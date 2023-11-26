@@ -1108,6 +1108,14 @@ bool GameControl::OnKeyRelease(const KeyboardEvent& Key, unsigned short Mod)
 	const Game* game = core->GetGame();
 	switch (Key.keycode) {
 //FIXME: move these to guiscript
+		case GEM_ESCAPE:
+			if (core->IsTurnBased() && core->currentTurnBasedActor->IsPC()) {
+				core->currentTurnBasedActor->ReleaseCurrentAction();
+			}
+			break;
+		case GEM_RETURN:
+			core->ToggleTurnBased();
+			break;
 		case ' ': //soft pause
 			core->TogglePause();
 			break;
@@ -1277,7 +1285,7 @@ void GameControl::UpdateCursor()
 	Point gameMousePos = GameMousePos();
 	int nextCursor = area->GetCursor( gameMousePos );
 	//make the invisible area really invisible
-	if (nextCursor == IE_CURSOR_INVALID) {
+	if (nextCursor == IE_CURSOR_INVALID && targetMode == TargetMode::None) {
 		lastCursor = IE_CURSOR_BLOCKED;
 		return;
 	}
@@ -1306,7 +1314,7 @@ void GameControl::UpdateCursor()
 			nextCursor = overInfoPoint->GetCursor(targetMode);
 		}
 		// recheck in case the position was different, resulting in a new isVisible check
-		if (nextCursor == IE_CURSOR_INVALID) {
+		if (nextCursor == IE_CURSOR_INVALID && targetMode == TargetMode::None) {
 			lastCursor = IE_CURSOR_BLOCKED;
 			return;
 		}
@@ -1327,7 +1335,7 @@ void GameControl::UpdateCursor()
 	}
 	// recheck in case the position was different, resulting in a new isVisible check
 	// fixes bg2 long block door in ar0801 above vamp beds, crashing on mouseover (too big)
-	if (nextCursor == IE_CURSOR_INVALID) {
+	if (nextCursor == IE_CURSOR_INVALID && targetMode == TargetMode::None) {
 		lastCursor = IE_CURSOR_BLOCKED;
 		return;
 	}
@@ -1665,8 +1673,8 @@ bool GameControl::MoveViewportTo(Point p, bool center, int speed)
 		} else if (p.y + frame.h >= mapsize.h + mwinh + padding) {
 			p.y = mapsize.h - frame.h + mwinh + padding;
 			canMove = false;
-		} else if (p.y < 0) {
-			p.y = 0;
+		} else if (p.y < 0 - mwinh - padding) {
+			p.y = - mwinh - padding;
 			canMove = false;
 		}
 
@@ -2180,7 +2188,21 @@ bool GameControl::OnMouseUp(const MouseEvent& me, unsigned short Mod)
 		}
 
 		if (targetMode == TargetMode::None && (isSelectionRect || lastActorID)) {
-			MakeSelection(Mod & GEM_MOD_SHIFT);
+			if (GetLastActor()) {
+				ieDword type = GetLastActor()->GetStat(IE_EA);
+				if (type >= EA_EVILCUTOFF || type == EA_GOODBUTRED) {
+					PerformSelectedAction(GetLastActor()->Pos);
+				} else {
+					if (GetLastActor()->IsSelected()) {
+						MoveViewportTo(GetLastActor()->Pos, true);
+					} else {
+						core->GetGame()->SelectActor(NULL, false, SELECT_NORMAL);
+						core->GetGame()->SelectActor(GetLastActor(), true, SELECT_NORMAL);
+					}
+				}
+			} else {
+				MakeSelection(Mod & GEM_MOD_SHIFT);
+			}
 			ClearMouseState();
 			return true;
 		}
@@ -2201,7 +2223,11 @@ bool GameControl::OnMouseUp(const MouseEvent& me, unsigned short Mod)
 		}
 
 		if (targetMode != TargetMode::None || (overMe && overMe->Type != ST_ACTOR)) {
-			PerformSelectedAction(p);
+			if (GetLastActor()) {
+				PerformSelectedAction(GetLastActor()->Pos);
+			} else {
+				PerformSelectedAction(p);
+			}
 			ClearMouseState();
 			return true;
 		}

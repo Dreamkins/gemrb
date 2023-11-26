@@ -1475,7 +1475,7 @@ void AttackCore(Scriptable *Sender, Scriptable *target, int flags)
 		return;
 	}
 
-	const Actor* tar = Scriptable::As<Actor>(target);
+	Actor* tar = Scriptable::As<Actor>(target);
 	if (attacker == tar) {
 		Sender->ReleaseCurrentAction();
 		Log(WARNING, "AttackCore", "Tried attacking itself: {}!", fmt::WideToChar{tar->GetName()});
@@ -1510,7 +1510,14 @@ void AttackCore(Scriptable *Sender, Scriptable *target, int flags)
 		weaponRange += 10;
 	}
 
-	if (!(flags & AC_NO_SOUND) && !Sender->CurrentActionTicks && !core->GetGameControl()->InDialog()) {
+	if (attacker && tar &&
+		(((attacker->IsPC() || tar->IsPC()) && EARelation(attacker, tar) == EAR_HOSTILE) || // attack or attacked PC
+			attacker->InInitiativeList() || tar->InInitiativeList())) { // for neutrals
+		attacker->MoveToInitiativeList();
+		tar->MoveToInitiativeList();
+	}
+
+	if (!core->IsTurnBased() && !(flags & AC_NO_SOUND) && !Sender->CurrentActionTicks && !core->GetGameControl()->InDialog()) {
 		// if the target changed scream and display attack message
 		if (target->GetGlobalID() != Sender->objects.LastTargetPersistent) {
 			displaymsg->DisplayConstantStringAction(HCStrings::ActionAttack, GUIColors::WHITE, Sender, target);
@@ -1547,7 +1554,7 @@ void AttackCore(Scriptable *Sender, Scriptable *target, int flags)
 
 	Sender->objects.LastTarget = target->GetGlobalID();
 	Sender->objects.LastTargetPersistent = Sender->objects.LastTarget;
-	attacker->PerformAttack(core->GetGame()->GameTime);
+	attacker->PerformAttack(core->GetGame()->GetGameTime());
 }
 
 //we need this because some special characters like _ or * are also accepted
@@ -2698,6 +2705,15 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 		}
 		return;
 	}
+
+	Actor* target = Scriptable::As<Actor>(tar);
+	if (act && tar &&
+		(((act->IsPC() || target->IsPC()) && EARelation(act, target) == EAR_HOSTILE) || // attack or attacked PC
+		act->InInitiativeList() || target->InInitiativeList())) { // for neutrals
+		act->MoveToInitiativeList();
+		target->MoveToInitiativeList();
+	}
+
 	dist = GetSpellDistance(spellResRef, Sender, tar->Pos);
 
 	if (act) {
@@ -2757,7 +2773,11 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 
 	int duration;
 	if (!parameters->int2Parameter) {
-		duration = Sender->CurrentActionState--;
+		if (!(core->IsTurnBased() && act->InInitiativeList())) {
+			duration = Sender->CurrentActionState--;
+		} else {
+			duration = Sender->CurrentActionState;
+		}
 	} else {
 		duration = Sender->CastSpell(tar, flags & SC_DEPLETE, flags & SC_INSTANT, flags & SC_NOINTERRUPT, level);
 	}
@@ -2876,7 +2896,11 @@ void SpellPointCore(Scriptable *Sender, Action *parameters, int flags)
 
 	int duration;
 	if (!parameters->int2Parameter) {
-		duration = Sender->CurrentActionState--;
+		if (!(core->IsTurnBased() && act->InInitiativeList())) {
+			duration = Sender->CurrentActionState--;
+		} else {
+			duration = Sender->CurrentActionState;
+		}
 	} else {
 		duration = Sender->CastSpellPoint(parameters->pointParameter, flags & SC_DEPLETE, flags & SC_INSTANT, flags & SC_NOINTERRUPT, level);
 	}
@@ -3027,7 +3051,13 @@ void RunAwayFromCore(Scriptable* Sender, const Action* parameters, int flags)
 
 	// already fleeing or just about to end?
 	if (Sender->CurrentActionState > 0) {
-		Sender->CurrentActionState--;
+		if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+			if (core->currentTurnBasedActor == actor && core->GetCurrentTurnBasedSlot().movesleft > 0) {
+				Sender->CurrentActionState--;
+			}
+		} else {
+			Sender->CurrentActionState--;
+		}
 		return;
 	} else if (Sender->CurrentActionTicks > 0) {
 		if (flags & RunAwayFlags::NoInterrupt) {
@@ -3052,7 +3082,7 @@ void RunAwayFromCore(Scriptable* Sender, const Action* parameters, int flags)
 
 	// estimate max distance with time and actor speed
 	double speed = actor->GetSpeed();
-	int maxDistance = parameters->int0Parameter;
+	int maxDistance = parameters->int0Parameter ? parameters->int0Parameter : 1000;
 	if (speed) {
 		maxDistance = static_cast<int>(maxDistance * gamedata->GetStepTime() / speed);
 	}

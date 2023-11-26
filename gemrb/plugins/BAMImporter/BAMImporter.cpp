@@ -226,6 +226,7 @@ void BAMImporter::Blit(const FrameEntry& frame, const BAMV2DataBlock& dataBlock,
 	}
 
 	sprite->UnlockSprite();
+	sprite = nullptr;
 }
 
 std::vector<BAMImporter::index_t> BAMImporter::CacheFLT()

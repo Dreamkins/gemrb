@@ -24,6 +24,8 @@
 #include "Interface.h"
 
 #include "Logging/Logging.h"
+#include <locale>
+#include <codecvt>
 
 namespace GemRB {
 

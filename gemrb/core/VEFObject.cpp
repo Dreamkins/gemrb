@@ -39,7 +39,7 @@ VEFObject::VEFObject(ScriptedAnimation *sca)
 	ResName = sca->ResName;
 	SingleObject=true;
 	ScheduleEntry entry;
-	entry.start = core->GetGame()->GameTime;
+	entry.start = core->GetGame()->GetGameTimeReal();
 	if (sca->Duration==0xffffffff) entry.length = 0xffffffff;
 	else entry.length = sca->Duration+entry.start;
 	entry.offset = Point(0,0);
@@ -115,7 +115,7 @@ VEFObject *VEFObject::CreateObject(const ResRef &res, SClass_ID id)
 bool VEFObject::UpdateDrawingState(int orientation)
 {
 	drawQueue.clear();
-	ieDword GameTime = core->GetGame()->GameTime;
+	ieDword GameTime = core->GetGame()->GetGameTimeReal();
 	for (auto& entry : entries) {
 		//don't render the animation if it is outside of the cycle
 		if (entry.start > GameTime) continue;
@@ -200,7 +200,7 @@ void VEFObject::Load2DA(const ResRef &resource)
 	}
 	SingleObject = false;
 	ResName = resource;
-	ieDword GameTime = core->GetGame()->GameTime;
+	ieDword GameTime = core->GetGame()->GetGameTimeReal();
 	TableMgr::index_t rows = tab->GetRowCount();
 	while(rows--) {
 		Point offset;
@@ -237,7 +237,7 @@ void VEFObject::ReadEntry(DataStream *stream)
 	stream->Seek( 49*4, GEM_CURRENT_POS); //skip empty fields
 
 	if (continuous) length = -1;
-	ieDword GameTime = core->GetGame()->GameTime;
+	ieDword GameTime = core->GetGame()->GetGameTimeReal();
 	AddEntry(resource, start, length, position, static_cast<VEFTypes>(type), GameTime);
 }
 

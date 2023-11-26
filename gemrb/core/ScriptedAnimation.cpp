@@ -489,7 +489,7 @@ bool ScriptedAnimation::UpdatePhase()
 		}
 
 		if (Duration != 0xffffffff) {
-			Duration += core->GetGame()->GameTime;
+			Duration += core->GetGame()->GetGameTimeReal();
 		}
 
 		justCreated = false;
@@ -518,7 +518,7 @@ retry:
 	auto frame = anim->NextFrame();
 
 	//explicit duration
-	if (Phase == P_HOLD && game->GameTime > Duration) {
+	if (Phase == P_HOLD && game->GetGameTimeReal() > Duration) {
 		IncrementPhase();
 		goto retry;
 	}

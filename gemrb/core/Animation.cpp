@@ -95,7 +95,7 @@ Animation::frame_t Animation::NextFrame(void)
 	tick_t time;
 	tick_t delta = 1000 / fps; // duration per frame in ms
 	if (gameAnimation) {
-		time = core->Time.Ticks2Ms(core->GetGame()->GameTime);
+		time = core->Time.Ticks2Ms(core->GetGame()->GetGameTimeReal());
 	} else {
 		time = GetMilliseconds();
 	}

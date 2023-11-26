@@ -547,6 +547,7 @@ private:
 	tick_t lastTalkTimeCheckAt = 0;
 	ieDword lastScriptCheck = 0;
 	int lastConBonus;
+
 	/** paint the actor itself. Called internally by Draw() */
 	void DrawActorSprite(const Point& p, BlitFlags flags,
 						 const std::vector<AnimationPart>& anims, const Color& tint) const;
@@ -585,11 +586,14 @@ private:
 	char GetArmorCode() const;
 	ResRef GetArmorSound() const;
 
-	bool AdvanceAnimations();
 	void UpdateDrawingRegion();
+
+public:
+	bool AdvanceAnimations();
 	/* applies modal spell etc, if needed */
 	void UpdateModalState(ieDword gameTime);
 
+private:
 	int CalculateSpeedFromRate(bool feedback) const;
 	int CalculateSpeedFromINI(bool feedback) const;
 	void IncrementDeathVariable(Game::kaputz_t& vars, const char *format, StringView name) const;
@@ -755,7 +759,7 @@ public:
 	/* deals damage to this actor */
 	int Damage(int damage, int damagetype, Scriptable* hitter, int modtype = MOD_ADDITIVE, int critical = 0, int saveflags = 0, int specialFlags = 0);
 	/* displays the damage taken and other details (depends on the game type) */
-	void DisplayCombatFeedback(unsigned int damage, int resisted, int damagetype, const Scriptable *hitter);
+	void DisplayCombatFeedback(int damage, int resisted, int damagetype, const Scriptable *hitter);
 	/* play a random footstep sound */
 	void PlayWalkSound();
 	/* play the proper hit sound (in pst) */
@@ -821,6 +825,15 @@ public:
 	void FaceTarget(const Scriptable *actor);
 	/* returns the number of attacks (handles monk barehanded bonus) */
 	ieDword GetNumberOfAttacks();
+	/* remove actor from additional initiative lists */
+	void RemoveFromAdditionInitiativeLists();
+	/* find actor in initiative list */
+	Actor* FindActorInInitiativeList();
+	/* check in initiative list */
+	bool InInitiativeList();
+	/* calculate initiative */
+	int CalculateInitiative(int from = 1);
+	void MoveToInitiativeList();
 	/* starts combat round*/
 	void InitRound(ieDword gameTime);
 	/* returns melee penalty */
@@ -836,6 +849,12 @@ public:
 	/* get the current hit bonus */
 	bool GetCombatDetails(int& tohit, bool leftorright, \
 		int& DamageBonus, int& speed, int& CriticalBonus, int& style, const Actor* target);
+	/* attack turn based */
+	void AttackTurnBased(ieDword gameTime);
+	/* get hit chance */
+	int getHitChanceTurnBased(const Actor* target);
+	/* calculate result of attack */
+	void CalculateAttackResult();
 	/* performs attack against target */
 	void PerformAttack(ieDword gameTime);
 	/* returns the adjusted weapon range, since items have odd values stored */
@@ -881,6 +900,7 @@ public:
 
 	/* Handling automatic stance changes */
 	bool HandleActorStance();
+	void UpdateAnimations();
 	void UpdateActorState();
 	/* update internal per frame state and return true if state is suitable for drawing the actor */
 	bool UpdateDrawingState();
@@ -888,7 +908,7 @@ public:
 	int GetElevation() const;
 	bool ShouldDrawReticle() const;
 	void DoStep(unsigned int newWalkScale, ieDword time = 0) override;
-	void Draw(const Region &screen, Color baseTint, Color tint, BlitFlags flags) const;
+	void Draw(const Region &screen, Color baseTint, Color tint, BlitFlags flags, bool force = false) const;
 
 	/* add mobile vvc (spell effects) to actor's list */
 	void AddVVCell(ScriptedAnimation* vvc);
@@ -1029,6 +1049,8 @@ public:
 	int GetRacialEnemyBonus(const Actor *target) const;
 	/* checks whether the actor can stay in the current modal state */
 	bool ModalSpellSkillCheck();
+	/* check see any enemy */
+	std::vector<Actor*> Actor::SeeAnyEnemy() const;
 	/* check if this actor is seen by or seeing anyone */
 	bool SeeAnyOne(bool enemy, bool seen) const;
 	/* does all the game logic checks to see if the actor can hide */
@@ -1095,6 +1117,9 @@ public:
 	bool HibernateIfAble();
 	bool ForceScriptCheck();
 	bool TouchAttack(const Projectile* pro) const;
+	bool InAttack();
+	std::vector<AnimationPart> GetCurrentStanceAnim() { return currentStance.anim; }
+	std::vector<AnimationPart> GetCurrentShadowStanceAnim() { return currentStance.shadow; }
 };
 }
 

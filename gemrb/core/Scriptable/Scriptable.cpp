@@ -176,6 +176,10 @@ bool Scriptable::IsPC() const
 
 void Scriptable::Update()
 {
+	if (Type == ST_PROXIMITY && core->IsTurnBased() && core->timeTurnBasedNeed < core->timeTurnBased) {
+		return;
+	}
+
 	Ticks++;
 	AdjustedTicks++;
 	if (AuraCooldown) AuraCooldown--;
@@ -492,10 +496,10 @@ void Scriptable::ProcessActions()
 	while (true) {
 		CurrentActionInterruptible = true;
 		if (!CurrentAction) {
-			if (! (CurrentActionTicks == 0 && CurrentActionState == 0)) {
-				Log(ERROR, "Scriptable", "Last action: {}", lastAction);
-			}
-			assert(CurrentActionTicks == 0 && CurrentActionState == 0);
+			//if (! (CurrentActionTicks == 0 && CurrentActionState == 0)) {
+			//	Log(ERROR, "Scriptable", "Last action: {}", lastAction);
+			//}
+			//assert(CurrentActionTicks == 0 && CurrentActionState == 0);
 			CurrentAction = PopNextAction();
 		} else {
 			CurrentActionTicks++;
@@ -1220,6 +1224,16 @@ int Scriptable::CastSpellPoint(const Point& target, bool deplete, bool instant, 
 	objects.LastSpellTarget = 0;
 	objects.LastTargetPos.Invalidate();
 	Actor* actor = Scriptable::As<Actor>(this);
+
+	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
+			actor->ReleaseCurrentAction();
+			return -1;
+		}
+		core->GetCurrentTurnBasedSlot().haveattack = false;
+		actor->RemoveFromAdditionInitiativeLists();
+	}
+
 	if (actor && actor->HandleCastingStance(SpellResRef, deplete, instant)) {
 		Log(ERROR, "Scriptable", "Spell {} not known or memorized, aborting cast!", SpellResRef);
 		return -1;
@@ -1255,6 +1269,16 @@ int Scriptable::CastSpell(Scriptable* target, bool deplete, bool instant, bool n
 	objects.LastSpellTarget = 0;
 	objects.LastTargetPos.Invalidate();
 	Actor* actor = Scriptable::As<Actor>(this);
+
+	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
+			actor->ReleaseCurrentAction();
+			return -1;
+		}
+		core->GetCurrentTurnBasedSlot().haveattack = false;
+		actor->RemoveFromAdditionInitiativeLists();
+	}
+
 	if (actor && actor->HandleCastingStance(SpellResRef, deplete, instant)) {
 		Log(ERROR, "Scriptable", "Spell {} not known or memorized, aborting cast!", SpellResRef);
 		return -1;
@@ -1325,8 +1349,9 @@ int Scriptable::SpellCast(bool instant, Scriptable* target, int level)
 		casting_time = Clamp(casting_time, 0, 10);
 	}
 
-	// this is a guess which seems approximately right so far (same as in the bg2 manual, except that it may be a combat round instead)
-	int duration = (casting_time*core->Time.round_size) / 10;
+	// The casting time of a spell is the number of tenths of rounds that it takes to cast the spell. A tenth of a round is 0.6 seconds of real time. 
+	// Casting times range from 1 to 9, therefore, the quickest spells are cast in 0.6 seconds, while the slowest spells are cast in 5.4 seconds.
+	int duration = (casting_time * core->Time.round_size) / 10;
 	if (instant) {
 		duration = 0;
 	}
@@ -1581,7 +1606,7 @@ bool Scriptable::TimerActive(ieDword ID)
 	if (tit == scriptTimers.end()) {
 		return false;
 	}
-	return tit->second > core->GetGame()->GameTime;
+	return tit->second > core->GetGame()->GetGameTime();
 }
 
 bool Scriptable::TimerExpired(ieDword ID)
@@ -1590,7 +1615,7 @@ bool Scriptable::TimerExpired(ieDword ID)
 	if (tit == scriptTimers.end()) {
 		return false;
 	}
-	if (tit->second <= core->GetGame()->GameTime) {
+	if (tit->second <= core->GetGame()->GetGameTime()) {
 		// expired timers become inactive after being checked
 		scriptTimers.erase(tit);
 		return true;
@@ -1600,7 +1625,7 @@ bool Scriptable::TimerExpired(ieDword ID)
 
 void Scriptable::StartTimer(ieDword ID, ieDword expiration)
 {
-	ieDword newTime = core->GetGame()->GameTime + expiration * core->Time.defaultTicksPerSec;
+	ieDword newTime = core->GetGame()->GetGameTime() + expiration * core->Time.defaultTicksPerSec;
 	const auto& tit = scriptTimers.find(ID);
 	if (tit != scriptTimers.end()) {
 		tit->second = newTime;
@@ -1792,6 +1817,15 @@ bool Highlightable::TryUnlock(Actor *actor, bool removekey) const {
 		return false;
 	}
 
+	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
+			actor->ReleaseCurrentAction();
+			return false;
+		}
+		core->GetCurrentTurnBasedSlot().haveattack = false;
+		actor->RemoveFromAdditionInitiativeLists();
+	}
+
 	if (removekey) {
 		CREItem* item = nullptr;
 		int result = haskey->inventory.RemoveItem(KeyResRef, 0, &item);
@@ -1927,19 +1961,23 @@ void Movable::SetStance(unsigned int arg)
 		}
 	}
 
-	StanceID = (unsigned char) arg;
-
-	if (StanceID == IE_ANI_ATTACK) {
+	if (arg == IE_ANI_ATTACK) {
 		// Set stance to a random attack animation
 		int random = RAND(0, 99);
 		if (random < AttackMovements[0]) {
-			StanceID = IE_ANI_ATTACK_BACKSLASH;
+			arg = IE_ANI_ATTACK_BACKSLASH;
 		} else if (random < AttackMovements[0] + AttackMovements[1]) {
-			StanceID = IE_ANI_ATTACK_SLASH;
+			arg = IE_ANI_ATTACK_SLASH;
 		} else {
-			StanceID = IE_ANI_ATTACK_JAB;
+			arg = IE_ANI_ATTACK_JAB;
 		}
 	}
+
+	if (StanceID != arg && caster->GetCurrentStanceAnim().size()) {
+		caster->GetAnims()->DropAnims();
+	}
+
+	StanceID = (unsigned char)arg;
 
 	// this doesn't get hit on movement, since movement overrides the stance manually
 	// but it is needed for the twang/clank when an actor stops moving
@@ -2049,6 +2087,24 @@ void Movable::BumpBack()
 // for a random time (inspired by network media access control algorithms) or just stops if
 // the goal is close enough.
 void Movable::DoStep(unsigned int walkScale, ieDword time) {
+	Actor* actor = Scriptable::As<Actor>(this);
+
+	if (actor->IsDead()) {
+		return;
+	}
+
+	if (core->IsTurnBased()) {
+		if (actor->InAttack() || GetStance() == IE_ANI_CAST || GetStance() == IE_ANI_CONJURE) {
+			ClearPath(true);
+			return;
+		}
+		if (actor->InInitiativeList() && (core->currentTurnBasedActor != actor || core->GetCurrentTurnBasedSlot().movesleft <= 0)) {
+			ClearPath(true);
+			SetStance(IE_ANI_READY);
+			return;
+		}
+	}
+
 	// Only bump back if not moving
 	// Actors can be bumped while moving if they are backing off
 	if (!path) {
@@ -2086,7 +2142,6 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 			actorInTheWay = area->GetActor(nmptCollision, GA_NO_DEAD|GA_NO_UNSCHEDULED|GA_NO_SELF, this);
 		}
 
-		const Actor* actor = Scriptable::As<Actor>(this);
 		bool blocksSearch = BlocksSearchMap();
 		if (actorInTheWay && blocksSearch && actorInTheWay->BlocksSearchMap()) {
 			// Give up instead of bumping if you are close to the goal
@@ -2102,6 +2157,11 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 			if (actor && actor->ValidTarget(GA_CAN_BUMP) && actorInTheWay->ValidTarget(GA_ONLY_BUMPABLE)) {
 				actorInTheWay->BumpAway();
 			} else {
+				if (core->IsTurnBased() && !actor->IsPC() && actor == core->currentTurnBasedActor) {
+					ClearPath(true);
+					NewOrientation = Orientation;
+					core->GetCurrentTurnBasedSlot().movesleft -= 150;
+				}
 				Backoff();
 				return;
 			}
@@ -2119,6 +2179,14 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 		if (InternalFlags & IF_RUNNING) {
 			StanceID = IE_ANI_RUN;
 		}
+
+		if (core->IsTurnBased() && core->currentTurnBasedActor == actor) {
+			Point newPos(Pos.x + dx, Pos.y + dy);
+			int dist = SquaredDistance(Pos, newPos);
+			core->GetCurrentTurnBasedSlot().movesleft -= dist;
+			actor->lastInit = core->GetGame()->GetGameTimeReal();
+		}
+
 		Pos.x += dx;
 		Pos.y += dy;
 		oldPos = Pos;

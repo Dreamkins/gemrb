@@ -758,6 +758,25 @@ void Map::UpdateScripts()
 			continue;
 		}
 
+		if (core->IsTurnBased() && game->GetPCs().size() && !actor->IsPC() && EARelation(actor, game->GetPCs()[0]) == EAR_FRIEND) {
+			actor->MoveToInitiativeList();
+		}
+
+		if (core->IsTurnBased() && actor->InInitiativeList()) {
+			if (core->currentTurnBasedActor == actor) {
+				bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->GetBase(IE_STATE_ID) & STATE_MINDLESS);
+				bool cantMove = !actor->InMove() || actor->Immobile() || !actor->GetPath() || (actor->GetBase(IE_STATE_ID) & STATE_CANTMOVE);
+				bool notAttackNow = !actor->InAttack();
+				//bool notCastNow = !(actor->GetStance() == IE_ANI_CAST && actor->CurrentActionState == 0);
+				if (notPlayerControl && cantMove && notAttackNow) {
+					const Actor* target = area->GetActorByGlobalID(objects.LastTarget);
+					if (actor->lastInit && game->GetGameTimeReal() - actor->lastInit > 20) {
+						core->EndTurn();
+					}
+				}
+			}
+		}
+
 		//Avenger moved this here from ApplyAllEffects (this one modifies the effect queue)
 		//.. but then fuzzie moved this here from UpdateActorState, because otherwise
 		//immobile actors (see check below) never become mobile again!
@@ -1163,7 +1182,7 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 	debugFlags = dFlags;
 
 	Game *game = core->GetGame();
-	ieDword gametime = game->GameTime;
+	ieDword gametime = game->GetGameTimeReal();
 	static ieDword oldGameTime = 0;
 	bool timestop = game->IsTimestopActive();
 
@@ -1477,6 +1496,165 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 			if (poly->wall_flag & WF_BASELINE) {
 				VideoDriver->DrawLine(poly->base0 - viewport.origin, poly->base1 - viewport.origin, ColorMagenta);
 			}
+		}
+	}
+
+#define SLOTSIZEX 46
+#define HPSIZEX 4
+
+	if (core->IsTurnBased() && !core->pause_before_fight) {
+
+		int xoffset = 0;
+		for (size_t list = 0; list < 10; list++) {
+			if (!core->initiatives[list].size()) {
+				break;
+			}
+			xoffset += core->initiatives[list].size() * SLOTSIZEX + 15;
+		}
+
+		// to center of screen
+		xoffset = core->config.Width / 2 - xoffset / 2;
+
+		bool endfixoffset = false;
+		int testoffset = xoffset;
+		for (size_t list = 0; list < 10; list++) {
+			if (endfixoffset || !core->initiatives[list].size()) {
+				break;
+			}
+
+			for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
+				Actor* actor = core->initiatives[list][idx].actor;
+				if (actor == core->currentTurnBasedActor && core->currentTurnBasedList == list) {
+					Point pos(testoffset + idx * SLOTSIZEX, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 10 : 0));
+					if (pos.x < core->config.Width / 8) {
+						xoffset += core->config.Width / 8 - pos.x;
+					}
+					else if ((pos.x + SLOTSIZEX + 10) > (core->config.Width - core->config.Width / 8)) {
+						xoffset -= (pos.x + SLOTSIZEX + 10) - (core->config.Width - core->config.Width / 8);
+					}
+					endfixoffset = true;
+					break;
+				}
+			}
+			testoffset += core->initiatives[list].size() * SLOTSIZEX + 15;
+		}
+
+		for (size_t list = 0; list < 10; list++) {
+			if (!core->initiatives[list].size()) {
+				break;
+			}
+
+			// border
+			Point pos(xoffset - 5, 40 - 5);
+			Region region(pos, Size(core->initiatives[list].size() * SLOTSIZEX + 5, 60 + 10));
+			Color color = Color(128, 128, 128, 255);
+			VideoDriver->DrawRect(region, color, false, BlitFlags::BLENDED);
+
+			GameControl* gc = core->GetGameControl();
+
+			for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
+				Actor* actor = core->initiatives[list][idx].actor;
+
+				Point pos(xoffset + idx * SLOTSIZEX + HPSIZEX, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 15 : 0));
+				Region region(pos, Size(38, 60));
+
+				if (region.PointInside(gc->ScreenMousePos())) {
+					gc->SetLastActor(actor);
+					if (gc->GetTargetMode() == TargetMode::None) {
+						ieDword type = actor->GetStat(IE_EA);
+						if (type >= EA_EVILCUTOFF || type == EA_GOODBUTRED) {
+							gc->SetCursor(core->Cursors[IE_CURSOR_ATTACK]);
+						} else {
+							gc->SetCursor(core->Cursors[IE_CURSOR_NORMAL]);
+						}
+					}
+				} else if (!gc->GetLastActor()) {
+					gc->SetLastActor(nullptr);
+					if (gc->GetTargetMode() == TargetMode::None) {
+						gc->ClearMouseState();
+					}
+				}
+
+				Color color = Color(255, 255, 255, 255);
+
+				Region oldClip = VideoDriver->GetScreenClip();
+				VideoDriver->SetScreenClip(&region);
+
+				if (core->initiatives[list][idx].image) {
+					int width = core->initiatives[list][idx].image->Frame.w;
+					int height = core->initiatives[list][idx].image->Frame.h;
+					pos.x -= width > 38 ? (width - 38) / 2 : 0;
+					pos.y += height < 60 ? (60 - height) / 2 : 0;
+
+					Color bcolor = Color(0, 0, 0, 255);
+					VideoDriver->DrawRect(region, bcolor, true, BlitFlags::BLENDED);
+
+					VideoDriver->BlitSprite(core->initiatives[list][idx].image, pos);
+				} else {
+					if (!core->initiatives[list][idx].actor->IsDead()) {
+						int sh = 0;
+						int oy = 0;
+						using AnimationPart = std::pair<Animation*, Holder<Palette>>;
+						std::vector<AnimationPart> animpart = core->initiatives[list][idx].actor->GetCurrentStanceAnim();
+						if (animpart.size()) {
+							if (animpart.size()) {
+								for (int a = 0; a < animpart.size(); a++) {
+									if (animpart[a].first->animArea.h > sh) {
+										sh = animpart[a].first->animArea.h;
+										oy = animpart[a].first->animArea.origin.y;
+									}
+								}
+
+								int hoffset = 0;
+								if (sh < 60) {
+									hoffset = (60 - sh) / 2;
+								}
+								
+								sh = sh - (sh + oy) + hoffset;
+
+								Color bcolor = Color(64, 64, 64, 255);
+								VideoDriver->DrawRect(region, bcolor, true, BlitFlags::BLENDED);
+
+								Region r(pos.x + 19, pos.y + sh + 4, 38, 60);
+								actor->Draw(r, color, color, BlitFlags::BLENDED, true);
+							}
+						}
+					}
+				}
+
+				VideoDriver->SetScreenClip(&oldClip);
+
+				Color rcolor = core->currentTurnBasedActor == actor ? Color(192, 192, 192, 255) : Color(128, 128, 128, 255);
+				VideoDriver->DrawRect(region, rcolor, false, BlitFlags::BLENDED);
+
+				if (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list && actor->IsPC()) {
+					int offs = xoffset + idx * SLOTSIZEX;
+
+					Color rcolor = Color(128, 192, 128, 255);
+					Region r(offs, pos.y -15, 10, 10);
+					VideoDriver->DrawRect(r, rcolor, core->GetCurrentTurnBasedSlot().haveattack, BlitFlags::BLENDED);
+
+					Color r2color = Color(128, 128, 255, 255);
+					int movesmax = gamedata->GetStepTime() / core->currentTurnBasedActor->CalculateSpeed(false) * core->Time.round_sec * core->Time.defaultTicksPerSec * 10;
+					int movescur = core->GetCurrentTurnBasedSlot().movesleft;
+					float part = (SLOTSIZEX -HPSIZEX - 12) * ((float)movescur / movesmax);
+
+					Region r2(offs + 12, pos.y - 15, part, 10);
+					VideoDriver->DrawRect(r2, r2color, true, BlitFlags::BLENDED);
+				}
+
+				int maxhp = actor->Modified[IE_MAXHITPOINTS];;
+				int hp = actor->Modified[IE_HITPOINTS];
+				hp = hp < 0 ? 0 : hp;
+				float percent = (float)((float)hp / (float)maxhp);
+				int hpheight = 60 * percent;
+
+				Point hppos(xoffset + idx * SLOTSIZEX + 1, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 15 : 0) + 60 - hpheight);
+				Region hpregion(hppos, Size(HPSIZEX, hpheight));
+				Color hpcolor = Color(255 - (255 * percent), 255 * percent, 0, 255);
+				VideoDriver->DrawRect(hpregion, hpcolor, true, BlitFlags::BLENDED);
+			}
+			xoffset += core->initiatives[list].size() * SLOTSIZEX + 15;
 		}
 	}
 }
@@ -1879,7 +2057,7 @@ int Map::CountSummons(ieDword flags, ieDword sex) const
 
 bool Map::AnyEnemyNearPoint(const Point &p) const
 {
-	ieDword gametime = core->GetGame()->GameTime;
+	ieDword gametime = core->GetGame()->GetGameTime();
 	for (const Actor *actor : actors) {
 		if (!actor->Schedule(gametime, true) ) {
 			continue;
@@ -1971,7 +2149,7 @@ void Map::AddActor(Actor* actor, bool init)
 
 bool Map::AnyPCSeesEnemy() const
 {
-	ieDword gametime = core->GetGame()->GameTime;
+	ieDword gametime = core->GetGame()->GetGameTime();
 	for (const Actor *actor : actors) {
 		if (actor->Modified[IE_EA]>=EA_EVILCUTOFF) {
 			if (IsVisible(actor->Pos) && actor->Schedule(gametime, true) ) {
@@ -2214,7 +2392,7 @@ void Map::PurgeArea(bool items)
 				continue;
 			}
 
-			if (ac->RemovalTime > core->GetGame()->GameTime) {
+			if (ac->RemovalTime > core->GetGame()->GetGameTime()) {
 				continue;
 			}
 
@@ -2687,7 +2865,7 @@ void Map::GenerateQueues()
 		queue[priority].clear();
 	}
 
-	ieDword gametime = core->GetGame()->GameTime;
+	ieDword gametime = core->GetGame()->GetGameTime();
 	bool hostilesNew = false;
 	while (i--) {
 		Actor* actor = actors[i];
@@ -3202,7 +3380,7 @@ void Map::TriggerSpawn(Spawn *spawn)
 	}
 
 	//check schedule
-	ieDword time = core->GetGame()->GameTime;
+	ieDword time = core->GetGame()->GetGameTime();
 	if (!Schedule(spawn->appearance, time)) {
 		return;
 	}
@@ -3244,7 +3422,7 @@ void Map::UpdateSpawns() const
 	if (SpawnsAlive()) {
 		return;
 	}
-	ieDword time = core->GetGame()->GameTime;
+	ieDword time = core->GetGame()->GetGameTime();
 	for (auto spawn : spawns) {
 		if ((spawn->Method & (SPF_NOSPAWN|SPF_WAIT)) == (SPF_NOSPAWN|SPF_WAIT)) {
 			//only reactivate the spawn point if the party cannot currently see it;
@@ -3632,14 +3810,14 @@ void Map::Sparkle(ieDword duration, ieDword color, ieDword type, const Point &po
 		grow = SP_SPAWN_SOME;
 		size = 40;
 		width = 40;
-		ttl = core->GetGame()->GameTime+Zpos;
+		ttl = core->GetGame()->GetGameTimeReal() + Zpos;
 		break;
 	case SPARKLE_EXPLOSION: //this isn't in the original engine, but it is a nice effect to have
 		path = SP_PATH_EXPL;
 		grow = SP_SPAWN_SOME;
 		size = 10;
 		width = 40;
-		ttl = core->GetGame()->GameTime+Zpos;
+		ttl = core->GetGame()->GetGameTimeReal() + Zpos;
 		break;
 	default:
 		path = SP_PATH_FLIT;

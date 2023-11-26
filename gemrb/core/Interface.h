@@ -273,6 +273,14 @@ private:
 	static Control dragDummy;
 };
 
+struct InitiativeSlot {
+	Actor* actor = nullptr;
+	Holder<Sprite2D> image;
+	int initiative = 10;
+	int movesleft = 0;
+	bool haveattack = false;
+};
+
 /**
  * @class Interface
  * Central interconnect for all GemRB parts, driving functions and utility functions possibly belonging to a better place
@@ -590,6 +598,8 @@ public:
 	int WriteWorldMap(const path_t& folder);
 	/** saves the .are and .sto files to the destination folder */
 	int CompressSave(const path_t& folder, bool overrideRunning);
+	/* toggle turn based mode */
+	void ToggleTurnBased();
 	/** toggles the pause. returns either PAUSE_ON or PAUSE_OFF to reflect the script state after toggling. */
 	PauseState TogglePause() const;
 	/** returns true the passed pause setting was applied. false otherwise. */
@@ -689,6 +699,17 @@ public:
 	bool UseCorruptedHack = false;
 	int FeedbackLevel = 0;
 
+	bool turnBasedEnable = true;
+	std::vector<InitiativeSlot> initiatives[10];
+	int currentTurnBasedSlot = 0;
+	int currentTurnBasedList = 0;
+	int roundTurnBased = 0;
+	Actor* currentTurnBasedActor = nullptr;
+	int pause_before_fight = 10;
+	uint32_t timeTurnBased = 0;
+	uint32_t timeTurnBasedNeed = 0;
+	int lastTurnBasedTarget = 0;
+
 	/** The Main program loop */
 	void Main(void);
 	/** returns true if the game is paused */
@@ -725,6 +746,17 @@ public:
 	PluginHolder<Audio> GetAudioDrv(void) const;
 
 	Timer& SetTimer(const EventHandler&, tick_t interval, int repeats = -1);
+
+	bool IsTurnBased() { return currentTurnBasedActor != nullptr; }
+	int GetCurrentTurnBasedSlotNum() { return currentTurnBasedSlot; }
+	int GetCurrentTurnBasedListNum() { return currentTurnBasedList; }
+	InitiativeSlot& GetCurrentTurnBasedSlot() { return initiatives[currentTurnBasedList][currentTurnBasedSlot]; }
+	InitiativeSlot& GetTurnBasedSlot(Actor* actor);
+	void InitTurnBasedSlot();
+	void FirstRoundStart();
+	void EndTurn();
+	void UpdateTurnBased();
+	void resetTurnBased();
 };
 
 extern GEM_EXPORT Interface * core;

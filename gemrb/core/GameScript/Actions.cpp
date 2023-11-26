@@ -156,7 +156,7 @@ void GameScript::SetGlobalTimer(Scriptable* Sender, Action* parameters)
 {
 	ieDword mytime;
 
-	mytime=core->GetGame()->GameTime; //gametime (should increase it)
+	mytime=core->GetGame()->GetGameTime(); //gametime (should increase it)
 	SetVariable( Sender, parameters->string0Parameter,
 		parameters->int0Parameter * core->Time.defaultTicksPerSec + mytime);
 }
@@ -175,7 +175,7 @@ void GameScript::SetGlobalTimerRandom(Scriptable* Sender, Action* parameters)
 		random = parameters->int0Parameter-parameters->int1Parameter+1;
 		random = RandomNumValue % random + parameters->int1Parameter;
 	}
-	mytime=core->GetGame()->GameTime; //gametime (should increase it)
+	mytime=core->GetGame()->GetGameTime(); //gametime (should increase it)
 	SetVariable(Sender, parameters->string0Parameter, random * core->Time.defaultTicksPerSec + mytime);
 }
 
@@ -185,7 +185,7 @@ void GameScript::SetGlobalTimerOnce(Scriptable* Sender, Action* parameters)
 	if (mytime != 0) {
 		return;
 	}
-	mytime=core->GetGame()->GameTime; //gametime (should increase it)
+	mytime=core->GetGame()->GetGameTime(); //gametime (should increase it)
 	SetVariable( Sender, parameters->string0Parameter,
 		parameters->int0Parameter * core->Time.defaultTicksPerSec + mytime);
 }
@@ -1735,7 +1735,7 @@ void GameScript::DisplayString(Scriptable* Sender, Action* parameters)
 //DisplayStringHead, but wait until done
 void GameScript::DisplayStringWait(Scriptable* Sender, Action* parameters)
 {
-	ieDword gt = core->GetGame()->GameTime;
+	ieDword gt = core->GetGame()->GetGameTime();
 	if (Sender->CurrentActionState) {
 		if (gt >= (ieDword)parameters->int2Parameter) {
 			Sender->ReleaseCurrentAction();
@@ -2347,6 +2347,17 @@ void GameScript::Unlock(Scriptable* Sender, Action* parameters)
 	if (!tar) {
 		return;
 	}
+
+	Actor* actor = Scriptable::As<Actor>(Sender);
+	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
+			actor->ReleaseCurrentAction();
+			return;
+		}
+		core->GetCurrentTurnBasedSlot().haveattack = false;
+		actor->RemoveFromAdditionInitiativeLists();
+	}
+
 	switch (tar->Type) {
 		case ST_DOOR:
 			static_cast<Door*>(tar)->SetDoorLocked(false, true);
@@ -2496,6 +2507,16 @@ void GameScript::PickLock(Scriptable* Sender, Action* parameters)
 {
 	//only actors may try to pick a lock
 	Actor* actor = Scriptable::As<Actor>(Sender);
+
+	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
+			actor->ReleaseCurrentAction();
+			return;
+		}
+		core->GetCurrentTurnBasedSlot().haveattack = false;
+		actor->RemoveFromAdditionInitiativeLists();
+	}
+
 	if (!actor) {
 		Sender->ReleaseCurrentAction();
 		return;
@@ -2567,12 +2588,23 @@ void GameScript::OpenDoor(Scriptable* Sender, Action* parameters) {
 	// no idea if this is right, or whether OpenDoor/CloseDoor should allow opening
 	// of all doors, or some doors, or whether it should still check for non-actors
 	Actor* actor = Scriptable::As<Actor>(Sender);
+
+	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
+			actor->ReleaseCurrentAction();
+			return;
+		}
+		core->GetCurrentTurnBasedSlot().haveattack = false;
+		actor->RemoveFromAdditionInitiativeLists();
+	}
+
 	if (actor) {
 		actor->SetModal(Modal::None);
 		if (!door->TryUnlock(actor)) {
 			return;
 		}
 	}
+
 	door->SetDoorOpen(true, false, gid, false);
 	Sender->ReleaseCurrentAction();
 }
@@ -2585,12 +2617,23 @@ void GameScript::CloseDoor(Scriptable* Sender, Action* parameters) {
 	}
 	// see comments in OpenDoor above
 	Actor* actor = Scriptable::As<Actor>(Sender);
+
+	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
+			actor->ReleaseCurrentAction();
+			return;
+		}
+		core->GetCurrentTurnBasedSlot().haveattack = false;
+		actor->RemoveFromAdditionInitiativeLists();
+	}
+
 	if (actor) {
 		// clear modal state like in OpenDoor?
 		if (!door->TryUnlock(actor)) {
 			return;
 		}
 	}
+
 	door->SetDoorOpen(false, false, 0);
 	Sender->ReleaseCurrentAction();
 }
@@ -4639,6 +4682,16 @@ void GameScript::PickPockets(Scriptable *Sender, Action* parameters)
 		return;
 	}
 
+	Actor* actor = Scriptable::As<Actor>(Sender);
+	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
+			actor->ReleaseCurrentAction();
+			return;
+		}
+		core->GetCurrentTurnBasedSlot().haveattack = false;
+		actor->RemoveFromAdditionInitiativeLists();
+	}
+
 	// determine slot to steal from and potentially adjust difficulty
 	int slot = -1;
 	if ((RandomNumValue & 3) || scr->GetStat(IE_GOLD) <= 0) {
@@ -5153,6 +5206,12 @@ void GameScript::RemoveMapnote( Scriptable* Sender, Action* parameters)
 
 void GameScript::AttackOneRound( Scriptable* Sender, Action* parameters)
 {
+	Actor* actor = Scriptable::As<Actor>(Sender);
+
+	if (core->IsTurnBased() && actor->GetStat(IE_EA) == EA_PC) {
+		return;
+	}
+
 	if (Sender->Type != ST_ACTOR) {
 		Sender->ReleaseCurrentAction();
 		return;
@@ -5462,7 +5521,7 @@ void GameScript::AdvanceTime(Scriptable* /*Sender*/, Action* parameters)
 void GameScript::DayNight(Scriptable* /*Sender*/, Action* parameters)
 {
 	int delta = parameters->int0Parameter * core->Time.hour_size
-	          - core->GetGame()->GameTime % core->Time.day_size;
+	          - core->GetGame()->GetGameTime() % core->Time.day_size;
 	if (delta < 0) {
 		delta += core->Time.day_size;
 	}
@@ -6759,7 +6818,7 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 		Sender->ReleaseCurrentAction();
 		return;
 	}
-	const Scriptable* tar = GetStoredActorFromObject(Sender, parameters->objects[1]);
+	Scriptable* tar = GetStoredActorFromObject(Sender, parameters->objects[1]);
 	if (!tar) {
 		Sender->ReleaseCurrentAction();
 		return;
@@ -6825,6 +6884,16 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 	// only one use per round; skip for our internal attack projectile
 	if (!(flags & UI_NOAURA) && act->AuraPolluted()) {
 		return;
+	}
+
+	Actor* actor = Scriptable::As<Actor>(Sender);
+	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
+			actor->ReleaseCurrentAction();
+			return;
+		}
+		core->GetCurrentTurnBasedSlot().haveattack = false;
+		actor->RemoveFromAdditionInitiativeLists();
 	}
 
 	act->UseItem(Slot, header, tar, flags);

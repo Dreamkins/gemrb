@@ -234,7 +234,7 @@ void Projectile::Setup()
 
 	timeStartStep = core->Time.Ticks2Ms(core->GetGame()->Ticks);
 
-	const Actor* act = area->GetActorByGlobalID(Caster);
+	Actor* act = area->GetActorByGlobalID(Caster);
 
 	if (act) {
 		ZPos = ProHeights::Normal;
@@ -599,7 +599,19 @@ void Projectile::ChangePhase()
 	// as the projectile won't go away on its own
 	if (ExtFlags & PEF_FREEZE && extensionDelay) {
 		if (extensionDelay > 0) {
-			extensionDelay--;
+			if (core->IsTurnBased()) {
+				if (timeTurnBasedExtencionDelay <= core->timeTurnBased) {
+					if (timeTurnBasedExtencionDelay) {
+						extensionDelay -= 5 * core->Time.defaultTicksPerSec;
+						if (extensionDelay < 0) {
+							extensionDelay = 0;
+						}
+					}
+					timeTurnBasedExtencionDelay = core->timeTurnBased + 6 * core->Time.defaultTicksPerSec;
+				}
+			} else {
+				extensionDelay--;
+			}
 			UpdateSound();
 		}
 		return;
@@ -1043,7 +1055,7 @@ void Projectile::LineTarget(Path::const_iterator beg, Path::const_iterator end) 
 			if (PersonalLineDistance(s, d, target, &t) > 1) {
 				continue;
 			}
-			auto prev = std::prev(first);
+			auto prev = first == path.begin() ? first : std::prev(first);
 			auto next = std::next(last);
 			if (t < 0.0 && first != path.begin() && prev->orient == orient) {
 				// skip; assume we've hit the target before
@@ -1584,7 +1596,20 @@ void Projectile::DrawExplosion(const Region& vp, BlitFlags flags)
 
 	//Delay explosion, it could even be revoked with PAF_SYNC (see skull trap)
 	if (extensionDelay) {
-		extensionDelay--;
+		if (core->IsTurnBased()) {
+			if (timeTurnBasedExtencionDelay <= core->timeTurnBased) {
+				if (timeTurnBasedExtencionDelay) {
+					extensionDelay -= 5 * core->Time.defaultTicksPerSec;
+					if (extensionDelay < 0) {
+						extensionDelay = 0;
+					}
+				}
+				timeTurnBasedExtencionDelay = core->timeTurnBased + 6 * core->Time.defaultTicksPerSec;
+			}
+		}
+		else {
+			extensionDelay--;
+		}
 		return;
 	}
 

@@ -1674,7 +1674,7 @@ Actor *Interface::SummonCreature(const ResRef& resource, const ResRef& animRes, 
 				//set up the summon disable effect
 				Effect *newfx = EffectQueue::CreateEffect(fx_summon_disable_ref, 0, 1, FX_DURATION_ABSOLUTE);
 				if (newfx) {
-					newfx->Duration = vvc->GetSequenceDuration(Time.defaultTicksPerSec) * 9 / 10 + core->GetGame()->GameTime;
+					newfx->Duration = vvc->GetSequenceDuration(Time.defaultTicksPerSec) * 9 / 10 + core->GetGame()->GetGameTimeReal();
 					ApplyEffect(newfx, ab, ab);
 				}
 			}
@@ -2357,7 +2357,9 @@ void Interface::LoadGame(Holder<SaveGame> sg, int ver_override)
 	// and the loading can fail for various reasons
 
 	// Yes, it uses goto. Other ways seemed too awkward for me.
-
+	if (IsTurnBased()) {
+		resetTurnBased();
+	}
 	gamedata->SaveAllStores();
 	strings->CloseAux();
 	tokens.clear(); //clearing the token dictionary
@@ -3848,6 +3850,14 @@ int Interface::GetWisdomBonus(int column, int value) const
 
 PauseState Interface::TogglePause() const
 {
+	if (core->IsTurnBased()) {
+		Actor* actor = core->currentTurnBasedActor;
+		if (actor->lastInit && game->GetGameTimeReal() - actor->lastInit > 4 && actor->IsPC() && actor->InMove() == false && actor->InAttack() == false) {
+			core->EndTurn();
+		}
+		return PauseState::Off;
+	}
+
 	const GameControl *gc = GetGameControl();
 	if (!gc) return PauseState::Off;
 	PauseState pause = (PauseState) ((gc->GetDialogueFlags() & DF_FREEZE_SCRIPTS) == 0);
@@ -3858,6 +3868,10 @@ PauseState Interface::TogglePause() const
 bool Interface::SetPause(PauseState pause, int flags) const
 {
 	GameControl *gc = GetGameControl();
+
+	if (core->IsTurnBased()) {
+		return false;
+	}
 
 	//don't allow soft pause in cutscenes and dialog
 	if (!(flags&PF_FORCED) && InCutSceneMode()) gc = NULL;
@@ -4049,6 +4063,258 @@ void Interface::SetNextScript(const path_t& script)
 {
 	nextScript = script;
 	QuitFlag |= QF_CHANGESCRIPT;
+}
+
+void Interface::InitTurnBasedSlot() {
+	currentTurnBasedActor = GetCurrentTurnBasedSlot().actor;
+	lastTurnBasedTarget = 0;
+
+	if (currentTurnBasedList == 0) {
+		GetCurrentTurnBasedSlot().movesleft = gamedata->GetStepTime() / currentTurnBasedActor->CalculateSpeed(false) * Time.round_sec * core->Time.defaultTicksPerSec * 10;
+	} else {
+		for (size_t idx = 0; idx < initiatives[currentTurnBasedList - 1].size(); idx++) {
+			if (initiatives[currentTurnBasedList - 1][idx].actor == currentTurnBasedActor) {
+				GetCurrentTurnBasedSlot().movesleft = initiatives[currentTurnBasedList - 1][idx].movesleft;
+				break;
+			}
+		}
+	}
+
+	GetCurrentTurnBasedSlot().haveattack = true;
+
+	if (currentTurnBasedActor->IsPC() && currentTurnBasedActor->GetStance() != IE_ANI_CAST) {
+		currentTurnBasedActor->ClearPath(true);
+		currentTurnBasedActor->ClearActions();
+	}
+	currentTurnBasedActor->lastInit = core->GetGame()->GetGameTimeReal();
+
+	GameControl* gc = core->GetGameControl();
+	if (currentTurnBasedActor->GetCurrentArea()->IsVisible(currentTurnBasedActor->Pos)) {
+		gc->MoveViewportTo(currentTurnBasedActor->Pos, true);
+	}
+
+	currentTurnBasedActor->RefreshEffects();
+	currentTurnBasedActor->UpdateModalState(timeTurnBased);
+}
+
+void Interface::FirstRoundStart() {
+	currentTurnBasedSlot = 0;
+	currentTurnBasedList = 0;
+	roundTurnBased++;
+
+	if (roundTurnBased == 1) {
+		timeTurnBased = core->GetGame()->GetGameTimeReal();
+	} else {
+		for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
+			initiatives[0][idx].initiative = initiatives[0][idx].actor->CalculateInitiative();
+		}
+	}
+
+	std::sort(initiatives[0].begin(), initiatives[0].end(), [](const InitiativeSlot& a, const InitiativeSlot& b) {
+		return a.initiative < b.initiative;
+		});
+
+	for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
+		initiatives[0][idx].actor->InitRound(timeTurnBased);
+	}
+
+	for (size_t attacks = 1; attacks < core->Time.round_sec; attacks++) {
+		initiatives[attacks].clear();
+		for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
+			if (!initiatives[0][idx].actor->Immobile() && initiatives[0][idx].actor->attackcount >= attacks + 1) {
+				initiatives[attacks].push_back(initiatives[0][idx]);
+			}
+		}
+	}
+
+	InitTurnBasedSlot();
+
+	String rollLog = fmt::format(u">>> ROUND: {} <<<", roundTurnBased);
+	displaymsg->DisplayString(std::move(rollLog), GUIColors::GOLD, 0);
+
+
+	core->GetGame()->SelectActor(nullptr, false, SELECT_REPLACE);
+	if (initiatives[0][0].actor->IsPartyMember()) {
+		core->GetGame()->SelectActor(initiatives[0][0].actor, true, SELECT_REPLACE);
+	}
+}
+
+InitiativeSlot& Interface::GetTurnBasedSlot(Actor* actor) {
+	if (!actor->InInitiativeList()) {
+		actor->MoveToInitiativeList();
+	}
+
+	for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
+		if (initiatives[0][idx].actor == actor) {
+			return initiatives[0][idx];
+		}
+	}
+}
+
+void Interface::EndTurn() {
+	if (!currentTurnBasedActor || 
+		core->GetGame()->GetCurrentAction() || 
+		currentTurnBasedActor->InAttack()) {
+		return;
+	}
+
+	Actor* last_move = currentTurnBasedActor;
+
+	currentTurnBasedSlot = 0;
+	for (size_t idx = 0; idx < initiatives[currentTurnBasedList].size(); idx++) {
+		if (initiatives[currentTurnBasedList][idx].actor == currentTurnBasedActor) {
+			currentTurnBasedSlot = idx;
+			break;
+		}
+	}
+
+	currentTurnBasedSlot++;
+	if (currentTurnBasedSlot >= initiatives[currentTurnBasedList].size()) {
+		currentTurnBasedSlot = 0;
+
+		for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
+			if (initiatives[0][idx].actor->GetStance() == IE_ANI_CAST) {
+				initiatives[0][idx].actor->CurrentActionState -= core->Time.defaultTicksPerSec;
+			}
+		}
+
+		currentTurnBasedList++;
+
+		timeTurnBasedNeed = timeTurnBased + core->Time.defaultTicksPerSec;
+
+		if (!initiatives[currentTurnBasedList].size()) {
+			while (currentTurnBasedList < core->Time.round_sec) {
+				timeTurnBasedNeed += core->Time.defaultTicksPerSec;
+
+				for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
+					if (initiatives[0][idx].actor->GetStance() == IE_ANI_CAST) {
+						initiatives[0][idx].actor->CurrentActionState -= core->Time.defaultTicksPerSec;
+					}
+				}
+
+				currentTurnBasedList++;
+			}
+
+			FirstRoundStart();
+			return;
+		}
+	}
+
+	if (currentTurnBasedActor->IsPartyMember()) {
+		core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
+	}
+
+	InitTurnBasedSlot();
+
+	if (currentTurnBasedActor->IsPartyMember()) {
+		core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
+	}
+}
+
+void Interface::ToggleTurnBased()
+{
+	turnBasedEnable = !turnBasedEnable;
+
+	String text;
+	if (turnBasedEnable) {
+		text = fmt::format(u"Turn based mode enabled.");
+	} else {
+		text = fmt::format(u"Turn based mode disabled.");
+	}
+	displaymsg->DisplayString(std::move(text), GUIColors::GOLD, 0);
+}
+
+void Interface::UpdateTurnBased() {
+
+	if (initiatives[0].size()) {
+		if (pause_before_fight) {
+			pause_before_fight--;
+		}
+
+		if (timeTurnBased <= timeTurnBasedNeed) {
+			if (timeTurnBased == timeTurnBasedNeed) {
+				timeTurnBasedNeed = 0;
+			} else {
+				timeTurnBased++;
+			}
+		}
+
+		// remove dead actors
+		if (currentTurnBasedActor && currentTurnBasedActor->IsDead()) {
+			EndTurn();
+		}
+		for (size_t list = 0; list < 10; list++) {
+			if (!initiatives[list].size()) {
+				break;
+			}
+			for (auto it = initiatives[list].begin(); it != initiatives[list].end();) {
+				if (it->actor->IsDead()) {
+					it = initiatives[list].erase(it);
+				} else {
+					++it;
+				}
+			}
+		}
+
+		currentTurnBasedSlot = 0;
+		for (size_t idx = 0; idx < initiatives[currentTurnBasedList].size(); idx++) {
+			if (initiatives[currentTurnBasedList][idx].actor == currentTurnBasedActor) {
+				currentTurnBasedSlot = idx;
+				break;
+			}
+		}
+
+		auto game = core->GetGame();
+		// move all party members in initiative list
+		for (size_t idx = 0; idx < game->GetPCs().size(); idx++) {
+			if (game->GetPCs()[idx]->InInitiativeList() == false && game->GetPCs()[idx]->IsDead() == false) {
+				game->GetPCs()[idx]->MoveToInitiativeList();
+			}
+		}
+
+		// have enemy present?
+		bool enemyPresent = false;
+		bool pcPresent = false;
+		for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
+			Actor* actor = initiatives[0][idx].actor;
+			if (actor->Modified[IE_EA] > EA_EVILCUTOFF && actor->GetCurrentArea()->IsVisible(actor->Pos)) {
+				enemyPresent = true;
+			}
+			if (initiatives[0][idx].actor->IsPC() == true) {
+				pcPresent = true;
+			}
+		}
+
+		if ((!pcPresent || !enemyPresent) && timeTurnBased < timeTurnBasedNeed) {
+			timeTurnBased++;
+		}
+
+		// first round start
+		if (enemyPresent && pcPresent && currentTurnBasedActor == nullptr && pause_before_fight == 0) {
+			core->GetGame()->PartyAttack = true;
+			FirstRoundStart();
+		}
+
+		// end battle if no enemy present
+		if (timeTurnBased >= timeTurnBasedNeed && (!turnBasedEnable || !enemyPresent || !pcPresent)) {
+			resetTurnBased();
+		}
+	}
+}
+
+void Interface::resetTurnBased() 
+{
+	if (core->GetGame() && timeTurnBased) {
+		core->GetGame()->SetGameTime(timeTurnBased);
+	}
+	for (int i = 0; i < 6; i++) {
+		initiatives[i].clear();
+	}
+	currentTurnBasedSlot = 0;
+	currentTurnBasedActor = nullptr;
+	pause_before_fight = 10;
+	roundTurnBased = 0;
+	timeTurnBased = 0;
 }
 
 }

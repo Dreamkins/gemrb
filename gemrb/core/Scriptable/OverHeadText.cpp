@@ -44,7 +44,7 @@ void OverHeadText::SetText(String newText, bool display, bool append, const Colo
 	}
 
 	// always append for actors and areas ... unless it's the head hp ratio
-	if (append && core->HasFeature(GFFlags::ONSCREEN_TEXT) && (owner->Type == ST_ACTOR || owner->Type == ST_AREA)) {
+	if (append && (core->HasFeature(GFFlags::ONSCREEN_TEXT) || core->IsTurnBased()) && (owner->Type == ST_ACTOR || owner->Type == ST_AREA)) {
 		idx = messages.size();
 		messages.emplace_back();
 		if (owner->Type == ST_ACTOR) {
@@ -63,7 +63,7 @@ bool OverHeadText::Display(bool show, size_t idx)
 {
 	if (show) {
 		isDisplaying = true;
-		messages[idx].timeStartDisplaying = core->Time.Ticks2Ms(core->GetGame()->GameTime);
+		messages[idx].timeStartDisplaying = core->Time.Ticks2Ms(core->GetGame()->GetGameTimeReal());
 		return true;
 	} else if (isDisplaying) {
 		// is this the last displaying message?
@@ -130,12 +130,12 @@ bool OverHeadMsg::Draw(int heightOffset, const Point& fallbackPos, int ownerType
 {
 	static constexpr tick_t maxDelay = 6000;
 	tick_t delay = maxDelay;
-	if (core->HasFeature(GFFlags::ONSCREEN_TEXT) && !scrollOffset.IsInvalid()) {
+	if ((core->HasFeature(GFFlags::ONSCREEN_TEXT) || core->IsTurnBased()) && !scrollOffset.IsInvalid()) {
 		// empirically determined estimate to get the right speed and distance and 2px/tick
 		delay = 1800;
 	}
 
-	tick_t time = core->Time.Ticks2Ms(core->GetGame()->GameTime);
+	tick_t time = core->Time.Ticks2Ms(core->GetGame()->GetGameTimeReal());
 	Color& textColor = color;
 	if (color == ColorBlack) {
 		// use defaults
@@ -168,7 +168,7 @@ bool OverHeadMsg::Draw(int heightOffset, const Point& fallbackPos, int ownerType
 	if (delay != maxDelay) {
 		rgn.y -= maxScrollOffset - scrollOffset.y;
 		// rgn.h will be adjusted automatically, we don't need to worry about accidentally hiding other msgs
-		scrollOffset.y -= 2;
+		scrollOffset.y = maxScrollOffset + time / 4;
 	}
 	core->GetTextFont()->Print(rgn, text, IE_FONT_ALIGN_CENTER | IE_FONT_ALIGN_TOP, fontColor);
 

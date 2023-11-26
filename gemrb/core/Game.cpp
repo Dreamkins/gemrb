@@ -1414,9 +1414,10 @@ EffectRef fx_set_regenerating_state_ref = { "State:Regenerating", -1 };
 //later this could be more complicated
 void Game::AdvanceTime(ieDword add, bool fatigue)
 {
-	ieDword h = GameTime/core->Time.hour_size;
+	ieDword h = GetGameTime() / core->Time.hour_size;
 	GameTime+=add;
-	if (h!=GameTime/core->Time.hour_size) {
+
+	if (h != GetGameTime() / core->Time.hour_size) {
 		//asking for a new weather when the hour changes
 		WeatherBits&=~WB_HASWEATHER;
 		//update clock display
@@ -1551,6 +1552,8 @@ void Game::UpdateScripts()
 	for (size_t idx = 0; idx < Maps.size(); idx++) {
 		Maps[idx]->UpdateScripts();
 	}
+
+	core->UpdateTurnBased();
 
 	if (PartyAttack) {
 		//ChangeSong will set the battlesong only if CombatCounter is nonzero
@@ -2101,7 +2104,7 @@ const Color *Game::GetGlobalTint() const
 	bool pstDayNight = map->AreaType & AT_PST_DAYNIGHT && core->HasFeature(GFFlags::PST_STATE_FLAGS);
 	if ((map->AreaType & (AT_OUTDOOR | AT_DAYNIGHT | AT_EXTENDED_NIGHT)) == (AT_OUTDOOR | AT_DAYNIGHT) || pstDayNight) {
 		//get daytime colour
-		ieDword daynight = core->Time.GetHour(GameTime);
+		ieDword daynight = core->Time.GetHour(GetGameTime());
 		if (daynight<2 || daynight>22) {
 			return &NightTint;
 		}
@@ -2137,7 +2140,7 @@ void Game::ApplyGlobalTint(Color &tint, BlitFlags &flags) const
 
 bool Game::IsDay() const
 {
-	ieDword daynight = core->Time.GetHour(GameTime);
+	ieDword daynight = core->Time.GetHour(GetGameTime());
 	// matches GameScript::TimeOfDay and splprot.2da by including dawn
 	if (daynight < 6 || daynight > 20) {
 		return false;
@@ -2488,6 +2491,16 @@ void Game::MoveFamiliars(const ResRef& targetArea, const Point& targetPoint, int
 			MoveBetweenAreasCore(npc, targetArea, targetPoint, orientation, true);
 		}
 	}
+}
+
+uint32_t Game::GetGameTime() const
+{ 
+	return core->IsTurnBased() ? core->timeTurnBased : GameTime; 
+}
+
+void Game::SetGameTime(uint32_t value)
+{ 
+	GameTime = value; 
 }
 
 }

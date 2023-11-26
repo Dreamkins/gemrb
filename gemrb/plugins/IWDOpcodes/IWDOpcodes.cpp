@@ -782,7 +782,7 @@ int fx_burning_blood2 (Scriptable* Owner, Actor* target, Effect* fx)
 	}
 
 	//timing
-	if (core->GetGame()->GameTime % core->Time.round_sec) {
+	if (core->GetGame()->GetGameTime() % core->Time.round_sec) {
 		return FX_APPLIED;
 	}
 
@@ -877,7 +877,7 @@ int fx_lich_touch (Scriptable* Owner, Actor* target, Effect* fx)
 	fx->Opcode = EffectQueue::ResolveEffect(fx_hold_creature_ref);
 	fx->Duration = fx->Parameter1;
 	fx->TimingMode = FX_DURATION_INSTANT_LIMITED;
-	fx->PrepareDuration(core->GetGame()->GameTime);
+	fx->PrepareDuration(core->GetGame()->GetGameTime());
 	return FX_APPLIED;
 }
 
@@ -909,7 +909,7 @@ int fx_blinding_orb (Scriptable* Owner, Actor* target, Effect* fx)
 	fx->Opcode = EffectQueue::ResolveEffect(fx_state_blind_ref);
 	fx->Duration = core->Roll(1,6,0);
 	fx->TimingMode = FX_DURATION_INSTANT_LIMITED;
-	fx->PrepareDuration(core->GetGame()->GameTime);
+	fx->PrepareDuration(core->GetGame()->GetGameTime());
 	return FX_APPLIED;
 }
 
@@ -948,7 +948,7 @@ int fx_salamander_aura (Scriptable* Owner, Actor* target, Effect* fx)
 	}
 
 	//timing
-	ieDword time = core->GetGame()->GameTime;
+	ieDword time = core->GetGame()->GetGameTime();
 	if ((fx->Parameter4==time) || (time%core->Time.round_size) ) {
 		return FX_APPLIED;
 	}
@@ -1008,7 +1008,7 @@ int fx_umberhulk_gaze (Scriptable* Owner, Actor* target, Effect* fx)
 		return FX_NOT_APPLIED;
 	}
 	fx->TimingMode=FX_DURATION_AFTER_EXPIRES;
-	fx->Duration = core->GetGame()->GameTime + core->Time.round_size;
+	fx->Duration = core->GetGame()->GetGameTime() + core->Time.round_size;
 
 	//collect targets and apply effect on targets
 	const Map *area = target->GetCurrentArea();
@@ -1072,7 +1072,7 @@ int fx_zombielord_aura (Scriptable* Owner, Actor* target, Effect* fx)
 	}
 
 	fx->TimingMode=FX_DURATION_AFTER_EXPIRES;
-	fx->Duration = core->GetGame()->GameTime + core->Time.round_size;
+	fx->Duration = core->GetGame()->GetGameTime() + core->Time.round_size;
 
 	//collect targets and apply effect on targets
 	const Map *area = target->GetCurrentArea();
@@ -1296,7 +1296,7 @@ int fx_cloak_of_fear(Scriptable* Owner, Actor* target, Effect* fx)
 
 	//timing (set up next fire)
 	fx->TimingMode=FX_DURATION_DELAY_PERMANENT;
-	fx->Duration = core->GetGame()->GameTime + 3 * core->Time.defaultTicksPerSec; // not rounds, that's the total duration!
+	fx->Duration = core->GetGame()->GetGameTime() + 3 * core->Time.defaultTicksPerSec; // not rounds, that's the total duration!
 	fx->Parameter1--;
 
 	//iwd2 style
@@ -1496,7 +1496,7 @@ int fx_shroud_of_flame (Scriptable* /*Owner*/, Actor* target, Effect* fx)
 	}
 
 	// how has special duration applied with a fixed delay (3s): 1 round/2 levels
-	ieDword time = core->GetGame()->GameTime;
+	ieDword time = core->GetGame()->GetGameTime();
 	if (fx->FirstApply) {
 		fx->Duration = time + fx->Parameter1 * core->Time.round_size;
 		fx->TimingMode = FX_DURATION_INSTANT_LIMITED;
@@ -1565,7 +1565,7 @@ int fx_shroud_of_flame2 (Scriptable* /*Owner*/, Actor* target, Effect* fx)
 	}
 
 	//timing
-	ieDword time = core->GetGame()->GameTime;
+	ieDword time = core->GetGame()->GetGameTime();
 	if (fx->Parameter4 == time || time % core->Time.round_size) {
 		return FX_APPLIED;
 	}
@@ -1622,7 +1622,7 @@ int fx_animal_rage (Scriptable* /*Owner*/, Actor* target, Effect* fx)
 
 	//and attacks the first enemy in sight
 	//timing
-	if (core->GetGame()->GameTime%6) {
+	if (core->GetGame()->GetGameTime() % 6) {
 		return FX_APPLIED;
 	}
 	//if enemy is in sight
@@ -1689,7 +1689,7 @@ int fx_vitriolic_sphere (Scriptable* Owner, Actor* target, Effect* fx)
 {
 	// print("fx_vitriolic_sphere(%2d): Damage %d", fx->Opcode, fx->Parameter1);
 	//timing
-	if (core->GetGame()->GameTime%6) {
+	if (core->GetGame()->GetGameTime() % 6) {
 		return FX_APPLIED;
 	}
 	target->Damage(fx->Parameter1, DAMAGE_ACID, Owner, MOD_ADDITIVE, fx->IsVariable, fx->SavingThrowType);
@@ -2175,10 +2175,10 @@ int fx_control (Scriptable* /*Owner*/, Actor* target, Effect* fx)
 	const Game *game = core->GetGame();
 	if (fx->FirstApply && target->HasFeat(FEAT_SLIPPERY_MIND)) {
 		fx->Parameter3 = 1;
-		fx->Parameter4 = game->GameTime+core->Time.round_size;
+		fx->Parameter4 = game->GetGameTime() + core->Time.round_size;
 	}
 
-	if (fx->Parameter3 && fx->Parameter4<game->GameTime) {
+	if (fx->Parameter3 && fx->Parameter4<game->GetGameTime()) {
 		fx->Parameter3 = 0;
 		if (target->GetSavingThrow(4, 0, fx)) {
 			return FX_NOT_APPLIED;
@@ -2387,7 +2387,7 @@ int fx_bleeding_wounds (Scriptable* Owner, Actor* target, Effect* fx)
 	}
 
 	tmp *= core->Time.defaultTicksPerSec;
-	if (tmp && (core->GetGame()->GameTime%tmp)) {
+	if (tmp && (core->GetGame()->GetGameTime() % tmp)) {
 		return FX_APPLIED;
 	}
 
@@ -2427,11 +2427,11 @@ int fx_area_effect (Scriptable* Owner, Actor* target, Effect* fx)
 		fx->Parameter4 = 0;
 	}
 
-	if (fx->Parameter4>=game->GameTime) {
+	if (fx->Parameter4>=game->GetGameTime()) {
 		return FX_APPLIED;
 	}
 
-	fx->Parameter4 = game->GameTime+fx->Parameter3;
+	fx->Parameter4 = game->GetGameTime() + fx->Parameter3;
 
 	Spell *spell = gamedata->GetSpell(fx->Resource);
 	if (!spell) {
@@ -2882,7 +2882,7 @@ int fx_barbarian_rage (Scriptable* /*Owner*/, Actor *target, Effect* fx)
 
 	// apply a spell with the maluses just as we're about to expire
 	// currently -2 str, -2 dex, fatigue icon
-	if (core->GetGame()->GameTime + 1 == fx->Duration) {
+	if (core->GetGame()->GetGameTime() + 1 == fx->Duration) {
 		Scriptable *caster = GetCasterObject();
 		core->ApplySpell(FatigueRef, target, caster, 0);
 	}
@@ -3085,7 +3085,7 @@ int fx_call_lightning (Scriptable* /*Owner*/, Actor* target, Effect* fx)
 
 	//timing
 	fx->TimingMode=FX_DURATION_DELAY_PERMANENT;
-	fx->Duration = core->GetGame()->GameTime + 10*core->Time.round_size;
+	fx->Duration = core->GetGame()->GetGameTime() + 10*core->Time.round_size;
 	fx->Parameter1--;
 
 	//calculate victim (an opponent of target)

@@ -1156,7 +1156,7 @@ static void pcf_maxhitpoint(Actor *actor, ieDword /*oldValue*/, ieDword /*newVal
 {
 	if (!actor->checkHP) {
 		actor->checkHP = 1;
-		actor->checkHPTime = core->GetGame()->GameTime;
+		actor->checkHPTime = core->GetGame()->GetGameTimeReal();
 	}
 }
 
@@ -2727,8 +2727,8 @@ void Actor::RefreshEffects(bool first, const stats_t& previous)
 	//as it's triggered by PCFs from the previous tick, it should probably run before current PCFs
 	if (first && checkHP == 2) {
 		//could not set this in the constructor
-		checkHPTime = game->GameTime;
-	} else if (checkHP && checkHPTime != game->GameTime) {
+		checkHPTime = game->GetGameTimeReal();
+	} else if (checkHP && checkHPTime != game->GetGameTimeReal()) {
 		checkHP = 0;
 		if (!(BaseStats[IE_STATE_ID] & STATE_DEAD)) pcf_hitpoint(this, 0, BaseStats[IE_HITPOINTS]);
 	}
@@ -2918,7 +2918,7 @@ void Actor::RefreshPCStats() {
 	//morale recovery every xth AI cycle ... except for pst pcs
 	int mrec = GetStat(IE_MORALERECOVERYTIME);
 	if (mrec && ShouldModifyMorale()) {
-		if (!(game->GameTime%mrec)) {
+		if (!(game->GetGameTimeReal() % mrec)) {
 			int morale = (signed) BaseStats[IE_MORALE];
 			if (morale < 10) {
 				NewBase(IE_MORALE, 1, MOD_ADDITIVE);
@@ -2986,7 +2986,7 @@ void Actor::RefreshPCStats() {
 
 	// regenerate actors with high enough constitution
 	int rate = GetConHealAmount();
-	if (rate && !(game->GameTime % rate)) {
+	if (rate && !(game->GetGameTimeReal() % rate) && !core->IsTurnBased()) {
 		NewBase(IE_HITPOINTS, 1, MOD_ADDITIVE);
 		if (core->HasFeature(GFFlags::ONSCREEN_TEXT) && InParty && Modified[IE_HITPOINTS] < Modified[IE_MAXHITPOINTS]) {
 			// eeeh, no token (Heal: 1)
@@ -3046,24 +3046,24 @@ void Actor::UpdateFatigue()
 {
 	const Game *game = core->GetGame();
 	const GameControl* gc = core->GetGameControl();
-	if (!InParty || !game->GameTime || !gc || gc->InDialog() || core->InCutSceneMode()) {
+	if (!InParty || !game->GetGameTime() || !gc || gc->InDialog() || core->InCutSceneMode()) {
 		return;
 	}
 
 	bool updated = false;
 	if (!TicksLastRested) {
 		// just loaded the game; approximate last rest
-		TicksLastRested = game->GameTime - (2*core->Time.hour_size) * (2*GetBase(IE_FATIGUE)+1);
+		TicksLastRested = game->GetGameTime() - (2*core->Time.hour_size) * (2*GetBase(IE_FATIGUE)+1);
 		updated = true;
-	} else if (LastFatigueCheck) {
-		ieDword FatigueDiff = (game->GameTime - TicksLastRested) / (4*core->Time.hour_size)
+	} else if (LastFatigueCheck && !core->IsTurnBased()) {
+		ieDword FatigueDiff = (game->GetGameTime() - TicksLastRested) / (4*core->Time.hour_size)
 		                    - (LastFatigueCheck - TicksLastRested) / (4*core->Time.hour_size);
 		if (FatigueDiff) {
 			NewBase(IE_FATIGUE, FatigueDiff, MOD_ADDITIVE);
 			updated = true;
 		}
 	}
-	LastFatigueCheck = game->GameTime;
+	LastFatigueCheck = game->GetGameTime();
 
 	if (!core->HasFeature(GFFlags::AREA_OVERRIDE)) {
 		// pst has TNO regeneration stored there
@@ -3708,6 +3708,10 @@ void Actor::CommandActor(Action* action, bool clearPath)
 //Generates an idle action (party banter, area comment, bored)
 void Actor::IdleActions(bool nonidle)
 {
+	if (core->IsTurnBased()) {
+		return;
+	}
+
 	//do we have an area
 	const Map *map = GetCurrentArea();
 	if (!map) return;
@@ -3751,7 +3755,7 @@ void Actor::PlayExistenceSounds()
 	if (Persistent()) return;
 
 	const Game *game = core->GetGame();
-	ieDword time = game->GameTime;
+	ieDword time = game->GetGameTimeReal();
 	if (time/nextComment > 1) { // first run, not adjusted for game time yet
 		nextComment += time;
 	}
@@ -3863,7 +3867,7 @@ static bool CheckConfusionOverride(Actor* actor)
 			break;
 	}
 	ForceOverrideAction(actor, actionString);
-	Log(DEBUG, "Actor", "Confusion: added {} at {}", actionString, int(core->GetGame()->GameTime));
+	Log(DEBUG, "Actor", "Confusion: added {} at {}", actionString, int(core->GetGame()->GetGameTime()));
 	return true;
 }
 
@@ -3893,7 +3897,7 @@ bool Actor::OverrideActions()
 
 	// each round also re-confuse the actor
 	// use the combat round size as the original;  also skald song duration matches it
-	int roundFraction = (game->GameTime - roundTime) % GetAdjustedTime(core->Time.attack_round_size);
+	int roundFraction = (game->GetGameTime() - roundTime) % GetAdjustedTime(core->Time.attack_round_size);
 	if (!roundFraction && CheckConfusionOverride(this)) return true;
 
 	// feeblemind
@@ -4084,6 +4088,15 @@ static void ChunkActor(Actor* actor)
 //returns actual damage
 int Actor::Damage(int damage, int damagetype, Scriptable* hitter, int modtype, int critical, int saveflags, int specialFlags)
 {
+	Actor* act = Scriptable::As<Actor>(hitter);
+
+	if (act &&
+		(((act->IsPC() || IsPC()) && EARelation(act, this) == EAR_HOSTILE) || // attack or attacked PC
+		act->InInitiativeList() || InInitiativeList())) { // for neutrals
+		act->MoveToInitiativeList();
+		MoveToInitiativeList();
+	}
+
 	//won't get any more hurt
 	if (InternalFlags & IF_REALLYDIED) {
 		return 0;
@@ -4101,8 +4114,6 @@ int Actor::Damage(int damage, int damagetype, Scriptable* hitter, int modtype, i
 	//add lastdamagetype up ? maybe
 	//FIXME: what does original do?
 	LastDamageType |= damagetype;
-
-	Actor* act = Scriptable::As<Actor>(hitter);
 
 	switch (modtype) {
 	case MOD_ADDITIVE:
@@ -4310,6 +4321,11 @@ int Actor::Damage(int damage, int damagetype, Scriptable* hitter, int modtype, i
 		}
 	}
 
+	if (!core->HasFeature(GFFlags::ONSCREEN_TEXT)) {
+		String text = fmt::format(u"-{}", damage);
+		overHead.SetText(std::move(text), true, true, Color(255, 255, 255, 255));
+	}
+
 	if (InParty) {
 		if (chp < (signed) Modified[IE_MAXHITPOINTS]/10) {
 			core->Autopause(AUTOPAUSE::WOUNDED, this);
@@ -4322,7 +4338,7 @@ int Actor::Damage(int damage, int damagetype, Scriptable* hitter, int modtype, i
 	return damage;
 }
 
-void Actor::DisplayCombatFeedback(unsigned int damage, int resisted, int damagetype, const Scriptable *hitter)
+void Actor::DisplayCombatFeedback(int damage, int resisted, int damagetype, const Scriptable *hitter)
 {
 	// shortcircuit for disintegration, which wouldn't hit any of the below
 	if (damage == 0 && resisted == 0) return;
@@ -5483,7 +5499,7 @@ bool Actor::CheckOnDeath()
 		return false;
 	}
 
-	ieDword time = core->GetGame()->GameTime;
+	ieDword time = core->GetGame()->GetGameTimeReal();
 	if (!pstflags && Modified[IE_MC_FLAGS]&MC_REMOVE_CORPSE) {
 		RemovalTime = time;
 		return true;
@@ -5810,7 +5826,7 @@ bool Actor::ValidTarget(int ga_flags, const Scriptable *checker) const
 
 		const Game *game = core->GetGame();
 		if (game) {
-			if (!Schedule(game->GameTime, true)) return false;
+			if (!Schedule(game->GetGameTime(), true)) return false;
 		}
 	}
 
@@ -6180,6 +6196,15 @@ void Actor::SetModalSpell(enum Modal state, const ResRef& spell)
 
 void Actor::AttackedBy(const Actor *attacker)
 {
+	Actor* actor = core->GetGame()->GetCurrentArea()->GetActorByGlobalID(attacker->GetGlobalID());
+
+	if (actor &&
+		(((actor->IsPC() || IsPC()) && EARelation(actor, this) == EAR_HOSTILE) || // attack or attacked PC
+		actor->InInitiativeList() || InInitiativeList())) { // for neutrals
+		actor->MoveToInitiativeList();
+		MoveToInitiativeList();
+	}
+
 	AddTrigger(TriggerEntry(trigger_attackedby, attacker->GetGlobalID()));
 	if (attacker->GetStat(IE_EA) != EA_PC && Modified[IE_EA] != EA_PC) {
 		objects.LastAttacker = attacker->GetGlobalID();
@@ -6352,6 +6377,64 @@ int Actor::BAB2APR(int pBAB, int pBABDecrement, int CheckRapidShot) const
 	// NOTE: we currently double the value, since it is stored doubled in other games and effects rely on it
 	// if you want to change it, don't forget to do the same for the bonus in GetNumberOfAttacks
 	return APR*2;
+}
+void Actor::RemoveFromAdditionInitiativeLists() {
+	for (size_t list = 1; list < 6; list++) {
+		for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
+			if (core->initiatives[list][idx].actor == this) {
+				core->initiatives[list].erase(core->initiatives[list].begin() + idx);
+				break;
+			}
+		}
+	}
+}
+
+Actor* Actor::FindActorInInitiativeList() {
+	for (size_t idx = 0; idx < core->initiatives[0].size(); idx++) {
+		if (core->initiatives[0][idx].actor == this) {
+			return this;
+		}
+	}
+	return nullptr;
+}
+
+bool Actor::InInitiativeList() {
+	if (!core || !core->GetGame()) {
+		return false;
+	}
+	return FindActorInInitiativeList() == this;
+}
+
+int Actor::CalculateInitiative(int from) {
+	int spdfactor = 0;
+	if (fxqueue.HasEffectWithParam(fx_set_haste_state_ref, 0) || fxqueue.HasEffectWithParam(fx_set_haste_state_ref, 1)) {
+		spdfactor -= 2;
+	}
+	else if (fxqueue.HasEffect(fx_set_slow_state_ref)) {
+		spdfactor += 2;
+	}
+	spdfactor -= GetAbilityBonus(IE_DEX);
+
+	if (from >= 10) return 10;
+
+	return LuckyRoll(from, 10, spdfactor, LR_NEGATIVE);
+}
+
+void Actor::MoveToInitiativeList() {
+	if (!core->turnBasedEnable || core->InCutSceneMode() || IsDead() || InInitiativeList() || !GetCurrentStanceAnim().size() || !GetCurrentStanceAnim()[0].first->GetFrame(0)) {
+		return;
+	}
+
+	InitiativeSlot slot;
+	slot.actor = this;
+
+	slot.initiative = CalculateInitiative(core->roundTurnBased > 0 ? core->GetCurrentTurnBasedSlot().initiative + 1 : 1);
+	slot.image = CopyPortrait(1);
+
+	core->initiatives[0].push_back(slot);
+
+	ClearPath();
+	//ReleaseCurrentAction();
 }
 
 //calculate how many attacks will be performed
@@ -6841,6 +6924,12 @@ static void ApplyCriticalEffect(Actor* actor, Actor* target, const WeaponInfo& w
 
 void Actor::PerformAttack(ieDword gameTime)
 {
+	if (core->IsTurnBased()) {
+		lastattack = gameTime;
+		AttackTurnBased(gameTime);
+		return;
+	}
+
 	static int attackRollDiceSides = gamedata->GetMiscRule("ATTACK_ROLL_DICE_SIDES");
 
 	// don't let imprisoned or otherwise missing actors continue their attack
@@ -7052,8 +7141,8 @@ void Actor::PerformAttack(ieDword gameTime)
 
 	bool critical = criticalroll >= attackRollDiceSides;
 	bool success = critical;
-	int defense = target->GetDefense(damagetype, wi.wflags, this);
-	int rollMod = ReverseToHit ? defense : tohit;
+	int defence = target->GetDefense(damagetype, wi.wflags, this);
+	int rollMod = ReverseToHit ? defence - target->AC.GetTotal() : 0;
 	if (!critical) {
 		// autohit immobile enemies (true for atleast stun, sleep, timestop)
 		if (target->Immobile() || (target->GetStat(IE_STATE_ID) & STATE_SLEEP)) {
@@ -7061,7 +7150,7 @@ void Actor::PerformAttack(ieDword gameTime)
 		} else if (roll == 1) {
 			success = false;
 		} else {
-			success = (roll + rollMod) > (ReverseToHit ? tohit : defense);
+			success = (roll + rollMod) >= (ReverseToHit ? (ToHit.GetTotal() - target->AC.GetTotal()) : (target->AC.GetTotal() - ToHit.GetTotal()));
 		}
 	}
 
@@ -7149,13 +7238,421 @@ void Actor::PerformAttack(ieDword gameTime)
 			VerbalConstant(Verbal::CritHit, gamedata->GetVBData("SPECIAL_COUNT"));
 		}
 		ApplyCriticalEffect(this, target, wi, true);
-	} else {
+	}
+	else {
 		//normal success
 		buffer.append("[Hit]");
 		Log(COMBAT, "Attack", "{}", buffer);
 	}
-	UseItem(wi.slot, wi.wflags&WEAPON_RANGED?-2:-1, target, (critical?UI_CRITICAL:0)|UI_NOAURA, damage);
+	UseItem(wi.slot, wi.wflags & WEAPON_RANGED ? -2 : -1, target, (critical ? UI_CRITICAL : 0) | UI_NOAURA, damage);
 	ResetState();
+}
+
+int Actor::getHitChanceTurnBased(const Actor* target)
+{
+	//which hand is used
+	//we do apr - attacksleft so we always use the main hand first
+	// however, in 3ed, only one attack can be made by the offhand
+	if (third) {
+		usedLeftHand = false;
+		// make only the last attack with the offhand (iwd2)
+		if (attackcount == 1 && IsDualWielding()) {
+			usedLeftHand = true;
+		}
+	} else {
+		usedLeftHand = (bool)((attacksperround - attackcount) & 1);
+	}
+
+	WeaponInfo& wi = weaponInfo[usedLeftHand];
+	if (!wi.extHeader && usedLeftHand) {
+		// nothing in left hand, use right
+		wi = weaponInfo[0];
+		usedLeftHand = false;
+	}
+
+	const ITMExtHeader* hittingheader = wi.extHeader;
+	int tohit;
+	int DamageBonus, CriticalBonus;
+	int speed, style;
+
+	//will return false on any errors (eg, unusable weapon)
+	if (!GetCombatDetails(tohit, usedLeftHand, DamageBonus, speed, CriticalBonus, style, target)) {
+		return 0;
+	}
+
+	int defence = target->GetDefense(hittingheader->DamageType, wi.wflags, this);
+	int rollMod = ReverseToHit ? defence - target->AC.GetTotal() : 0;
+
+	if (target->Immobile() || (target->GetStat(IE_STATE_ID) & STATE_SLEEP)) {
+		return 100;
+	} else {
+		int vs = (ReverseToHit ? (ToHit.GetTotal() - target->AC.GetTotal()) : (target->AC.GetTotal() - ToHit.GetTotal()));
+		return std::min(20, std::max(1, 20 - (vs - rollMod))) * 100 / 20;
+	}
+}
+
+void Actor::CalculateAttackResult()
+{
+	core->currentTurnBasedActor->lastInit = core->GetGame()->GetGameTimeReal();
+
+	static int attackRollDiceSides = gamedata->GetMiscRule("ATTACK_ROLL_DICE_SIDES");
+
+	//get target
+	Actor* target = area->GetActorByGlobalID(core->lastTurnBasedTarget);
+	if (!target) {
+		Log(WARNING, "Actor", "Attack without valid target!");
+		return;
+	}
+
+	//which hand is used
+	//we do apr - attacksleft so we always use the main hand first
+	// however, in 3ed, only one attack can be made by the offhand
+	if (third) {
+		usedLeftHand = false;
+		// make only the last attack with the offhand (iwd2)
+		if (attackcount == 1 && IsDualWielding()) {
+			usedLeftHand = true;
+		}
+	}
+	else {
+		usedLeftHand = (bool)((attacksperround - attackcount) & 1);
+	}
+
+	WeaponInfo& wi = weaponInfo[usedLeftHand];
+	if (!wi.extHeader && usedLeftHand) {
+		// nothing in left hand, use right
+		wi = weaponInfo[0];
+		usedLeftHand = false;
+	}
+
+	const ITMExtHeader* hittingheader = wi.extHeader;
+	int tohit;
+	int DamageBonus, CriticalBonus;
+	int speed, style;
+
+	//will return false on any errors (eg, unusable weapon)
+	if (!GetCombatDetails(tohit, usedLeftHand, DamageBonus, speed, CriticalBonus, style, target)) {
+		return;
+	}
+
+	if (PCStats) {
+		PCStats->RegisterFavourite(weaponInfo[usedLeftHand && IsDualWielding()].item->Name, FAV_WEAPON);
+	}
+
+	std::string buffer;
+	//debug messages
+	if (usedLeftHand && IsDualWielding()) {
+		buffer.append("(Off) ");
+	}
+	else {
+		buffer.append("(Main) ");
+	}
+	if (attacksperround) {
+		AppendFormat(buffer, "Left: {} | ", attackcount);
+		//AppendFormat(buffer, "Next: {} ", nextattack);
+	}
+	if (fxqueue.HasEffectWithParam(fx_puppetmarker_ref, 1) || fxqueue.HasEffectWithParam(fx_puppetmarker_ref, 2)) { // illusions can't hit
+		ResetState();
+		buffer.append("[Missed (puppet)]");
+		Log(COMBAT, "Attack", "{}", buffer);
+		return;
+	}
+
+	// iwd2 smite evil only lasts for one attack, but has an insane duration, so remove it manually
+	if (HasSpellState(SS_SMITEEVIL)) {
+		fxqueue.RemoveAllEffects(fx_smite_evil_ref);
+	}
+
+	// check for concealment first (iwd2), both our enemies' and from our phasing problems
+	int concealment = (GetStat(IE_ETHEREALNESS) >> 8) + (target->GetStat(IE_ETHEREALNESS) & 0x64);
+	if (concealment && LuckyRoll(1, 100, 0) < concealment) {
+		// can we retry?
+		if (!HasFeat(FEAT_BLIND_FIGHT) || LuckyRoll(1, 100, 0) < concealment) {
+			// Missed <TARGETNAME> due to concealment.
+			core->GetTokenDictionary()["TARGETNAME"] = target->GetDefaultName();
+			if (core->HasFeedback(FT_COMBAT)) displaymsg->DisplayConstantStringName(HCStrings::ConcealedMiss, GUIColors::WHITE, this);
+			buffer.append("[Concealment Miss]");
+			Log(COMBAT, "Attack", "{}", buffer);
+			ResetState();
+			return;
+		}
+	}
+
+	// iwd2 rerolls to check for criticals (cf. manual page 45) - the second roll just needs to hit; on miss, it degrades to a normal hit
+	// CriticalBonus is negative, it is added to the minimum roll needed for a critical hit
+	// IE_CRITICALHITBONUS is positive, it is subtracted
+	int roll = LuckyRoll(1, attackRollDiceSides, 0, LR_CRITICAL);
+	int criticalroll = roll + (int)GetStat(IE_CRITICALHITBONUS) - CriticalBonus;
+	if (third) {
+		int ThreatRangeMin = wi.critrange;
+		ThreatRangeMin -= ((int)GetStat(IE_CRITICALHITBONUS) - CriticalBonus);
+		criticalroll = LuckyRoll(1, attackRollDiceSides, 0, LR_CRITICAL);
+		if (criticalroll < ThreatRangeMin || GetStat(IE_SPECFLAGS) & SPECF_CRITIMMUNITY) {
+			// make it an ordinary hit
+			criticalroll = 1;
+		}
+		else {
+			// make sure it will be a critical hit
+			criticalroll = attackRollDiceSides;
+		}
+	}
+
+	//damage type is?
+	//modify defense with damage type
+	ieDword damagetype = hittingheader->DamageType;
+	int damage = 0;
+
+	if (hittingheader->DiceThrown < 256) {
+		// another bizarre 2E feature that's unused, but working
+		if (!third && hittingheader->AltDiceSides && target->GetStat(IE_MC_FLAGS) & MC_LARGE_CREATURE) {
+			// make sure not to discard other damage bonuses from above
+			int dmgBon = DamageBonus - hittingheader->DamageBonus + hittingheader->AltDamageBonus;
+			damage += LuckyRoll(hittingheader->AltDiceThrown, hittingheader->AltDiceSides, dmgBon, LR_DAMAGELUCK);
+		}
+		else {
+			damage += LuckyRoll(hittingheader->DiceThrown, hittingheader->DiceSides, DamageBonus, LR_DAMAGELUCK);
+		}
+		if (damage <= 0) damage = 1; // bad luck, effects and/or profs on lowlevel chars
+	}
+
+	bool critical = criticalroll >= attackRollDiceSides;
+	bool success = critical;
+	int defence = target->GetDefense(damagetype, wi.wflags, this);
+	int rollMod = ReverseToHit ? defence - target->AC.GetTotal() : 0;
+	if (!critical) {
+		// autohit immobile enemies (true for atleast stun, sleep, timestop)
+		if (target->Immobile() || (target->GetStat(IE_STATE_ID) & STATE_SLEEP)) {
+			success = true;
+		}
+		else if (roll == 1) {
+			success = false;
+		}
+		else {
+			success = (roll + rollMod) >= (ReverseToHit ? (ToHit.GetTotal() - target->AC.GetTotal()) : (target->AC.GetTotal() - ToHit.GetTotal()));
+		}
+	}
+
+	if (target->GetStat(IE_EXTSTATE_ID) & EXTSTATE_EYE_SWORD) {
+		target->fxqueue.RemoveAllEffects(fx_eye_sword_ref);
+		target->spellbook.RemoveSpell(SevenEyes[EYE_SWORD]);
+		target->SetBaseBit(IE_EXTSTATE_ID, EXTSTATE_EYE_SWORD, false);
+		success = false;
+		roll = 2; // avoid chance critical misses
+	}
+
+	int critMissThreshold = 1;
+	static EffectRef fx_critical_miss_ref = { "CriticalMissModifier", -1 };
+	const Effect* fx = fxqueue.HasEffect(fx_critical_miss_ref);
+	if (fx && IsCriticalEffectEligible(wi, fx)) {
+		critMissThreshold += fx->Parameter1;
+	}
+
+	if (roll <= critMissThreshold) {
+		success = false;
+	}
+
+	const GameControl* gc = core->GetGameControl();
+	if (core->HasFeedback(FT_TOHIT) && !gc->InDialog()) {
+		// log the roll
+		String leftRight;
+		String hitMiss;
+		if (usedLeftHand && DisplayMessage::HasStringReference(HCStrings::AttackRollLeft)) {
+			leftRight = core->GetString(DisplayMessage::GetStringReference(HCStrings::AttackRollLeft));
+		}
+		else {
+			leftRight = core->GetString(DisplayMessage::GetStringReference(HCStrings::AttackRoll));
+		}
+		if (success) {
+			hitMiss = core->GetString(DisplayMessage::GetStringReference(HCStrings::Hit));
+		}
+		else {
+			hitMiss = core->GetString(DisplayMessage::GetStringReference(HCStrings::Miss));
+		}
+
+		int TH = ToHit.GetTotal();
+		int AC = target->AC.GetTotal();
+		String rollLog;
+		if (third) {
+			rollLog = fmt::format(u"{} {} vs {} (AC {} - ToHit {}) : {}", leftRight, roll, AC - TH, AC, TH, hitMiss);
+		} else {
+			if (rollMod) {
+				rollLog = fmt::format(u"{} {} ({} {} {}) vs {} (THAC0 {} - AC {}) : {}", leftRight, roll + rollMod, roll, (rollMod >= 0) ? u"+" : u"-", abs(rollMod), TH - AC, TH, AC, hitMiss);
+			} else {
+				rollLog = fmt::format(u"{} {} vs {} (THAC0 {} - AC {}) : {}", leftRight, roll, TH - AC, TH, AC, hitMiss);
+			}
+		}
+		//String rollLog = fmt::format(L"{} {} {} {} = {} : {}", leftRight, roll, (rollMod >= 0) ? L"+" : L"-", abs(rollMod), roll + rollMod, hitMiss);
+		displaymsg->DisplayStringName(std::move(rollLog), GUIColors::WHITE, this);
+	}
+
+	if (roll <= critMissThreshold) {
+		//critical failure
+		buffer.append("[Critical Miss]");
+		Log(COMBAT, "Attack", "{}", buffer);
+		if (!gc->InDialog()) {
+			displaymsg->DisplayMsgAtLocation(HCStrings::CriticalMiss, FT_COMBAT, this, this, GUIColors::WHITE);
+			VerbalConstant(Verbal::CritMiss);
+		}
+		if (wi.wflags & WEAPON_RANGED) {//no need for this with melee weapon!
+			UseItem(wi.slot, (ieDword)-2, target, UI_MISS | UI_NOAURA);
+		}
+		else if (core->HasFeature(GFFlags::BREAKABLE_WEAPONS) && InParty) {
+			//break sword
+			// a random roll on-hit (perhaps critical failure too)
+			//  in 0,5% (1d20*1d10==1) cases
+			if (wi.wflags & WEAPON_BREAKABLE && core->Roll(1, 10, 0) == 1) {
+				inventory.BreakItemSlot(wi.slot);
+				inventory.EquipBestWeapon(EQUIP_MELEE);
+			}
+		}
+		if (!core->HasFeature(GFFlags::ONSCREEN_TEXT)) {
+			String text = fmt::format(u"Critical Miss");
+			target->overHead.SetText(std::move(text), true, true, Color(255, 255, 255, 255));
+		}
+
+		ApplyCriticalEffect(this, target, wi, false);
+		ResetState();
+
+		core->GetCurrentTurnBasedSlot().haveattack = false;
+
+		return;
+	}
+
+	if (!success) {
+		//hit failed
+		if (wi.wflags & WEAPON_RANGED) {//Launch the projectile anyway
+			UseItem(wi.slot, (ieDword)-2, target, UI_MISS | UI_NOAURA);
+		}
+		ResetState();
+		buffer.append("[Missed]");
+		Log(COMBAT, "Attack", "{}", buffer);
+
+		if (!core->HasFeature(GFFlags::ONSCREEN_TEXT)) {
+			String text = fmt::format(u"Missed");
+			target->overHead.SetText(std::move(text), true, true, Color(255, 255, 255, 255));
+		}
+
+		core->GetCurrentTurnBasedSlot().haveattack = false;
+		return;
+	}
+
+	ModifyWeaponDamage(wi, target, damage, critical);
+
+	if (third && target->GetStat(IE_MC_FLAGS) & MC_INVULNERABLE) {
+		Log(DEBUG, "Actor", "Attacking invulnerable target, nulifying damage!");
+		damage = 0;
+	}
+
+	if (critical) {
+		//critical success
+		buffer.append("[Critical Hit]");
+		Log(COMBAT, "Attack", "{}", buffer);
+		if (!gc->InDialog()) {
+			displaymsg->DisplayMsgAtLocation(HCStrings::CriticalHit, FT_COMBAT, this, this, GUIColors::WHITE);
+			VerbalConstant(Verbal::CritHit, gamedata->GetVBData("SPECIAL_COUNT"));
+		}
+		ApplyCriticalEffect(this, target, wi, true);
+	}
+	else {
+		//normal success
+		buffer.append("[Hit]");
+		Log(COMBAT, "Attack", "{}", buffer);
+	}
+
+	UseItem(wi.slot, wi.wflags & WEAPON_RANGED ? -2 : -1, target, (critical ? UI_CRITICAL : 0) | UI_NOAURA, damage);
+	ResetState();
+
+	core->GetCurrentTurnBasedSlot().haveattack = false;
+}
+
+void Actor::AttackTurnBased(ieDword gameTime)
+{
+	Game* game = core->GetGame();
+
+	// don't let imprisoned or otherwise missing actors continue their attack
+	if (Modified[IE_AVATARREMOVAL]) return;
+
+	if (InParty) {
+		// TODO: this is temporary hack
+		game->PartyAttack = true;
+	}
+
+	if (Modified[IE_STATE_ID] == STATE_PANIC) {
+		return;
+	}
+
+	if (!core->currentTurnBasedActor || core->currentTurnBasedActor != this) {
+		return;
+	}
+
+	//only return if we don't have any attacks left this round
+	if (!core->GetCurrentTurnBasedSlot().haveattack) {
+		if (!InAttack()) {
+			ReleaseCurrentAction();
+		}
+		return;
+	}
+
+	if (GetStance() == IE_ANI_ATTACK ||
+		GetStance() == IE_ANI_ATTACK_SLASH ||
+		GetStance() == IE_ANI_ATTACK_BACKSLASH ||
+		GetStance() == IE_ANI_ATTACK_JAB ||
+		GetStance() == IE_ANI_SHOOT) {
+		return;
+	}
+	
+
+	if (IsDead()) {
+		// this should be avoided by the AF_ALIVE check by all the calling actions
+		Log(ERROR, "Actor", "Attack by dead actor!");
+		return;
+	}
+
+	if (!objects.LastTarget) {
+		Log(ERROR, "Actor", "Attack without valid target ID!");
+		return;
+	}
+
+	//get target
+	Actor* target = area->GetActorByGlobalID(objects.LastTarget);
+	if (!target) {
+		Log(WARNING, "Actor", "Attack without valid target!");
+		return;
+	}
+
+	// also start CombatCounter if a pc is attacked
+	if (!InParty && target->IsPartyMember()) {
+		core->GetGame()->PartyAttack = true;
+	}
+
+	Log(DEBUG, "Actor", "Performattack for {}, target is: {}", fmt::WideToChar{ GetShortName() }, fmt::WideToChar{ target->GetShortName() });
+
+	WeaponInfo& wi = weaponInfo[usedLeftHand];
+	if (!wi.extHeader && usedLeftHand) {
+		// nothing in left hand, use right
+		wi = weaponInfo[0];
+	}
+
+	if (!WithinPersonalRange(this, target, GetWeaponRange(usedLeftHand)) || GetCurrentArea() != target->GetCurrentArea()) {
+		// this is a temporary double-check, remove when bugfixed
+		Log(ERROR, "Actor", "Attack action didn't bring us close enough!");
+		return;
+	}
+
+	ClearPath(true);
+	SetStance(AttackStance);
+	lastInit = core->GetGame()->GetGameTimeReal();
+	core->lastTurnBasedTarget = objects.LastTarget;
+
+	//UpdateModalState(gameTime);
+	PlaySwingSound(wi);
+
+	PlayWarCry(5);
+
+	//display attack message
+	displaymsg->DisplayConstantStringAction(HCStrings::ActionAttack, GUIColors::WHITE, this, target);
+
+	CalculateAttackResult();
 }
 
 unsigned int Actor::GetWeaponRange(bool leftOrRight) const
@@ -7316,6 +7813,56 @@ void Actor::ModifyDamage(Scriptable *hitter, int &damage, int &resisted, int dam
 	}
 }
 
+bool Actor::InAttack() {
+	if (Immobile()) {
+		return false;
+	}
+	if (GetStance() == IE_ANI_ATTACK ||
+		GetStance() == IE_ANI_ATTACK_SLASH ||
+		GetStance() == IE_ANI_ATTACK_BACKSLASH ||
+		GetStance() == IE_ANI_ATTACK_JAB ||
+		GetStance() == IE_ANI_SHOOT) {
+		return true;
+	}
+	return false;
+}
+
+void Actor::UpdateAnimations() {
+	Game* game = core->GetGame();
+	const auto& anim = currentStance.anim;
+
+	if (anim.empty()) {
+		UpdateModalState(game->GetGameTime());
+		return;
+	}
+
+	Animation* first = anim[0].first;
+
+	if (first->endReached) {
+		// restart animation for next time it is needed
+		first->endReached = false;
+		first->SetFrame(0);
+
+		Animation* firstShadow = currentStance.shadow.empty() ? nullptr : currentStance.shadow[0].first;
+		if (firstShadow) {
+			firstShadow->endReached = false;
+			firstShadow->SetFrame(0);
+		}
+
+		HandleActorStance();
+	}
+	else {
+		// check if walk sounds need to be played
+		// dialog, pause game
+		if (!(core->GetGameControl()->GetDialogueFlags() & (DF_IN_DIALOG | DF_FREEZE_SCRIPTS))) {
+			// footsteps option set, stance
+			if (footsteps && GetStance() == IE_ANI_WALK) {
+				PlayWalkSound();
+			}
+		}
+	}
+}
+
 void Actor::UpdateActorState()
 {
 	if (InTrap) {
@@ -7347,17 +7894,17 @@ void Actor::UpdateActorState()
 	// display pc hitpoints if requested
 	// limit the invocation count to save resources (the text is drawn repeatedly anyway)
 	ieDword overheadHP = core->GetDictionary().Get("HP Over Head", 0);
-	assert(game->GameTime);
+	assert(game->GetGameTime());
 	assert(core->Time.round_size);
-	if (overheadHP && Persistent() && (game->GameTime % (core->Time.round_size / 2) == 0)) { // smaller delta to skip fading
+	if (overheadHP && Persistent() && (game->GetGameTimeReal() % (core->Time.round_size / 2) == 0)) { // smaller delta to skip fading
 		DisplayHeadHPRatio();
 	}
 
 	const auto& anim = currentStance.anim;
-	if (attackProjectile) {
+	if (attackProjectile && !anim.empty()) {
 		// default so that the projectile fires if we dont have an animation for some reason
-		unsigned int frameCount = anim.empty() ? 9 : anim[0].first->GetFrameCount();
-		unsigned int currentFrame = anim.empty() ? 8 : anim[0].first->GetCurrentFrameIndex();
+		unsigned int frameCount = anim[0].first->GetFrameCount();
+		unsigned int currentFrame = anim[0].first->GetCurrentFrameIndex();
 
 		//IN BG1 and BG2, this is at the ninth frame... (depends on the combat bitmap, which we don't handle yet)
 		// however some critters don't have that long animations (eg. squirrel 0xC400)
@@ -7367,38 +7914,8 @@ void Actor::UpdateActorState()
 		}
 	}
 	
-	if (anim.empty()) {
-		UpdateModalState(game->GameTime);
-		return;
-	}
-
-	Animation* first = anim[0].first;
-	
-	if (first->endReached) {
-		// possible stance change
-		if (HandleActorStance()) {
-			// restart animation for next time it is needed
-			first->endReached = false;
-			first->SetFrame(0);
-
-			Animation* firstShadow = currentStance.shadow.empty() ? nullptr : currentStance.shadow[0].first;
-			if (firstShadow) {
-				firstShadow->endReached = false;
-				firstShadow->SetFrame(0);
-			}
-		}
-	} else {
-		// check if walk sounds need to be played
-		// dialog, pause game
-		if (!(core->GetGameControl()->GetDialogueFlags() & (DF_IN_DIALOG | DF_FREEZE_SCRIPTS))) {
-			// footsteps option set, stance
-			if (footsteps && GetStance() == IE_ANI_WALK) {
-				PlayWalkSound();
-			}
-		}
-	}
-
-	UpdateModalState(game->GameTime);
+	UpdateAnimations();
+	UpdateModalState(game->GetGameTime());
 }
 
 void Actor::UpdateModalState(ieDword gameTime)
@@ -8090,7 +8607,7 @@ Region Actor::DrawingRegion() const
 	return drawingRegion;
 }
 
-void Actor::Draw(const Region& vp, Color baseTint, Color tint, BlitFlags flags) const
+void Actor::Draw(const Region& vp, Color baseTint, Color tint, BlitFlags flags, bool force) const
 {
 	// if an actor isn't visible, should we still draw video cells?
 	// let us assume not, for now..
@@ -8103,7 +8620,7 @@ void Actor::Draw(const Region& vp, Color baseTint, Color tint, BlitFlags flags) 
 		return;
 	}
 
-	if (!DrawingRegion().IntersectsRegion(vp)) {
+	if (!force && !DrawingRegion().IntersectsRegion(vp)) {
 		return;
 	}
 
@@ -8146,7 +8663,7 @@ void Actor::Draw(const Region& vp, Color baseTint, Color tint, BlitFlags flags) 
 		vvc->Draw(vp, baseTint, BBox.h, vvcFlags);
 	}
 
-	if (ShouldDrawCircle()) {
+	if (ShouldDrawCircle() && !force) {
 		DrawCircle(vp.origin);
 	}
 
@@ -8171,89 +8688,97 @@ void Actor::Draw(const Region& vp, Color baseTint, Color tint, BlitFlags flags) 
 		
 		if (AppearanceFlags & APP_HALFTRANS) flags |= BlitFlags::HALFTRANS;
 
-		Point drawPos = Pos - vp.origin;
-		drawPos.y -= GetElevation();
+		if (force) {
+			Point p(vp.origin.x + vp.size.w / 2, vp.origin.y + vp.size.h / 1.5);
+			DrawActorSprite(vp.origin, flags, currentStance.anim, tint);
+		}
+		else {
 
-		// mirror images behind the actor
-		for (int i = 0; i < 4; ++i) {
-			unsigned int m = MirrorImageZOrder[i];
-			if (m < Modified[IE_MIRRORIMAGES]) {
-				int dir = MirrorImageLocation[m];
-				int icx = drawPos.x + 3 * OrientdX[dir];
-				int icy = drawPos.y + 3 * OrientdY[dir];
-				Point iPos(icx, icy);
-				// FIXME: I don't know if GetBlocked() is good enough
-				// consider the possibility the mirror image is behind a wall (walls.second)
-				// GetBlocked might be false, but we still should not draw the image
-				// maybe the mirror image coordinates can never be beyond the width of a wall?
-				if ((area->GetBlocked(iPos + vp.origin) & (PathMapFlags::PASSABLE | PathMapFlags::ACTOR)) != PathMapFlags::IMPASSABLE) {
-					DrawActorSprite(iPos, flags, currentStance.anim, tint);
+			Point drawPos = Pos - vp.origin;
+			drawPos.y -= GetElevation();
+
+			// mirror images behind the actor
+			for (int i = 0; i < 4; ++i) {
+				unsigned int m = MirrorImageZOrder[i];
+				if (m < Modified[IE_MIRRORIMAGES]) {
+					int dir = MirrorImageLocation[m];
+					int icx = drawPos.x + 3 * OrientdX[dir];
+					int icy = drawPos.y + 3 * OrientdY[dir];
+					Point iPos(icx, icy);
+					// FIXME: I don't know if GetBlocked() is good enough
+					// consider the possibility the mirror image is behind a wall (walls.second)
+					// GetBlocked might be false, but we still should not draw the image
+					// maybe the mirror image coordinates can never be beyond the width of a wall?
+					if ((area->GetBlocked(iPos + vp.origin) & (PathMapFlags::PASSABLE | PathMapFlags::ACTOR)) != PathMapFlags::IMPASSABLE) {
+						DrawActorSprite(iPos, flags, currentStance.anim, tint);
+					}
 				}
 			}
-		}
 
-		// blur sprites behind the actor
-		int blurdx = (OrientdX[face]*(int)Modified[IE_MOVEMENTRATE])/20;
-		int blurdy = (OrientdY[face]*(int)Modified[IE_MOVEMENTRATE])/20;
-		Point blurPos = drawPos;
-		if (State & STATE_BLUR) {
-			if (face < 4 || face >= 12) {
-				blurPos -= Point(4 * blurdx, 4 * blurdy);
-				for (int i = 0; i < 3; ++i) {
-					blurPos += Point(blurdx, blurdy);
-					// FIXME: I don't think we ought to draw blurs that are behind a wall that the actor is in front of
-					DrawActorSprite(blurPos, flags, currentStance.anim, tint);
+			// blur sprites behind the actor
+			int blurdx = (OrientdX[face] * (int)Modified[IE_MOVEMENTRATE]) / 20;
+			int blurdy = (OrientdY[face] * (int)Modified[IE_MOVEMENTRATE]) / 20;
+			Point blurPos = drawPos;
+			if (State & STATE_BLUR) {
+				if (face < 4 || face >= 12) {
+					blurPos -= Point(4 * blurdx, 4 * blurdy);
+					for (int i = 0; i < 3; ++i) {
+						blurPos += Point(blurdx, blurdy);
+						// FIXME: I don't think we ought to draw blurs that are behind a wall that the actor is in front of
+						DrawActorSprite(blurPos, flags, currentStance.anim, tint);
+					}
 				}
 			}
-		}
 
-		if (!currentStance.shadow.empty()) {
-			const Game* game = core->GetGame();
-			// infravision, independent of light map and global light
-			if (HasBodyHeat() &&
-				game->PartyHasInfravision() &&
-				!game->IsDay() &&
-				(area->AreaType & AT_OUTDOOR) && !(area->AreaFlags & AF_DREAM)) {
-				Color irTint = Color(255, 120, 120, tint.a);
+			if (!currentStance.shadow.empty()) {
+				const Game* game = core->GetGame();
+				// infravision, independent of light map and global light
+				if (HasBodyHeat() &&
+					game->PartyHasInfravision() &&
+					!game->IsDay() &&
+					(area->AreaType & AT_OUTDOOR) && !(area->AreaFlags & AF_DREAM)) {
+					Color irTint = Color(255, 120, 120, tint.a);
 
-				/* IWD2: infravision is white, not red. */
-				if(core->HasFeature(GFFlags::RULES_3ED)) {
-					irTint = Color(255, 255, 255, tint.a);
+					/* IWD2: infravision is white, not red. */
+					if (core->HasFeature(GFFlags::RULES_3ED)) {
+						irTint = Color(255, 255, 255, tint.a);
+					}
+
+					DrawActorSprite(drawPos, flags, currentStance.shadow, irTint);
 				}
-
-				DrawActorSprite(drawPos, flags, currentStance.shadow, irTint);
-			} else {
-				DrawActorSprite(drawPos, flags, currentStance.shadow, tint);
-			}
-		}
-
-		// actor itself
-		DrawActorSprite(drawPos, flags, currentStance.anim, tint);
-
-		// blur sprites in front of the actor
-		if (State & STATE_BLUR) {
-			if (face >= 4 && face < 12) {
-				for (int i = 0; i < 3; ++i) {
-					blurPos -= Point(blurdx, blurdy);
-					DrawActorSprite(blurPos, flags, currentStance.anim, tint);
+				else {
+					DrawActorSprite(drawPos, flags, currentStance.shadow, tint);
 				}
 			}
-		}
 
-		// mirror images in front of the actor
-		for (int i = 4; i < 8; ++i) {
-			unsigned int m = MirrorImageZOrder[i];
-			if (m < Modified[IE_MIRRORIMAGES]) {
-				int dir = MirrorImageLocation[m];
-				int icx = drawPos.x + 3 * OrientdX[dir];
-				int icy = drawPos.y + 3 * OrientdY[dir];
-				Point iPos(icx, icy);
-				// FIXME: I don't know if GetBlocked() is good enough
-				// consider the possibility the mirror image is in front of a wall (walls.first)
-				// GetBlocked might be false, but we still should not draw the image
-				// maybe the mirror image coordinates can never be beyond the width of a wall?
-				if ((area->GetBlocked(iPos + vp.origin) & (PathMapFlags::PASSABLE | PathMapFlags::ACTOR)) != PathMapFlags::IMPASSABLE) {
-					DrawActorSprite(iPos, flags, currentStance.anim, tint);
+			// actor itself
+			DrawActorSprite(drawPos, flags, currentStance.anim, tint);
+
+			// blur sprites in front of the actor
+			if (State & STATE_BLUR) {
+				if (face >= 4 && face < 12) {
+					for (int i = 0; i < 3; ++i) {
+						blurPos -= Point(blurdx, blurdy);
+						DrawActorSprite(blurPos, flags, currentStance.anim, tint);
+					}
+				}
+			}
+
+			// mirror images in front of the actor
+			for (int i = 4; i < 8; ++i) {
+				unsigned int m = MirrorImageZOrder[i];
+				if (m < Modified[IE_MIRRORIMAGES]) {
+					int dir = MirrorImageLocation[m];
+					int icx = drawPos.x + 3 * OrientdX[dir];
+					int icy = drawPos.y + 3 * OrientdY[dir];
+					Point iPos(icx, icy);
+					// FIXME: I don't know if GetBlocked() is good enough
+					// consider the possibility the mirror image is in front of a wall (walls.first)
+					// GetBlocked might be false, but we still should not draw the image
+					// maybe the mirror image coordinates can never be beyond the width of a wall?
+					if ((area->GetBlocked(iPos + vp.origin) & (PathMapFlags::PASSABLE | PathMapFlags::ACTOR)) != PathMapFlags::IMPASSABLE) {
+						DrawActorSprite(iPos, flags, currentStance.anim, tint);
+					}
 				}
 			}
 		}
@@ -8770,7 +9295,7 @@ void Actor::Rest(int hours)
 			}
 		}
 	} else {
-		TicksLastRested = LastFatigueCheck = core->GetGame()->GameTime;
+		TicksLastRested = LastFatigueCheck = core->GetGame()->GetGameTime();
 		SetBase (IE_FATIGUE, 0);
 		SetBase (IE_INTOXICATION, 0);
 		inventory.ChargeAllItems (0);
@@ -8800,6 +9325,14 @@ HCStrings Actor::SetEquippedQuickSlot(int slot, int header)
 		return HCStrings::count;
 	}
 
+	if (InInitiativeList()) {
+		if (core->currentTurnBasedList != 0 || attackcount != attacksperround) {
+			return HCStrings::count;
+		}
+		RemoveFromAdditionInitiativeLists();
+		ClearPath();
+		ReleaseCurrentAction();
+	}
 
 	if ((slot<0) || (slot == IW_NO_EQUIPPED) ) {
 		if (slot == IW_NO_EQUIPPED) {
@@ -10254,71 +10787,35 @@ int Actor::LuckyRoll(int dice, int size, int add, ieDword flags, const Actor* op
 {
 	assert(this != opponent);
 
-	int luck;
-
-	luck = (signed) GetSafeStat(IE_LUCK);
+	int myluck = (signed)GetSafeStat(IE_LUCK);
+	int opluck = opponent ? opponent->GetSafeStat(IE_LUCK) : 0;
 
 	//damageluck is additive with regular luck (used for maximized damage, righteous magic)
-	if (flags&LR_DAMAGELUCK) {
-		luck += (signed) GetSafeStat(IE_DAMAGELUCK);
+	if (flags & LR_DAMAGELUCK) {
+		myluck += (signed) GetSafeStat(IE_DAMAGELUCK);
 	}
 
-	//it is always the opponent's luck that decrease damage (or anything)
-	if (opponent) luck -= opponent->GetSafeStat(IE_LUCK);
-
-	if (flags&LR_NEGATIVE) {
-		luck = -luck;
+	if (flags & LR_NEGATIVE) {
+		myluck = -myluck;
 	}
 
 	if (dice < 1 || size < 1) {
-		return (add + luck > 1 ? add + luck : 1);
+		return (add + myluck > 1 ? add + myluck : 1);
 	}
 
-	ieDword critical = flags&LR_CRITICAL;
+	int dice1 = core->Roll(dice, size, 0);
+	int dice2 = core->Roll(dice, size, 0);
 
-	if (dice > 100) {
-		int bonus;
-		if (abs(luck) > size) {
-			bonus = luck/abs(luck) * size;
-		} else {
-			bonus = luck;
-		}
-		int roll = RAND(1, dice * size);
-		if (critical && (roll == 1 || roll == size)) {
-			return roll;
-		} else {
-			return add + dice * (size + bonus) / 2;
-		}
-	}
-
-	int roll, result = 0, misses = 0, hits = 0;
-	for (int i = 0; i < dice; i++) {
-		roll = RAND(1, size);
-		if (roll == 1) {
-			misses++;
-		} else if (roll == size) {
-			hits++;
-		}
-		roll += luck;
-		if (roll > size) {
-			roll = size;
-		} else if (roll < 1) {
-			roll = 1;
-		}
-		result += roll;
-	}
-
-	// ensure we can still return a critical failure/success
-	if (critical && dice == misses) return 1;
-	if (critical && dice == hits) return size*dice;
-
-	// hack for critical mode, so overbearing luck does not cause a critical hit
-	// FIXME: decouple the result from the critical info
-	if (critical && result+add >= size*dice) {
-		return size*dice - 1;
+	int result;
+	if (myluck > opluck) {
+		result = std::max(dice1, dice2);
+	} else if (myluck < opluck) {
+		result = std::min(dice1, dice2);
 	} else {
-		return result + add;
+		result = dice1;
 	}
+
+	return (flags & LR_CRITICAL) && (result == dice * 1 || result == dice * size) ? result : result + add;
 }
 
 // removes the (normal) invisibility state
@@ -10740,10 +11237,10 @@ void Actor::ResetCommentTime()
 {
 	Game* game = core->GetGame();
 	if (bored_time) {
-		nextComment = game->GameTime + core->Roll(5, 1000, bored_time/2);
+		nextComment = game->GetGameTime() + core->Roll(5, 1000, bored_time/2);
 	} else {
 		game->nextBored = 0;
-		nextComment = game->GameTime + core->Roll(10, 500, 150);
+		nextComment = game->GetGameTime() + core->Roll(10, 500, 150);
 	}
 }
 
@@ -10927,7 +11424,7 @@ bool Actor::HasVisibleHP() const
 // shows hp/maxhp as overhead text
 void Actor::DisplayHeadHPRatio()
 {
-	if (!HasVisibleHP()) return;
+	if (!HasVisibleHP() && !core->IsTurnBased()) return;
 
 	overHead.SetText(fmt::format(u"{}/{}", Modified[IE_HITPOINTS], Modified[IE_MAXHITPOINTS]), true, false);
 }

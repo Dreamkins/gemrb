@@ -265,12 +265,12 @@ public:
 	Scriptable(const Scriptable&) = delete;
 	virtual ~Scriptable();
 	Scriptable& operator=(const Scriptable&) = delete;
+	std::list<TriggerEntry> triggers;
 private:
 	tick_t WaitCounter = 0;
 	std::map<ieDword, ieDword> scriptTimers;
 	ieDword globalID = 0;
 protected: //let Actor access this
-	std::list<TriggerEntry> triggers;
 	Map *area = nullptr;
 	ieVariable scriptName;
 	ieDword InternalFlags = 0; // for triggers
@@ -573,7 +573,7 @@ public:
 	void Stop(int flags = 0) override;
 	void ClearPath(bool resetDestination = true);
 	void HandleAnkhegStance(bool emerge);
-
+	const Action* GetCurrentAction() { return CurrentAction; }
 	/* returns the most likely position of this actor */
 	Point GetMostLikelyPosition() const;
 	virtual bool BlocksSearchMap() const = 0;

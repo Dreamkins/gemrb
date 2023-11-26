@@ -419,7 +419,7 @@ Effect *EffectQueue::CreateUnsummonEffect(const Effect *fx)
 		newfx->Resource =  newfx->Resource3.IsEmpty() ? "SPGFLSH1" : newfx->Resource3;
 		if( fx->TimingMode == FX_DURATION_ABSOLUTE) {
 			//unprepare duration
-			newfx->Duration = (newfx->Duration - core->GetGame()->GameTime) / core->Time.defaultTicksPerSec;
+			newfx->Duration = (newfx->Duration - core->GetGame()->GetGameTime()) / core->Time.defaultTicksPerSec;
 		}
 	}
 
@@ -1181,7 +1181,7 @@ int EffectQueue::ApplyEffect(Actor* target, Effect* fx, ieDword first_apply, ieD
 		return FX_NOT_APPLIED;
 	}
 
-	ieDword GameTime = core->GetGame()->GameTime;
+	ieDword GameTime = core->GetGame()->GetGameTime();
 
 	if (first_apply) {
 		fx->FirstApply = 1;
@@ -1646,7 +1646,7 @@ void EffectQueue::RemoveAllEffectsWithParamAndResource(EffectRef &effect_referen
 //probably also called by rest
 void EffectQueue::RemoveExpiredEffects(ieDword futuretime)
 {
-	ieDword GameTime = core->GetGame()->GameTime;
+	ieDword GameTime = core->GetGame()->GetGameTime();
 	// prevent overflows, since we pass the max futuretime for guaranteed expiry
 	if (GameTime + futuretime < GameTime) {
 		GameTime=0xffffffff;
@@ -2412,7 +2412,7 @@ bool EffectQueue::CheckIWDTargeting(Scriptable* Owner, Actor* target, ieDword va
 			return DiffCore(EARelation(Owner, target), EAR_HOSTILE, rel);
 		case STI_DAYTIME:
 			ieDword timeofday;
-			timeofday = core->Time.GetHour(core->GetGame()->GameTime);
+			timeofday = core->Time.GetHour(core->GetGame()->GetGameTime());
 			// handle the clock jumping at midnight
 			if (val > rel) {
 				return timeofday >= val || timeofday <= rel;

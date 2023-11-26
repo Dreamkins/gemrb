@@ -244,6 +244,7 @@ private:
 	ResRef nightmovies[8];
 	int MapIndex = -1;
 	ResRef Familiars[9];
+	std::atomic_uint32_t GameTime{ 0 };
 public:
 	std::vector< Actor*> selected;
 	int version = 0;
@@ -265,7 +266,6 @@ public:
 	int protagonist = PM_YES;
 	/** if party size exceeds this amount, a callback will be called */
 	size_t partysize = 6;
-	std::atomic_uint32_t GameTime {0};
 	ieDword RealTime = 0;
 	ieWord WhichFormation = 0; // 0-4 index into Formations, not an actual formation!
 	ieWord  Formations[5]{};
@@ -371,6 +371,7 @@ public:
 	int DelMap(unsigned int index, int forced = 0);
 	int AddNPC(Actor* npc);
 	Actor* GetNPC(unsigned int Index) const;
+	const std::vector< Actor*>& GetPCs() { return PCs; }
 	void SwapPCs(unsigned int pc1, unsigned int pc2) const;
 	bool IsDay() const;
 	/** checks if the actor should be replaced via npclevel.2da and then does it */
@@ -506,7 +507,9 @@ public:
 	bool CheckPartyBanter() const;
 	void CheckBored();
 	void CheckAreaComment();
-
+	uint32_t GetGameTime() const;
+	void SetGameTime(uint32_t value);
+	uint32_t GetGameTimeReal() const { return GameTime; }
 private:
 	ResRef *GetDream(Map *area);
 	void CastOnRest() const;
