@@ -2731,14 +2731,24 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 		//move near to target
 		if ((flags&SC_RANGE_CHECK) && dist != 0xffffffff) {
 			if (PersonalDistance(tar, Sender) > dist) {
-				MoveNearerTo(Sender, tar, dist);
+				if (core->IsTurnBased() && (core->currentTurnBasedActor != act || core->GetTurnBasedSlot(act).movesleft <= 0)) {
+					Sender->ReleaseCurrentAction();
+					act->SetStance(IE_ANI_READY);
+				} else {
+					MoveNearerTo(Sender, tar, dist);
+				}
 				gamedata->FreeSpell(spl, Sender->SpellResRef, false);
 				return;
 			}
 			if (!Sender->GetCurrentArea()->IsVisibleLOS(Sender->Pos, tar->Pos)) {
 				if (!(spl->Flags&SF_NO_LOS)) {
 					gamedata->FreeSpell(spl, Sender->SpellResRef, false);
-					MoveNearerTo(Sender, tar, dist);
+					if (core->IsTurnBased() && (core->currentTurnBasedActor != act || core->GetTurnBasedSlot(act).movesleft <= 0)) {
+						Sender->ReleaseCurrentAction();
+						act->SetStance(IE_ANI_READY);
+					} else {
+						MoveNearerTo(Sender, tar, dist);
+					}
 					return;
 				}
 			}

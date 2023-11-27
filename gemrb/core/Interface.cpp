@@ -4082,7 +4082,7 @@ void Interface::InitTurnBasedSlot() {
 
 	GetCurrentTurnBasedSlot().haveattack = true;
 
-	if (currentTurnBasedActor->IsPC() && currentTurnBasedActor->GetStance() != IE_ANI_CAST) {
+	if (currentTurnBasedActor->IsPC()/* && currentTurnBasedActor->GetStance() != IE_ANI_CAST*/) {
 		currentTurnBasedActor->ClearPath(true);
 		currentTurnBasedActor->ClearActions();
 	}
