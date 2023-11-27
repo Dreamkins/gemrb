@@ -4082,7 +4082,7 @@ void Interface::InitTurnBasedSlot() {
 
 	GetCurrentTurnBasedSlot().haveattack = true;
 
-	if (currentTurnBasedActor->IsPC()/* && currentTurnBasedActor->GetStance() != IE_ANI_CAST*/) {
+	if (currentTurnBasedActor->IsPC() && currentTurnBasedActor->GetStance() != IE_ANI_CAST) {
 		currentTurnBasedActor->ClearPath(true);
 		currentTurnBasedActor->ClearActions();
 	}
@@ -4240,7 +4240,7 @@ void Interface::UpdateTurnBased() {
 		}
 
 		// remove dead actors
-		if (currentTurnBasedActor && currentTurnBasedActor->IsDead()) {
+		if (currentTurnBasedActor && (currentTurnBasedActor->CheckOnDeath() || currentTurnBasedActor->IsDead())) {
 			EndTurn();
 		}
 		for (size_t list = 0; list < 10; list++) {
@@ -4248,7 +4248,7 @@ void Interface::UpdateTurnBased() {
 				break;
 			}
 			for (auto it = initiatives[list].begin(); it != initiatives[list].end();) {
-				if (it->actor->IsDead()) {
+				if (it->actor->CheckOnDeath() || it->actor->IsDead()) {
 					it = initiatives[list].erase(it);
 				} else {
 					++it;
