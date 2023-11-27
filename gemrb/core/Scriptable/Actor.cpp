@@ -3157,6 +3157,7 @@ bool Actor::GetSavingThrow(ieDword type, int modifier, const Effect *fx)
 	// NOTE: assuming criticals apply to iwd2 too
 	if (ret == 1) return false;
 	if (ret == saveDiceSides) return true;
+	if (Modified[IE_STATE_ID] & STATE_DEAD) return false; // just to shut some errant feedback, should be fine
 	const Effect* sfx = fxqueue.HasEffect(fx_save_vs_school_bonus_ref);
 
 	if (!third) {
@@ -3913,11 +3914,14 @@ bool Actor::OverrideActions()
 
 void Actor::Panic(const Scriptable *attacker, int panicmode)
 {
-	if (GetStat(IE_STATE_ID)&STATE_PANIC) {
+	auto PanicAction = [](unsigned short actionID) {
+		return actionID == 184 || actionID == 85 || actionID == 124;
+	};
+	if (GetStat(IE_STATE_ID) & STATE_PANIC && (!CurrentAction || PanicAction(CurrentAction->actionID))) {
 		Log(DEBUG, "Actor", "Already panicked!");
-		//already in panic
 		return;
 	}
+
 	if (InParty) core->GetGame()->SelectActor(this, false, SELECT_NORMAL);
 	VerbalConstant(Verbal::Panic, gamedata->GetVBData("SPECIAL_COUNT"));
 
@@ -3928,7 +3932,7 @@ void Actor::Panic(const Scriptable *attacker, int panicmode)
 
 	switch(panicmode) {
 	case PANIC_RUNAWAY:
-		action = GenerateActionDirect("RunAwayFromNoInterrupt([-1])", attacker);
+		action = GenerateActionDirect("RunAwayFromNoInterrupt([-1],300)", attacker);
 		SetBaseBit(IE_STATE_ID, STATE_PANIC, true);
 		break;
 	case PANIC_RANDOMWALK:
@@ -3944,6 +3948,7 @@ void Actor::Panic(const Scriptable *attacker, int panicmode)
 		return;
 	}
 	if (action) {
+		ReleaseCurrentAction();
 		AddActionInFront(action);
 	} else {
 		Log(ERROR, "Actor", "Cannot generate panic action");
@@ -5022,11 +5027,8 @@ void Actor::Turn(Scriptable *cleric, ieDword turnlevel)
 		evilcleric = true;
 	}
 
-	//a little adjustment of the level to get a slight randomness on who is turned
-	unsigned int level = GetXPLevel(true)-(GetGlobalID()&3);
-	if (cleric2 && cleric2->GetPaladinLevel()) {
-		level += 2; // hardcoded penalty from the originals
-	}
+	ieDword level = GetXPLevel(true);
+	turnlevel += RAND(0, 3);
 
 	//this is safely hardcoded i guess
 	if (Modified[IE_GENERAL]!=GEN_UNDEAD) {
