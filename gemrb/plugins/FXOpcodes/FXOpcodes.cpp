@@ -4578,7 +4578,7 @@ int fx_casting_glow (Scriptable* Owner, Actor* target, Effect* fx)
 		sca->ZOffset = heightmod;
 		sca->SetBlend();
 		if (fx->Duration) {
-			sca->SetDefaultDuration(fx->Duration-core->GetGame()->GetGameTime());
+			sca->SetDefaultDuration(fx->Duration-core->GetGame()->GetGameTimeReal());
 		} else {
 			sca->SetDefaultDuration(10000);
 		}
@@ -6074,10 +6074,10 @@ int fx_play_visual_effect (Scriptable* /*Owner*/, Actor* target, Effect* fx)
 	}
 
 	if (fx->TimingMode!=FX_DURATION_INSTANT_PERMANENT) {
-		sca->SetDefaultDuration(fx->Duration-core->GetGame()->GetGameTime());
+		sca->SetDefaultDuration(fx->Duration-core->GetGame()->GetGameTimeReal());
 		if (!(sca->SequenceFlags & IE_VVC_LOOP) && sca->anims[P_HOLD * MAX_ORIENT]) {
 			// shorten effect duration to match vvc; Duration is sensible only for looping or frozen looping vvcs
-			fx->Duration = sca->anims[P_HOLD * MAX_ORIENT]->GetFrameCount() + core->GetGame()->GetGameTime();
+			fx->Duration = sca->anims[P_HOLD * MAX_ORIENT]->GetFrameCount() + core->GetGame()->GetGameTimeReal();
 		}
 	}
 	if (fx->Parameter2 == 1) {
