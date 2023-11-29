@@ -1575,8 +1575,8 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 					}
 				}
 
+				// actor image
 				Color color = Color(255, 255, 255, 255);
-
 				Region oldClip = VideoDriver->GetScreenClip();
 				VideoDriver->SetScreenClip(&region);
 
@@ -1586,9 +1586,10 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 					pos.x -= width > 38 ? (width - 38) / 2 : 0;
 					pos.y += height < 60 ? (60 - height) / 2 : 0;
 
+					// actor image background
 					Color bcolor = Color(0, 0, 0, 255);
 					VideoDriver->DrawRect(region, bcolor, true, BlitFlags::BLENDED);
-
+					// actor sprite
 					VideoDriver->BlitSprite(core->initiatives[list][idx].image, pos);
 				} else {
 					if (!core->initiatives[list][idx].actor->IsDead()) {
@@ -1612,9 +1613,10 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 								
 								sh = sh - (sh + oy) + hoffset;
 
+								// actor image background
 								Color bcolor = Color(64, 64, 64, 255);
 								VideoDriver->DrawRect(region, bcolor, true, BlitFlags::BLENDED);
-
+								// actor sprite
 								Region r(pos.x + 19, pos.y + sh + 4, 38, 60);
 								actor->Draw(r, color, color, BlitFlags::BLENDED, true);
 							}
@@ -1624,25 +1626,29 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 
 				VideoDriver->SetScreenClip(&oldClip);
 
+				// actor border
 				Color rcolor = core->currentTurnBasedActor == actor ? Color(192, 192, 192, 255) : Color(128, 128, 128, 255);
 				VideoDriver->DrawRect(region, rcolor, false, BlitFlags::BLENDED);
 
 				if (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list && actor->IsPC()) {
 					int offs = xoffset + idx * SLOTSIZEX;
 
+					// action rect
 					Color rcolor = Color(128, 192, 128, 255);
-					Region r(offs, pos.y -15, 10, 10);
+					Region r(offs, region.y -15, 10, 10);
 					VideoDriver->DrawRect(r, rcolor, core->GetCurrentTurnBasedSlot().haveattack, BlitFlags::BLENDED);
 
+					// moves rect
 					Color r2color = Color(128, 128, 255, 255);
 					int movesmax = gamedata->GetStepTime() / core->currentTurnBasedActor->CalculateSpeed(false) * core->Time.round_sec * core->Time.defaultTicksPerSec * 10;
 					int movescur = core->GetCurrentTurnBasedSlot().movesleft;
 					float part = (SLOTSIZEX -HPSIZEX - 12) * ((float)movescur / movesmax);
 
-					Region r2(offs + 12, pos.y - 15, part, 10);
+					Region r2(offs + 12, region.y - 15, part, 10);
 					VideoDriver->DrawRect(r2, r2color, true, BlitFlags::BLENDED);
 				}
-
+				
+				// HP rect
 				int maxhp = actor->Modified[IE_MAXHITPOINTS];;
 				int hp = actor->Modified[IE_HITPOINTS];
 				hp = hp < 0 ? 0 : hp;
@@ -2667,6 +2673,8 @@ PathMapFlags Map::GetBlockedInRadiusTile(const SearchmapPoint& tp, uint16_t size
 	// We check a circle of radius size-2 around (px,py)
 	// TODO: recheck that this matches originals
 	// these circles are perhaps slightly different for sizes 7 and up.
+
+	if (core->InCutSceneMode()) return PathMapFlags::PASSABLE;
 
 	PathMapFlags ret = PathMapFlags::IMPASSABLE;
 	size = Clamp<uint16_t>(size, 2, MAX_CIRCLESIZE);
