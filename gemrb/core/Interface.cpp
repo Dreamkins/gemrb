@@ -4240,7 +4240,7 @@ void Interface::UpdateTurnBased() {
 		}
 
 		// remove dead actors
-		if (currentTurnBasedActor && (currentTurnBasedActor->CheckOnDeath() || currentTurnBasedActor->IsDead())) {
+		if (currentTurnBasedActor && (currentTurnBasedActor->GetStat(IE_STATE_ID) & STATE_DEAD)) {
 			EndTurn();
 		}
 		for (size_t list = 0; list < 10; list++) {
@@ -4248,7 +4248,7 @@ void Interface::UpdateTurnBased() {
 				break;
 			}
 			for (auto it = initiatives[list].begin(); it != initiatives[list].end();) {
-				if (it->actor->CheckOnDeath() || it->actor->IsDead()) {
+				if (it->actor->CheckOnDeath() || (it->actor->GetStat(IE_STATE_ID) & STATE_DEAD)) {
 					it = initiatives[list].erase(it);
 				} else {
 					++it;
@@ -4267,7 +4267,7 @@ void Interface::UpdateTurnBased() {
 		auto game = core->GetGame();
 		// move all party members in initiative list
 		for (size_t idx = 0; idx < game->GetPCs().size(); idx++) {
-			if (game->GetPCs()[idx]->InInitiativeList() == false && game->GetPCs()[idx]->IsDead() == false) {
+			if (game->GetPCs()[idx]->InInitiativeList() == false) {
 				game->GetPCs()[idx]->MoveToInitiativeList();
 			}
 		}

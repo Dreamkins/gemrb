@@ -6423,7 +6423,7 @@ int Actor::CalculateInitiative(int from) {
 }
 
 void Actor::MoveToInitiativeList() {
-	if (!core->turnBasedEnable || core->InCutSceneMode() || IsDead() || InInitiativeList() || !GetCurrentStanceAnim().size() || !GetCurrentStanceAnim()[0].first->GetFrame(0)) {
+	if (!core->turnBasedEnable || core->InCutSceneMode() || InInitiativeList() || !GetCurrentStanceAnim().size() || !GetCurrentStanceAnim()[0].first->GetFrame(0)) {
 		return;
 	}
 
@@ -6436,7 +6436,6 @@ void Actor::MoveToInitiativeList() {
 	core->initiatives[0].push_back(slot);
 
 	ClearPath();
-	//ReleaseCurrentAction();
 }
 
 //calculate how many attacks will be performed
