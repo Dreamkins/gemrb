@@ -2673,9 +2673,6 @@ PathMapFlags Map::GetBlockedInRadiusTile(const SearchmapPoint& tp, uint16_t size
 	// We check a circle of radius size-2 around (px,py)
 	// TODO: recheck that this matches originals
 	// these circles are perhaps slightly different for sizes 7 and up.
-
-	if (core->InCutSceneMode()) return PathMapFlags::PASSABLE;
-
 	PathMapFlags ret = PathMapFlags::IMPASSABLE;
 	size = Clamp<uint16_t>(size, 2, MAX_CIRCLESIZE);
 	uint16_t r = size - 2;
