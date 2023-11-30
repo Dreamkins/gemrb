@@ -181,7 +181,9 @@ public:
 	}
 	
 	~PyStringWrapper() noexcept {
-		Py_DECREF(object);
+		if (object) {
+			Py_DECREF(object);
+		}
 	}
 };
 PyStringWrapper PyString_AsStringView(PyObject* obj);
