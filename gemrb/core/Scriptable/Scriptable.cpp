@@ -1653,18 +1653,12 @@ int Selectable::CircleSize2Radius() const
 	return adjustedSize;
 }
 
-void Selectable::DrawCircle(const Point& p) const
+Color Selectable::GetCircleColor() const
 {
-	if (circleSize <= 0) {
-		return;
-	}
-
 	Color mix;
 	const Color* col = &selectedColor;
-	Holder<Sprite2D> sprite = circleBitmap[0];
 
 	if (Selected && !Over) {
-		sprite = circleBitmap[1];
 	} else if (Over) {
 		mix = GlobalColorCycle.Blend(overColor, selectedColor);
 		col = &mix;
@@ -1672,13 +1666,25 @@ void Selectable::DrawCircle(const Point& p) const
 		col = &overColor;
 	}
 
+	return *col;
+}
+
+void Selectable::DrawCircle(const Point& p) const
+{
+	if (circleSize <= 0) {
+		return;
+	}
+
+	const Color col = GetCircleColor();
+	Holder<Sprite2D> sprite = circleBitmap[0];
+
 	if (sprite) {
 		VideoDriver->BlitSprite(sprite, Pos - p);
 	} else {
 		float baseSize = CircleSize2Radius() * sizeFactor;
 		const Size s(baseSize * 8, baseSize * 6);
 		const Region r(Pos - p - s.Center(), s);
-		VideoDriver->DrawEllipse(r, *col);
+		VideoDriver->DrawEllipse(r, col);
 	}
 }
 
