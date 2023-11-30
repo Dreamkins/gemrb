@@ -7823,7 +7823,7 @@ bool Actor::InAttack() {
 		GetStance() == IE_ANI_ATTACK_BACKSLASH ||
 		GetStance() == IE_ANI_ATTACK_JAB ||
 		GetStance() == IE_ANI_SHOOT) {
-		return true;
+		return currentStance.anim.size() > 0;
 	}
 	return false;
 }
