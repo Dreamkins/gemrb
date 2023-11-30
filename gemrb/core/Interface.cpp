@@ -3852,7 +3852,7 @@ PauseState Interface::TogglePause() const
 {
 	if (core->IsTurnBased()) {
 		Actor* actor = core->currentTurnBasedActor;
-		if (actor->lastInit && game->GetGameTimeReal() - actor->lastInit > 4 && actor->IsPC() && actor->InMove() == false && actor->InAttack() == false) {
+		if (actor && actor->lastInit && game->GetGameTimeReal() - actor->lastInit > 4 && actor->IsPC() && actor->InMove() == false && actor->InAttack() == false) {
 			core->EndTurn();
 		}
 		return PauseState::Off;
@@ -4195,7 +4195,9 @@ void Interface::EndTurn() {
 				currentTurnBasedList++;
 			}
 
-			FirstRoundStart();
+			currentTurnBasedList = 0;
+			currentTurnBasedSlot = 0;
+			currentTurnBasedActor = nullptr;
 			return;
 		}
 	}
@@ -4285,19 +4287,17 @@ void Interface::UpdateTurnBased() {
 			}
 		}
 
-		if ((!pcPresent || !enemyPresent) && timeTurnBased < timeTurnBasedNeed) {
-			timeTurnBased++;
-		}
+		if (timeTurnBased >= timeTurnBasedNeed) {
+			// first round start
+			if (enemyPresent && pcPresent && currentTurnBasedActor == nullptr && pause_before_fight == 0) {
+				core->GetGame()->PartyAttack = true;
+				FirstRoundStart();
+			}
 
-		// first round start
-		if (enemyPresent && pcPresent && currentTurnBasedActor == nullptr && pause_before_fight == 0) {
-			core->GetGame()->PartyAttack = true;
-			FirstRoundStart();
-		}
-
-		// end battle if no enemy present
-		if (timeTurnBased >= timeTurnBasedNeed && (!turnBasedEnable || !enemyPresent || !pcPresent)) {
-			resetTurnBased();
+			// end battle if no enemy present
+			if (!turnBasedEnable || !enemyPresent || !pcPresent) {
+				resetTurnBased();
+			}
 		}
 	}
 }
@@ -4315,6 +4315,7 @@ void Interface::resetTurnBased()
 	pause_before_fight = 10;
 	roundTurnBased = 0;
 	timeTurnBased = 0;
+	timeTurnBasedNeed = 0;
 }
 
 }

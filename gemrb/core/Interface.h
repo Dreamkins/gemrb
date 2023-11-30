@@ -747,7 +747,7 @@ public:
 
 	Timer& SetTimer(const EventHandler&, tick_t interval, int repeats = -1);
 
-	bool IsTurnBased() { return currentTurnBasedActor != nullptr; }
+	bool IsTurnBased() { return (currentTurnBasedActor != nullptr || timeTurnBased < timeTurnBasedNeed); }
 	int GetCurrentTurnBasedSlotNum() { return currentTurnBasedSlot; }
 	int GetCurrentTurnBasedListNum() { return currentTurnBasedList; }
 	InitiativeSlot& GetCurrentTurnBasedSlot() { return initiatives[currentTurnBasedList][currentTurnBasedSlot]; }
