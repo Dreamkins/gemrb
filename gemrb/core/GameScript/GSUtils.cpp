@@ -2658,6 +2658,10 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 	}
 
 	//resolve spellname
+	// sometimes we pass it ourselves, otherwise calculate from ids value
+	if (!parameters->resref1Parameter.IsEmpty()) {
+		spellResRef = parameters->resref1Parameter;
+	}
 	if (spellResRef.IsEmpty() && !ResolveSpellName(spellResRef, parameters)) {
 		Sender->ReleaseCurrentAction();
 		return;
@@ -2834,6 +2838,10 @@ void SpellPointCore(Scriptable *Sender, Action *parameters, int flags)
 	int level = 0;
 
 	//resolve spellname
+	// sometimes we pass it ourselves, otherwise calculate from ids value
+	if (!parameters->resref1Parameter.IsEmpty()) {
+		spellResRef = parameters->resref1Parameter;
+	}
 	if (!ResolveSpellName(spellResRef, parameters)) {
 		Sender->ReleaseCurrentAction();
 		return;

@@ -141,7 +141,6 @@ private:
 // WARNING: dont use these for new code
 // they are temporary while we compete the transition to Python 3
 class PyStringWrapper {
-	wchar_t* buffer = nullptr;
 	char* str = nullptr;
 	PyObject* object = nullptr;
 	Py_ssize_t len = 0;
@@ -149,20 +148,22 @@ class PyStringWrapper {
 public:
 	PyStringWrapper(PyObject* obj, const char* encoding) noexcept {
 		if (PyUnicode_Check(obj)) {
-			PyObject * temp_bytes = PyUnicode_AsEncodedString(obj, encoding, "strict"); // Owned reference
+			PyObject* temp_bytes = PyUnicode_AsEncodedString(obj, encoding, "backslashreplace"); // Owned reference
 			if (temp_bytes != NULL) {
 				PyBytes_AsStringAndSize(temp_bytes, &str, &len);
 				object = temp_bytes; // needs to outlive our use of wrap.str
 			} else { // raw data...
+				// CHECK: is this even possible now that erros are not "strict"?
+				// maybe an assert is better
 				PyErr_Clear();
-				Py_ssize_t buflen = PyUnicode_GET_LENGTH(obj);
-				buffer = new wchar_t[buflen + 1];
-				Py_ssize_t strlen = PyUnicode_AsWideChar(obj, buffer, buflen);
-				buffer[strlen] = L'\0';
-				str = reinterpret_cast<char*>(buffer);
-				len = strlen * sizeof(wchar_t);
+				Py_IncRef(obj);
+				object = obj;
+				len = PyUnicode_GET_LENGTH(object);
+				str = static_cast<char*>(PyUnicode_DATA(object));
 			}
 		} else if (PyObject_TypeCheck(obj, &PyBytes_Type)) {
+			Py_IncRef(obj);
+			object = obj;
 			PyBytes_AsStringAndSize(obj, &str, &len);
 		}
 	}
@@ -171,22 +172,16 @@ public:
 	PyStringWrapper& operator=(const PyStringWrapper&) = delete;
 	
 	PyStringWrapper(PyStringWrapper&& wrap) {
-		std::swap(wrap.buffer, buffer);
 		std::swap(wrap.str, str);
 		std::swap(wrap.object, object);
 	}
-	
-	const char* CString() const noexcept {
-		return str;
-	}
-	
+
 	operator StringView() const noexcept {
 		return StringView(str, len);
 	}
 	
 	~PyStringWrapper() noexcept {
-		Py_XDECREF(object);
-		delete[] buffer;
+		Py_DECREF(object);
 	}
 };
 PyStringWrapper PyString_AsStringView(PyObject* obj);
