@@ -175,7 +175,11 @@ public:
 		std::swap(wrap.str, str);
 		std::swap(wrap.object, object);
 	}
-
+	
+	const char* CString() const noexcept {
+		return str;
+	}
+	
 	operator StringView() const noexcept {
 		return StringView(str, len);
 	}
