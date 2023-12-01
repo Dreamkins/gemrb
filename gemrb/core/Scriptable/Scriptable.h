@@ -439,6 +439,7 @@ public:
 	float sizeFactor = 1.0f;
 public:
 	void SetBBox(const Region &newBBox);
+	Color GetCircleColor() const;
 	void DrawCircle(const Point& p) const;
 	bool IsOver(const Point &Pos) const;
 	void SetOver(bool over);

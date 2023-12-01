@@ -279,6 +279,8 @@ struct InitiativeSlot {
 	int initiative = 10;
 	int movesleft = 0;
 	bool haveattack = false;
+	bool opportunity = false;
+	bool haveOportunity = false;
 };
 
 /**
@@ -702,9 +704,14 @@ public:
 	bool turnBasedEnable = true;
 	std::vector<InitiativeSlot> initiatives[10];
 	int currentTurnBasedSlot = 0;
+	int currentTurnBasedSlotOld = 0;
 	int currentTurnBasedList = 0;
+	int currentTurnBasedListOld = 0;
 	int roundTurnBased = 0;
 	Actor* currentTurnBasedActor = nullptr;
+	Actor* currentTurnBasedActorOld = nullptr;
+	bool opportunity = false;
+	Point lasOpportunityPos;
 	int pause_before_fight = 10;
 	uint32_t timeTurnBased = 0;
 	uint32_t timeTurnBasedNeed = 0;
@@ -752,6 +759,7 @@ public:
 	int GetCurrentTurnBasedListNum() { return currentTurnBasedList; }
 	InitiativeSlot& GetCurrentTurnBasedSlot() { return initiatives[currentTurnBasedList][currentTurnBasedSlot]; }
 	InitiativeSlot& GetTurnBasedSlot(Actor* actor);
+	InitiativeSlot& GetTurnBasedSlotWithAttack(Actor* actor);
 	void InitTurnBasedSlot();
 	void FirstRoundStart();
 	void EndTurn();

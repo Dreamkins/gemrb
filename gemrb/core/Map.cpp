@@ -765,7 +765,7 @@ void Map::UpdateScripts()
 		if (core->IsTurnBased() && actor->InInitiativeList()) {
 			if (core->currentTurnBasedActor == actor) {
 				bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->GetBase(IE_STATE_ID) & STATE_MINDLESS);
-				bool cantMove = !actor->InMove() || actor->Immobile() || !actor->GetPath() || (actor->GetBase(IE_STATE_ID) & STATE_CANTMOVE);
+				bool cantMove = core->opportunity || !actor->InMove() || actor->Immobile() || !actor->GetPath() || (actor->GetBase(IE_STATE_ID) & STATE_CANTMOVE);
 				bool notAttackNow = !actor->InAttack();
 				//bool notCastNow = !(actor->GetStance() == IE_ANI_CAST && actor->CurrentActionState == 0);
 				if (notPlayerControl && cantMove && notAttackNow) {
@@ -1548,6 +1548,9 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 			Point pos(xoffset - 5, 40 - 5);
 			Region region(pos, Size(core->initiatives[list].size() * SLOTSIZEX + 5, 60 + 10));
 			Color color = Color(128, 128, 128, 255);
+			if (list) {
+				VideoDriver->DrawLine(pos + Point(-5, 10), pos + Point(-5, 60), color, BlitFlags::BLENDED);
+			}
 			VideoDriver->DrawRect(region, color, false, BlitFlags::BLENDED);
 
 			GameControl* gc = core->GetGameControl();
@@ -1627,8 +1630,9 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 				VideoDriver->SetScreenClip(&oldClip);
 
 				// actor border
-				Color rcolor = core->currentTurnBasedActor == actor ? Color(192, 192, 192, 255) : Color(128, 128, 128, 255);
-				VideoDriver->DrawRect(region, rcolor, false, BlitFlags::BLENDED);
+				Color rcolor = actor->GetCircleColor();// core->currentTurnBasedActor == actor ? Color(192, 192, 192, 255) : Color(128, 128, 128, 255);
+				Region actborder(region.x - HPSIZEX, region.y, region.w + HPSIZEX, region.h);
+				VideoDriver->DrawRect(actborder, rcolor, false, BlitFlags::BLENDED);
 
 				if (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list && actor->IsPC()) {
 					int offs = xoffset + idx * SLOTSIZEX;
@@ -1655,8 +1659,8 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 				float percent = (float)((float)hp / (float)maxhp);
 				int hpheight = 60 * percent;
 
-				Point hppos(xoffset + idx * SLOTSIZEX + 1, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 15 : 0) + 60 - hpheight);
-				Region hpregion(hppos, Size(HPSIZEX, hpheight));
+				Point hppos(xoffset + idx * SLOTSIZEX + 1, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 15 : 0) + 60 - hpheight + 1);
+				Region hpregion(hppos, Size(HPSIZEX, hpheight - 2));
 				Color hpcolor = Color(255 - (255 * percent), 255 * percent, 0, 255);
 				VideoDriver->DrawRect(hpregion, hpcolor, true, BlitFlags::BLENDED);
 			}
