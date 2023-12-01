@@ -4080,8 +4080,6 @@ void Interface::InitTurnBasedSlot() {
 		}
 	}
 
-	GetCurrentTurnBasedSlot().haveattack = true;
-
 	if (currentTurnBasedActor->IsPC() && currentTurnBasedActor->GetStance() != IE_ANI_CAST) {
 		currentTurnBasedActor->ClearPath(true);
 		currentTurnBasedActor->ClearActions();
@@ -4116,6 +4114,10 @@ void Interface::FirstRoundStart() {
 
 	for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
 		initiatives[0][idx].actor->InitRound(timeTurnBased);
+		if (initiatives[0][idx].actor->attackcount) {
+			initiatives[0][idx].haveattack = true;
+			initiatives[0][idx].haveOportunity = true;
+		}
 	}
 
 	for (size_t attacks = 1; attacks < core->Time.round_sec; attacks++) {
@@ -4123,6 +4125,8 @@ void Interface::FirstRoundStart() {
 		for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
 			if (!initiatives[0][idx].actor->Immobile() && initiatives[0][idx].actor->attackcount >= attacks + 1) {
 				initiatives[attacks].push_back(initiatives[0][idx]);
+				initiatives[attacks].back().haveattack = true;
+				initiatives[attacks].back().haveOportunity = true;
 			}
 		}
 	}
@@ -4151,10 +4155,36 @@ InitiativeSlot& Interface::GetTurnBasedSlot(Actor* actor) {
 	}
 }
 
+InitiativeSlot& Interface::GetTurnBasedSlotWithAttack(Actor* actor) {
+	for (size_t list = 0; initiatives[list].size(); list++) {
+		for (size_t idx = 0; idx < initiatives[list].size(); idx++) {
+			if (initiatives[list][idx].actor != actor) {
+				continue;
+			}
+			if (initiatives[list][idx].haveattack) {
+				return initiatives[list][idx];
+			}
+		}
+	}
+	return initiatives[0][0];
+}
+
 void Interface::EndTurn() {
 	if (!currentTurnBasedActor || 
 		core->GetGame()->GetCurrentAction() || 
 		currentTurnBasedActor->InAttack()) {
+		return;
+	}
+
+	if (core->opportunity && initiatives[currentTurnBasedList][currentTurnBasedSlot].opportunity) {
+		initiatives[currentTurnBasedList][currentTurnBasedSlot].opportunity = false;
+		initiatives[currentTurnBasedList][currentTurnBasedSlot].haveOportunity = false;
+		currentTurnBasedActor = currentTurnBasedActorOld;
+		currentTurnBasedList = currentTurnBasedListOld;
+		currentTurnBasedSlot = currentTurnBasedSlotOld;
+		currentTurnBasedActorOld = nullptr;
+		currentTurnBasedListOld = 0;
+		currentTurnBasedSlotOld = 0;
 		return;
 	}
 
@@ -4242,7 +4272,7 @@ void Interface::UpdateTurnBased() {
 		}
 
 		// remove dead actors
-		if (currentTurnBasedActor && (currentTurnBasedActor->GetStat(IE_STATE_ID) & STATE_DEAD)) {
+		if (currentTurnBasedActor && (currentTurnBasedActor->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP))) {
 			EndTurn();
 		}
 		for (size_t list = 0; list < 10; list++) {
@@ -4250,12 +4280,36 @@ void Interface::UpdateTurnBased() {
 				break;
 			}
 			for (auto it = initiatives[list].begin(); it != initiatives[list].end();) {
-				if (it->actor->CheckOnDeath() || (it->actor->GetStat(IE_STATE_ID) & STATE_DEAD)) {
+				if (it->actor->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP)) {
 					it = initiatives[list].erase(it);
 				} else {
 					++it;
 				}
 			}
+		}
+
+		if (core->opportunity && !currentTurnBasedActorOld) {
+			for (size_t list = 0; initiatives[list].size(); list++) {
+				for (size_t idx = 0; idx < initiatives[list].size(); idx++) {
+					if (initiatives[list][idx].opportunity) {
+						currentTurnBasedActorOld = currentTurnBasedActor;
+						currentTurnBasedListOld = currentTurnBasedList;
+						currentTurnBasedSlotOld = currentTurnBasedSlot;
+						currentTurnBasedActor = initiatives[list][idx].actor;
+						currentTurnBasedList = list;
+						currentTurnBasedSlot = idx;
+						currentTurnBasedActor->lastInit = game->GetGameTimeReal();
+						break;
+					}
+				}
+				if (currentTurnBasedActorOld) {
+					return;
+				}
+			}
+		}
+
+		if (!currentTurnBasedActorOld) {
+			core->opportunity = false;
 		}
 
 		currentTurnBasedSlot = 0;

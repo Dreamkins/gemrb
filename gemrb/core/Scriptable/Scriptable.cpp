@@ -2100,7 +2100,7 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 	}
 
 	if (core->IsTurnBased()) {
-		if (actor->InAttack() || GetStance() == IE_ANI_CAST || GetStance() == IE_ANI_CONJURE) {
+		if (core->opportunity || actor->InAttack() || GetStance() == IE_ANI_CAST || GetStance() == IE_ANI_CONJURE) {
 			ClearPath(true);
 			return;
 		}
@@ -2196,6 +2196,51 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 
 		if (core->IsTurnBased() && core->currentTurnBasedActor == actor) {
 			Point newPos(Pos.x + dx, Pos.y + dy);
+
+			size_t list = core->currentTurnBasedList;
+			if (core->lasOpportunityPos != Pos) {
+				// check enemys for opportunity
+				for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
+					// enemy?
+					if (EARelation(actor, core->initiatives[list][idx].actor) != EAR_HOSTILE) {
+						continue;
+					}
+					auto enemy = core->initiatives[list][idx].actor;
+
+					// have attacks?
+					if (!core->initiatives[list][idx].haveattack && enemy->attackcount < core->currentTurnBasedList + 2) {
+						continue;
+					}
+
+					// can see?
+					if (enemy->Immobile() || !CanSee(enemy, this, true, 0)) {
+						continue;
+					}
+
+					const ITMExtHeader* header = enemy->GetWeapon(false);
+					//melee weapon
+					if (header && (header->AttackType != ITEM_AT_MELEE)) {
+						continue;
+					}
+
+					unsigned int weaponRange = enemy->GetWeaponRange(false);
+					InitiativeSlot& slot = core->GetTurnBasedSlotWithAttack(enemy);
+					if (slot.actor == enemy && slot.haveOportunity && slot.haveattack && WithinPersonalRange(enemy, Pos, weaponRange) && !WithinPersonalRange(enemy, newPos, weaponRange)) {
+						slot.opportunity = true;
+						enemy->objects.LastTarget = GetGlobalID();
+						enemy->objects.LastTargetPersistent = enemy->objects.LastTarget;
+						enemy->objects.LastTargetPos = Pos;
+						core->opportunity = true;
+					}
+				}
+
+				if (core->opportunity) {
+					core->lasOpportunityPos = Pos;
+					ClearPath(true);
+					return;
+				}
+			}
+
 			int dist = SquaredDistance(Pos, newPos);
 			core->GetCurrentTurnBasedSlot().movesleft -= dist;
 			actor->lastInit = core->GetGame()->GetGameTimeReal();
