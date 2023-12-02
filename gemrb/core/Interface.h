@@ -710,7 +710,7 @@ public:
 	int roundTurnBased = 0;
 	Actor* currentTurnBasedActor = nullptr;
 	Actor* currentTurnBasedActorOld = nullptr;
-	bool opportunity = false;
+	ieDword opportunity = 0;
 	Point lasOpportunityPos;
 	int pause_before_fight = 10;
 	uint32_t timeTurnBased = 0;

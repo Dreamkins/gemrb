@@ -4299,6 +4299,8 @@ void Interface::UpdateTurnBased() {
 						currentTurnBasedList = list;
 						currentTurnBasedSlot = idx;
 						currentTurnBasedActor->lastInit = game->GetGameTimeReal();
+						Action* attack = GenerateAction("Attack()");
+						currentTurnBasedActor->AddActionInFront(attack);
 						break;
 					}
 				}
@@ -4309,7 +4311,7 @@ void Interface::UpdateTurnBased() {
 		}
 
 		if (!currentTurnBasedActorOld) {
-			core->opportunity = false;
+			core->opportunity = 0;
 		}
 
 		currentTurnBasedSlot = 0;

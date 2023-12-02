@@ -1475,6 +1475,10 @@ void AttackCore(Scriptable *Sender, Scriptable *target, int flags)
 		return;
 	}
 
+	if (core->IsTurnBased() && core->opportunity) {
+		target = attacker->GetCurrentArea()->GetActorByGlobalID(core->opportunity);
+	}
+
 	Actor* tar = Scriptable::As<Actor>(target);
 	if (attacker == tar) {
 		Sender->ReleaseCurrentAction();
@@ -2646,6 +2650,11 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 	int level = 0;
 	static bool third = core->HasFeature(GFFlags::RULES_3ED);
 
+	if (core->IsTurnBased() && core->opportunity) {
+		Sender->ReleaseCurrentAction();
+		return;
+	}
+
 	// handle iwd2 marked spell casting (MARKED_SPELL is 0)
 	// NOTE: supposedly only casting via SpellWait checks this, so refactor if needed
 	if (third && parameters->int0Parameter == 0 && parameters->resref0Parameter.IsEmpty()) {
@@ -2836,6 +2845,11 @@ void SpellPointCore(Scriptable *Sender, Action *parameters, int flags)
 {
 	ResRef spellResRef;
 	int level = 0;
+
+	if (core->IsTurnBased() && core->opportunity) {
+		Sender->ReleaseCurrentAction();
+		return;
+	}
 
 	//resolve spellname
 	// sometimes we pass it ourselves, otherwise calculate from ids value

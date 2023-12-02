@@ -2207,8 +2207,20 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 					}
 					auto enemy = core->initiatives[list][idx].actor;
 
+					if (enemy->GetStance() == IE_ANI_CAST) {
+						continue;
+					}
+
 					// have attacks?
 					if (!core->initiatives[list][idx].haveattack && enemy->attackcount < core->currentTurnBasedList + 2) {
+						continue;
+					}
+
+					if (enemy->GetCurrentArea() != GetCurrentArea()) {
+						continue;
+					}
+					
+					if (!enemy->GetCurrentArea()->IsVisibleLOS(enemy->Pos, Pos)) {
 						continue;
 					}
 
@@ -2227,10 +2239,7 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 					InitiativeSlot& slot = core->GetTurnBasedSlotWithAttack(enemy);
 					if (slot.actor == enemy && slot.haveOportunity && slot.haveattack && WithinPersonalRange(enemy, Pos, weaponRange) && !WithinPersonalRange(enemy, newPos, weaponRange)) {
 						slot.opportunity = true;
-						enemy->objects.LastTarget = GetGlobalID();
-						enemy->objects.LastTargetPersistent = enemy->objects.LastTarget;
-						enemy->objects.LastTargetPos = Pos;
-						core->opportunity = true;
+						core->opportunity = GetGlobalID();
 					}
 				}
 
