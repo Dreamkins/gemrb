@@ -1595,7 +1595,7 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 					// actor sprite
 					VideoDriver->BlitSprite(core->initiatives[list][idx].image, pos);
 				} else {
-					if (!core->initiatives[list][idx].actor->IsDead()) {
+					if (!(core->initiatives[list][idx].actor->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP))) {
 						int sh = 0;
 						int oy = 0;
 						using AnimationPart = std::pair<Animation*, Holder<Palette>>;
