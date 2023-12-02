@@ -7603,7 +7603,7 @@ void Actor::AttackTurnBased(ieDword gameTime)
 	}
 	
 
-	if (IsDead()) {
+	if (ShouldStopAttack()) {
 		// this should be avoided by the AF_ALIVE check by all the calling actions
 		Log(ERROR, "Actor", "Attack by dead actor!");
 		return;

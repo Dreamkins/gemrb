@@ -2095,7 +2095,7 @@ void Movable::BumpBack()
 void Movable::DoStep(unsigned int walkScale, ieDword time) {
 	Actor* actor = Scriptable::As<Actor>(this);
 
-	if (actor->IsDead()) {
+	if (actor->ShouldStopAttack()) {
 		return;
 	}
 
