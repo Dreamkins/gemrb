@@ -1156,7 +1156,7 @@ static void pcf_maxhitpoint(Actor *actor, ieDword /*oldValue*/, ieDword /*newVal
 {
 	if (!actor->checkHP) {
 		actor->checkHP = 1;
-		actor->checkHPTime = core->GetGame()->GetGameTimeReal();
+		actor->checkHPTime = core->GetGame()->GetGameTime();
 	}
 }
 
@@ -2727,8 +2727,8 @@ void Actor::RefreshEffects(bool first, const stats_t& previous)
 	//as it's triggered by PCFs from the previous tick, it should probably run before current PCFs
 	if (first && checkHP == 2) {
 		//could not set this in the constructor
-		checkHPTime = game->GetGameTimeReal();
-	} else if (checkHP && checkHPTime != game->GetGameTimeReal()) {
+		checkHPTime = game->GetGameTime();
+	} else if (checkHP && checkHPTime != game->GetGameTime()) {
 		checkHP = 0;
 		if (!(BaseStats[IE_STATE_ID] & STATE_DEAD)) pcf_hitpoint(this, 0, BaseStats[IE_HITPOINTS]);
 	}
@@ -2918,7 +2918,7 @@ void Actor::RefreshPCStats() {
 	//morale recovery every xth AI cycle ... except for pst pcs
 	int mrec = GetStat(IE_MORALERECOVERYTIME);
 	if (mrec && ShouldModifyMorale()) {
-		if (!(game->GetGameTimeReal() % mrec)) {
+		if (!(game->GetGameTime() % mrec)) {
 			int morale = (signed) BaseStats[IE_MORALE];
 			if (morale < 10) {
 				NewBase(IE_MORALE, 1, MOD_ADDITIVE);
@@ -2986,7 +2986,7 @@ void Actor::RefreshPCStats() {
 
 	// regenerate actors with high enough constitution
 	int rate = GetConHealAmount();
-	if (rate && !(game->GetGameTimeReal() % rate) && !core->IsTurnBased()) {
+	if (rate && !(game->GetGameTime() % rate) && !core->IsTurnBased()) {
 		NewBase(IE_HITPOINTS, 1, MOD_ADDITIVE);
 		if (core->HasFeature(GFFlags::ONSCREEN_TEXT) && InParty && Modified[IE_HITPOINTS] < Modified[IE_MAXHITPOINTS]) {
 			// eeeh, no token (Heal: 1)
@@ -5501,7 +5501,7 @@ bool Actor::CheckOnDeath()
 		return false;
 	}
 
-	ieDword time = core->GetGame()->GetGameTimeReal();
+	ieDword time = core->GetGame()->GetGameTime();
 	if (!pstflags && Modified[IE_MC_FLAGS]&MC_REMOVE_CORPSE) {
 		RemovalTime = time;
 		return true;

@@ -1735,7 +1735,7 @@ void GameScript::DisplayString(Scriptable* Sender, Action* parameters)
 //DisplayStringHead, but wait until done
 void GameScript::DisplayStringWait(Scriptable* Sender, Action* parameters)
 {
-	ieDword gt = core->GetGame()->GetGameTime();
+	ieDword gt = core->GetGame()->GetGameTimeReal();
 	if (Sender->CurrentActionState) {
 		if (gt >= (ieDword)parameters->int2Parameter) {
 			Sender->ReleaseCurrentAction();

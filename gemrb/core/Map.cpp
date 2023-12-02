@@ -2874,7 +2874,7 @@ void Map::GenerateQueues()
 		queue[priority].clear();
 	}
 
-	ieDword gametime = core->GetGame()->GetGameTime();
+	ieDword gametime = core->GetGame()->GetGameTimeReal();
 	bool hostilesNew = false;
 	while (i--) {
 		Actor* actor = actors[i];
