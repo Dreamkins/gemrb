@@ -3268,6 +3268,8 @@ bool Interface::ResolveRandomItem(CREItem *itm) const
 
 		// Explode to ResRef, so that there is a null terminator for strtounsigned
 		auto parts = Explode<ResRef, ResRef>(pickedItem, '*', 1);
+		if (!parts.size()) return false;
+
 		ieWord diceSides;
 		bool isGold = false;
 		if (parts.size() > 1) {
@@ -4069,13 +4071,16 @@ void Interface::InitTurnBasedSlot() {
 	currentTurnBasedActor = GetCurrentTurnBasedSlot().actor;
 	lastTurnBasedTarget = 0;
 
-	if (currentTurnBasedList == 0) {
-		GetCurrentTurnBasedSlot().movesleft = gamedata->GetStepTime() / currentTurnBasedActor->CalculateSpeed(false) * Time.round_sec * core->Time.defaultTicksPerSec * 10;
-	} else {
-		for (size_t idx = 0; idx < initiatives[currentTurnBasedList - 1].size(); idx++) {
-			if (initiatives[currentTurnBasedList - 1][idx].actor == currentTurnBasedActor) {
-				GetCurrentTurnBasedSlot().movesleft = initiatives[currentTurnBasedList - 1][idx].movesleft;
-				break;
+	if (!GetCurrentTurnBasedSlot().delayAttack) {
+		if (currentTurnBasedList == 0) {
+			int speed = (currentTurnBasedActor->GetSpeed() ? gamedata->GetStepTime() / currentTurnBasedActor->GetSpeed() : 0);
+			GetCurrentTurnBasedSlot().movesleft = speed * core->Time.defaultTicksPerSec * core->Time.round_sec * 10;
+		} else {
+			for (size_t idx = 0; idx < initiatives[currentTurnBasedList - 1].size(); idx++) {
+				if (initiatives[currentTurnBasedList - 1][idx].actor == currentTurnBasedActor) {
+					GetCurrentTurnBasedSlot().movesleft = initiatives[currentTurnBasedList - 1][idx].movesleft;
+					break;
+				}
 			}
 		}
 	}
@@ -4091,8 +4096,8 @@ void Interface::InitTurnBasedSlot() {
 		gc->MoveViewportTo(currentTurnBasedActor->Pos, true);
 	}
 
-	currentTurnBasedActor->RefreshEffects();
-	currentTurnBasedActor->UpdateModalState(timeTurnBased);
+	//currentTurnBasedActor->RefreshEffects();
+	//currentTurnBasedActor->UpdateModalState(timeTurnBased);
 }
 
 void Interface::FirstRoundStart() {
@@ -4117,6 +4122,7 @@ void Interface::FirstRoundStart() {
 		if (initiatives[0][idx].actor->attackcount) {
 			initiatives[0][idx].haveattack = true;
 			initiatives[0][idx].haveOportunity = true;
+			initiatives[0][idx].delayAttack = false;
 		}
 	}
 
@@ -4127,6 +4133,7 @@ void Interface::FirstRoundStart() {
 				initiatives[attacks].push_back(initiatives[0][idx]);
 				initiatives[attacks].back().haveattack = true;
 				initiatives[attacks].back().haveOportunity = true;
+				initiatives[attacks].back().delayAttack = false;
 			}
 		}
 	}
@@ -4179,12 +4186,24 @@ void Interface::EndTurn() {
 	if (core->opportunity && initiatives[currentTurnBasedList][currentTurnBasedSlot].opportunity) {
 		initiatives[currentTurnBasedList][currentTurnBasedSlot].opportunity = false;
 		initiatives[currentTurnBasedList][currentTurnBasedSlot].haveOportunity = false;
+
+		if (currentTurnBasedActor->IsPC()) {
+			core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
+		}
+
 		currentTurnBasedActor = currentTurnBasedActorOld;
 		currentTurnBasedList = currentTurnBasedListOld;
 		currentTurnBasedSlot = currentTurnBasedSlotOld;
 		currentTurnBasedActorOld = nullptr;
 		currentTurnBasedListOld = 0;
 		currentTurnBasedSlotOld = 0;
+
+		if (currentTurnBasedActor->IsPC()) {
+			core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
+		}
+
+		String rollLog = fmt::format(u">>> OPPORTUNITY FINISH <<<");
+		displaymsg->DisplayString(std::move(rollLog), GUIColors::GOLD, 0);
 		return;
 	}
 
@@ -4198,7 +4217,16 @@ void Interface::EndTurn() {
 		}
 	}
 
-	currentTurnBasedSlot++;
+	// delayed attack
+	if (GetCurrentTurnBasedSlot().haveattack && !GetCurrentTurnBasedSlot().delayAttack && currentTurnBasedSlot < initiatives[currentTurnBasedList].size() - 1) {
+		InitiativeSlot delayedSlot = GetCurrentTurnBasedSlot();
+		delayedSlot.delayAttack = true;
+		initiatives[currentTurnBasedList].erase(initiatives[currentTurnBasedList].begin() + currentTurnBasedSlot);
+		initiatives[currentTurnBasedList].push_back(delayedSlot);
+	} else {
+		currentTurnBasedSlot++;
+	}
+
 	if (currentTurnBasedSlot >= initiatives[currentTurnBasedList].size()) {
 		currentTurnBasedSlot = 0;
 
@@ -4228,17 +4256,20 @@ void Interface::EndTurn() {
 			currentTurnBasedList = 0;
 			currentTurnBasedSlot = 0;
 			currentTurnBasedActor = nullptr;
+
+			String rollLog = fmt::format(u">>> ENVIRONMENT PHASE <<<");
+			displaymsg->DisplayString(std::move(rollLog), GUIColors::GOLD, 0);
 			return;
 		}
 	}
 
-	if (currentTurnBasedActor->IsPartyMember()) {
+	if (currentTurnBasedActor->IsPC()) {
 		core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
 	}
 
 	InitTurnBasedSlot();
 
-	if (currentTurnBasedActor->IsPartyMember()) {
+	if (currentTurnBasedActor->IsPC()) {
 		core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
 	}
 }
@@ -4295,16 +4326,28 @@ void Interface::UpdateTurnBased() {
 						currentTurnBasedActorOld = currentTurnBasedActor;
 						currentTurnBasedListOld = currentTurnBasedList;
 						currentTurnBasedSlotOld = currentTurnBasedSlot;
+
+						if (currentTurnBasedActor->IsPC()) {
+							core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
+						}
+
 						currentTurnBasedActor = initiatives[list][idx].actor;
 						currentTurnBasedList = list;
 						currentTurnBasedSlot = idx;
 						currentTurnBasedActor->lastInit = game->GetGameTimeReal();
-						Action* attack = GenerateAction("Attack()");
-						currentTurnBasedActor->AddActionInFront(attack);
+
+						if (currentTurnBasedActor->IsPC()) {
+							core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
+						} else {
+							Action* attack = GenerateAction("Attack()");
+							currentTurnBasedActor->AddActionInFront(attack);
+						}
 						break;
 					}
 				}
 				if (currentTurnBasedActorOld) {
+					String rollLog = fmt::format(u">>> OPPORTUNITY ATTACK <<<");
+					displaymsg->DisplayString(std::move(rollLog), GUIColors::GOLD, 0);
 					return;
 				}
 			}

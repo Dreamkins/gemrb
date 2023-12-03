@@ -2205,9 +2205,11 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 					if (EARelation(actor, core->initiatives[list][idx].actor) != EAR_HOSTILE) {
 						continue;
 					}
-					auto enemy = core->initiatives[list][idx].actor;
+					Actor* enemy = core->initiatives[list][idx].actor;
+					const Actor* target = Scriptable::As<const Actor>(this);
 
-					if (enemy->GetStance() == IE_ANI_CAST) {
+					// can attack?
+					if (enemy->GetStance() == IE_ANI_CAST || enemy->Immobile()) {
 						continue;
 					}
 
@@ -2219,13 +2221,9 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 					if (enemy->GetCurrentArea() != GetCurrentArea()) {
 						continue;
 					}
-					
-					if (!enemy->GetCurrentArea()->IsVisibleLOS(enemy->Pos, Pos)) {
-						continue;
-					}
 
 					// can see?
-					if (enemy->Immobile() || !CanSee(enemy, this, true, 0)) {
+					if (target->IsInvisibleTo(enemy) || !CanSee(enemy, this, true, 0)) {
 						continue;
 					}
 

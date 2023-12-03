@@ -762,6 +762,9 @@ void Map::UpdateScripts()
 			actor->MoveToInitiativeList();
 		}
 
+		//actor->ClearActions();
+		//actor->fxqueue.RemoveAllNonPermanentEffects();
+
 		if (core->IsTurnBased() && actor->InInitiativeList()) {
 			if (core->currentTurnBasedActor == actor) {
 				bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->GetBase(IE_STATE_ID) & STATE_MINDLESS);
@@ -1644,9 +1647,12 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 
 					// moves rect
 					Color r2color = Color(128, 128, 255, 255);
-					int movesmax = gamedata->GetStepTime() / core->currentTurnBasedActor->CalculateSpeed(false) * core->Time.round_sec * core->Time.defaultTicksPerSec * 10;
+					int speed = (actor->GetSpeed() ? gamedata->GetStepTime() / actor->GetSpeed() : 0);
+					int movesmax = speed * core->Time.defaultTicksPerSec * core->Time.round_sec * 10;
 					int movescur = core->GetCurrentTurnBasedSlot().movesleft;
-					float part = (SLOTSIZEX -HPSIZEX - 12) * ((float)movescur / movesmax);
+					movescur = std::min(movesmax, movescur);
+
+					float part = (SLOTSIZEX -HPSIZEX - 12) * (speed ? ((float)movescur / movesmax) : 0);
 
 					Region r2(offs + 12, region.y - 15, part, 10);
 					VideoDriver->DrawRect(r2, r2color, true, BlitFlags::BLENDED);
