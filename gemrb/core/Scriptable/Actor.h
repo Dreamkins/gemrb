@@ -416,7 +416,7 @@ public:
 	//CRE DATA FIELDS
 	stats_t BaseStats {};
 	stats_t Modified {};
-	stat_t* PrevStats = nullptr;
+	std::shared_ptr<stats_t> PrevStats = nullptr;
 	ieByteSigned DeathCounters[4]{}; // PST specific (good, law, lady, murder)
 
 	ResRef BardSong;               //custom bard song (updated by fx)

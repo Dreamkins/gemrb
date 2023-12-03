@@ -524,7 +524,9 @@ Actor::stat_t Actor::GetSafeStat(unsigned int StatIndex) const
 	if (StatIndex >= MAX_STATS) {
 		return 0xdadadada;
 	}
-	if (PrevStats) return PrevStats[StatIndex];
+	if (PrevStats) {
+		return PrevStats->at(StatIndex);
+	}
 	return Modified[StatIndex];
 }
 
@@ -2612,7 +2614,7 @@ Actor::stats_t Actor::ResetStats(bool init)
 	} else {
 		prev = Modified;
 	}
-	PrevStats = &prev[0];
+	PrevStats = std::make_shared<stats_t>(prev);
 
 	//copy back the original stats, because the effects
 	//will be reapplied in ApplyAllEffects again
