@@ -4786,7 +4786,7 @@ int fx_cast_spell_point (Scriptable* Owner, Actor* /*target*/, Effect* fx)
 			// override casting level
 			forceSpellAction->int1Parameter = fx->Parameter1;
 		}
-		forceSpellAction->resref1Parameter = fx->Resource;
+		forceSpellAction->resref0Parameter = fx->Resource;
 		Owner->AddActionInFront(forceSpellAction);
 		Owner->ImmediateEvent();
 	} else if (fx->Parameter2 == 1) {
