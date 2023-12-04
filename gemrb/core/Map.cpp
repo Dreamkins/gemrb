@@ -767,8 +767,8 @@ void Map::UpdateScripts()
 
 		if (core->IsTurnBased() && actor->InInitiativeList()) {
 			if (core->currentTurnBasedActor == actor) {
-				bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->GetBase(IE_STATE_ID) & STATE_MINDLESS);
-				bool cantMove = core->opportunity || !actor->InMove() || actor->Immobile() || !actor->GetPath() || (actor->GetBase(IE_STATE_ID) & STATE_CANTMOVE);
+				bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->GetMod(IE_STATE_ID) & STATE_MINDLESS);
+				bool cantMove = core->opportunity || !actor->InMove() || actor->Immobile() || !actor->GetPath() || (actor->GetMod(IE_STATE_ID) & STATE_CANTMOVE);
 				bool notAttackNow = !actor->InAttack();
 				//bool notCastNow = !(actor->GetStance() == IE_ANI_CAST && actor->CurrentActionState == 0);
 				if (notPlayerControl && cantMove && notAttackNow) {

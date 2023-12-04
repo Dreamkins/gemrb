@@ -2206,10 +2206,9 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 						continue;
 					}
 					Actor* enemy = core->initiatives[list][idx].actor;
-					const Actor* target = Scriptable::As<const Actor>(this);
 
 					// can attack?
-					if (enemy->GetStance() == IE_ANI_CAST || enemy->Immobile() || (actor->GetBase(IE_STATE_ID) & (STATE_CANTMOVE | STATE_MINDLESS))) {
+					if (enemy->GetStance() == IE_ANI_CAST || enemy->Immobile() || (enemy->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_MINDLESS))) {
 						continue;
 					}
 
@@ -2223,7 +2222,7 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 					}
 
 					// can see?
-					if (target->IsInvisibleTo(enemy) || !CanSee(enemy, this, true, 0)) {
+					if (actor->IsInvisibleTo(enemy) || !CanSee(enemy, this, true, 0)) {
 						continue;
 					}
 

@@ -3854,7 +3854,8 @@ PauseState Interface::TogglePause() const
 {
 	if (core->IsTurnBased()) {
 		Actor* actor = core->currentTurnBasedActor;
-		if (actor && actor->lastInit && game->GetGameTimeReal() - actor->lastInit > 4 && actor->IsPC() && actor->InMove() == false && actor->InAttack() == false) {
+		bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->GetMod(IE_STATE_ID) & STATE_MINDLESS);
+		if (actor && actor->lastInit && game->GetGameTimeReal() - actor->lastInit > 4 && !notPlayerControl && !actor->InMove() && !actor->InAttack()) {
 			core->EndTurn();
 		}
 		return PauseState::Off;
@@ -4218,7 +4219,7 @@ void Interface::EndTurn() {
 	}
 
 	// delayed attack
-	if (!(actor->Immobile() || (actor->GetBase(IE_STATE_ID) & (STATE_CANTMOVE | STATE_MINDLESS))) && GetCurrentTurnBasedSlot().haveattack && !GetCurrentTurnBasedSlot().delayAttack && currentTurnBasedSlot < initiatives[currentTurnBasedList].size() - 1) {
+	if (!(actor->Immobile() || (actor->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_MINDLESS))) && GetCurrentTurnBasedSlot().haveattack && !GetCurrentTurnBasedSlot().delayAttack && currentTurnBasedSlot < initiatives[currentTurnBasedList].size() - 1) {
 		InitiativeSlot delayedSlot = GetCurrentTurnBasedSlot();
 		delayedSlot.delayAttack = true;
 		initiatives[currentTurnBasedList].erase(initiatives[currentTurnBasedList].begin() + currentTurnBasedSlot);
