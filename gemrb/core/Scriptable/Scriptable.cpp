@@ -2209,7 +2209,7 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 					const Actor* target = Scriptable::As<const Actor>(this);
 
 					// can attack?
-					if (enemy->GetStance() == IE_ANI_CAST || enemy->Immobile() || (actor->GetBase(IE_STATE_ID) & STATE_CANTMOVE)) {
+					if (enemy->GetStance() == IE_ANI_CAST || enemy->Immobile() || (actor->GetBase(IE_STATE_ID) & (STATE_CANTMOVE | STATE_MINDLESS))) {
 						continue;
 					}
 
