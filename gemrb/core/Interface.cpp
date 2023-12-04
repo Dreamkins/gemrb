@@ -4207,7 +4207,7 @@ void Interface::EndTurn() {
 		return;
 	}
 
-	Actor* last_move = currentTurnBasedActor;
+	Actor* actor = currentTurnBasedActor;
 
 	currentTurnBasedSlot = 0;
 	for (size_t idx = 0; idx < initiatives[currentTurnBasedList].size(); idx++) {
@@ -4218,7 +4218,7 @@ void Interface::EndTurn() {
 	}
 
 	// delayed attack
-	if (GetCurrentTurnBasedSlot().haveattack && !GetCurrentTurnBasedSlot().delayAttack && currentTurnBasedSlot < initiatives[currentTurnBasedList].size() - 1) {
+	if (!(actor->Immobile() || (actor->GetBase(IE_STATE_ID) & STATE_CANTMOVE)) && GetCurrentTurnBasedSlot().haveattack && !GetCurrentTurnBasedSlot().delayAttack && currentTurnBasedSlot < initiatives[currentTurnBasedList].size() - 1) {
 		InitiativeSlot delayedSlot = GetCurrentTurnBasedSlot();
 		delayedSlot.delayAttack = true;
 		initiatives[currentTurnBasedList].erase(initiatives[currentTurnBasedList].begin() + currentTurnBasedSlot);
