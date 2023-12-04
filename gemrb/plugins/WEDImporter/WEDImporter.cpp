@@ -257,7 +257,9 @@ std::vector<ieWord> WEDImporter::GetDoorIndices(const ResRef& resref, bool& Base
 	//Reading Door Tile Cells
 	str->Seek( DoorTilesOffset + ( DoorTileStart * 2 ), GEM_STREAM_START );
 	auto DoorTiles = std::vector<ieWord>(DoorTileCount);
-	str->Read(&DoorTiles[0], DoorTileCount * sizeof(ieWord));
+	if (DoorTileCount) {
+		str->Read(&DoorTiles[0], DoorTileCount * sizeof(ieWord));
+	}
 
 	BaseClosed = DoorClosed != 0;
 	return DoorTiles;

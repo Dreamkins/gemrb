@@ -542,7 +542,7 @@ void CharAnimations::SetupColors(PaletteType type)
 		*/
 		for (int i = 0; i < colorcount; i++) {
 			const auto& pal32 = core->GetPalette32(static_cast<uint8_t>(Colors[i]));
-			PartPalettes[PAL_MAIN]->CopyColorRange(&pal32[0], &pal32[32], static_cast<uint8_t>(dest));
+			PartPalettes[PAL_MAIN]->CopyColorRange(&pal32[0], &pal32[31], static_cast<uint8_t>(dest));
 			dest +=size;
 		}
 
