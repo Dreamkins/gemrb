@@ -4328,7 +4328,7 @@ int Actor::Damage(int damage, int damagetype, Scriptable* hitter, int modtype, i
 		}
 	}
 
-	if (!core->HasFeature(GFFlags::ONSCREEN_TEXT)) {
+	if (core->IsTurnBased() && !core->HasFeature(GFFlags::ONSCREEN_TEXT)) {
 		String text = fmt::format(u"-{}", damage);
 		overHead.SetText(std::move(text), true, true, Color(255, 255, 255, 255));
 	}
@@ -7509,7 +7509,7 @@ void Actor::CalculateAttackResult()
 			}
 		}
 		if (!core->HasFeature(GFFlags::ONSCREEN_TEXT)) {
-			String text = fmt::format(u"Critical Miss");
+			String text = core->GetString(DisplayMessage::GetStringReference(HCStrings::CriticalMiss));
 			target->overHead.SetText(std::move(text), true, true, Color(255, 255, 255, 255));
 		}
 
@@ -7531,7 +7531,7 @@ void Actor::CalculateAttackResult()
 		Log(COMBAT, "Attack", "{}", buffer);
 
 		if (!core->HasFeature(GFFlags::ONSCREEN_TEXT)) {
-			String text = fmt::format(u"Missed");
+			String text = core->GetString(DisplayMessage::GetStringReference(HCStrings::Miss));
 			target->overHead.SetText(std::move(text), true, true, Color(255, 255, 255, 255));
 		}
 
