@@ -1870,7 +1870,7 @@ void Projectile::DrawTravel(const Region& viewport, BlitFlags flags)
 	if (TFlags & PTF_BLEND) {
 		flags |= BlitFlags::DST;
 	}
-	if (TFlags & PTF_TRANS_BLEND) {
+	if ((TFlags & PTF_TRANS_BLEND) == PTF_TRANS_BLEND) {
 		flags |= BlitFlags::SRC;
 	}
 
