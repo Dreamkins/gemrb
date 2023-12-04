@@ -1864,14 +1864,14 @@ void Projectile::DrawTravel(const Region& viewport, BlitFlags flags)
 
 	pos.y -= ZPos;
 	
-	if (TFlags & PTF_TRANS) {
-		flags |= BlitFlags::ONE_MINUS_DST;
-	}
-	if (TFlags & PTF_BLEND) {
-		flags |= BlitFlags::DST;
-	}
-	if ((TFlags & PTF_TRANS_BLEND) == PTF_TRANS_BLEND) {
+	if (TFlags & PTF_LIGHT) {
+		flags |= BlitFlags::ADD;
+	} else if ((TFlags & PTF_TRANS_BLEND) == PTF_TRANS_BLEND) {
 		flags |= BlitFlags::SRC;
+	} else if (TFlags & PTF_TRANS) {
+		flags |= BlitFlags::ONE_MINUS_DST;
+	} else if (TFlags & PTF_BLEND) {
+		flags |= BlitFlags::DST;
 	}
 
 	if (ExtFlags&PEF_PILLAR) {
