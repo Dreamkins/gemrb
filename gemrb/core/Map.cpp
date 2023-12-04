@@ -1590,6 +1590,7 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 					int width = core->initiatives[list][idx].image->Frame.w;
 					int height = core->initiatives[list][idx].image->Frame.h;
 					pos.x -= width > 38 ? (width - 38) / 2 : 0;
+					pos.x += width < 38 ? (38 - width) / 2 : 0;
 					pos.y += height < 60 ? (60 - height) / 2 : 0;
 
 					// actor image background
