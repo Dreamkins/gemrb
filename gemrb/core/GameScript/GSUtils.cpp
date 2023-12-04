@@ -2651,7 +2651,6 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 	static bool third = core->HasFeature(GFFlags::RULES_3ED);
 
 	if (core->IsTurnBased() && core->opportunity) {
-		Sender->ReleaseCurrentAction();
 		return;
 	}
 
@@ -2799,7 +2798,7 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 		if (!(core->IsTurnBased() && act->InInitiativeList())) {
 			duration = Sender->CurrentActionState--;
 		} else {
-			duration = Sender->CurrentActionState;
+			duration = std::max(Sender->CurrentActionState, 0);
 		}
 	} else {
 		duration = Sender->CastSpell(tar, flags & SC_DEPLETE, flags & SC_INSTANT, flags & SC_NOINTERRUPT, level);
@@ -2847,7 +2846,6 @@ void SpellPointCore(Scriptable *Sender, Action *parameters, int flags)
 	int level = 0;
 
 	if (core->IsTurnBased() && core->opportunity) {
-		Sender->ReleaseCurrentAction();
 		return;
 	}
 

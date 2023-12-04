@@ -1225,7 +1225,7 @@ int Scriptable::CastSpellPoint(const Point& target, bool deplete, bool instant, 
 	objects.LastTargetPos.Invalidate();
 	Actor* actor = Scriptable::As<Actor>(this);
 
-	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+	if (!noInterrupt && core->IsTurnBased() && actor && actor->InInitiativeList()) {
 		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
 			actor->ReleaseCurrentAction();
 			return -1;
@@ -1270,7 +1270,7 @@ int Scriptable::CastSpell(Scriptable* target, bool deplete, bool instant, bool n
 	objects.LastTargetPos.Invalidate();
 	Actor* actor = Scriptable::As<Actor>(this);
 
-	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+	if (!noInterrupt && core->IsTurnBased() && actor && actor->InInitiativeList()) {
 		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
 			actor->ReleaseCurrentAction();
 			return -1;
