@@ -2666,10 +2666,6 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 	}
 
 	//resolve spellname
-	// sometimes we pass it ourselves, otherwise calculate from ids value
-	if (!parameters->resref1Parameter.IsEmpty()) {
-		spellResRef = parameters->resref1Parameter;
-	}
 	if (spellResRef.IsEmpty() && !ResolveSpellName(spellResRef, parameters)) {
 		Sender->ReleaseCurrentAction();
 		return;
@@ -2686,11 +2682,12 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 	}
 
 	// use the passed level instead of the caster's casting level
+	// if it's still 0 afterwards, it will revert to the caster's level
 	if (flags&SC_SETLEVEL) {
-		if (!parameters->resref0Parameter.IsEmpty()) {
-			level = parameters->int0Parameter;
+		if (parameters->resref0Parameter.IsEmpty()) {
+			level = parameters->int1Parameter; // int0 was the spell id
 		} else {
-			level = parameters->int1Parameter;
+			level = parameters->int0Parameter;
 		}
 	}
 
@@ -2850,10 +2847,6 @@ void SpellPointCore(Scriptable *Sender, Action *parameters, int flags)
 	}
 
 	//resolve spellname
-	// sometimes we pass it ourselves, otherwise calculate from ids value
-	if (!parameters->resref1Parameter.IsEmpty()) {
-		spellResRef = parameters->resref1Parameter;
-	}
 	if (!ResolveSpellName(spellResRef, parameters)) {
 		Sender->ReleaseCurrentAction();
 		return;
@@ -2870,11 +2863,12 @@ void SpellPointCore(Scriptable *Sender, Action *parameters, int flags)
 	}
 
 	// use the passed level instead of the caster's casting level
+	// if it's still 0 afterwards, it will revert to the caster's level
 	if (flags&SC_SETLEVEL) {
-		if (!parameters->resref0Parameter.IsEmpty()) {
-			level = parameters->int0Parameter;
-		} else {
+		if (parameters->resref0Parameter.IsEmpty()) {
 			level = parameters->int1Parameter;
+		} else {
+			level = parameters->int0Parameter;
 		}
 	}
 
