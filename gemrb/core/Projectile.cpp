@@ -232,6 +232,10 @@ void Projectile::Setup()
 	tint.b=128;
 	tint.a=255;
 
+	if (SFlags & PSF_FLYING) {
+		SFlags &= ~PSF_FLYING;
+	}
+
 	timeStartStep = core->Time.Ticks2Ms(core->GetGame()->Ticks);
 
 	Actor* act = area->GetActorByGlobalID(Caster);

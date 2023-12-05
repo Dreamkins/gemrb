@@ -213,7 +213,7 @@ public:
 #endif
 
 	ieWord Speed = 20; // (horizontal) pixels / tick
-	ieDword SFlags = PSF_FLYING;
+	ieDword SFlags = 0;// PSF_FLYING;
 	ResRef FiringSound;
 	ResRef ArrivalSound;
 	ResRef TravelVVC;
