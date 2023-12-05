@@ -697,6 +697,7 @@ int Projectile::AddTrail(const ResRef& BAM, const ieByte *pal) const
 	sca->PlayOnce();
 	sca->SetBlend();
 	sca->Pos = Pos;
+	sca->Pos.y -= ZPos;
 	// oddly, there's no visible difference in setting or not setting sca->ZOffset = ZPos
 	// the heights are still fine even for the large dragon offsets
 	area->AddVVCell(vef);
