@@ -2219,7 +2219,11 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 					Actor* enemy = core->initiatives[list][idx].actor;
 
 					// can attack?
-					if (enemy->GetStance() == IE_ANI_CAST || enemy->Immobile() || (enemy->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_MINDLESS))) {
+					if (enemy->GetStance() == IE_ANI_DIE || enemy->GetStance() == IE_ANI_SLEEP || enemy->GetStance() == IE_ANI_CAST) {
+						continue;
+					}
+
+					if (enemy->Immobile() || (enemy->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_MINDLESS))) {
 						continue;
 					}
 
