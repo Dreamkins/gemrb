@@ -1084,7 +1084,7 @@ void GameScript::WaitRandom(Scriptable* Sender, Action* parameters)
 		}
 		Sender->CurrentActionState = width * core->Time.defaultTicksPerSec;
 	} else {
-		Sender->CurrentActionState--;
+		Sender->DecreaseActionState();
 	}
 
 	if (!Sender->CurrentActionState) {
@@ -1100,7 +1100,7 @@ void GameScript::Wait(Scriptable* Sender, Action* parameters)
 	if (!Sender->CurrentActionState) {
 		Sender->CurrentActionState = parameters->int0Parameter * core->Time.defaultTicksPerSec;
 	} else {
-		Sender->CurrentActionState--;
+		Sender->DecreaseActionState();
 	}
 
 	if (!Sender->CurrentActionState) {
@@ -1116,7 +1116,7 @@ void GameScript::SmallWait(Scriptable* Sender, Action* parameters)
 	if (!Sender->CurrentActionState) {
 		Sender->CurrentActionState = parameters->int0Parameter;
 	} else {
-		Sender->CurrentActionState--;
+		Sender->DecreaseActionState();
 	}
 
 	if (!Sender->CurrentActionState) {
@@ -1135,7 +1135,7 @@ void GameScript::SmallWaitRandom(Scriptable* Sender, Action* parameters)
 		}
 		Sender->CurrentActionState = RAND(0, random-1) + parameters->int0Parameter;
 	} else {
-		Sender->CurrentActionState--;
+		Sender->DecreaseActionState();
 	}
 
 	if (!Sender->CurrentActionState) {
@@ -3302,7 +3302,8 @@ void GameScript::PlayDead(Scriptable* Sender, Action* parameters)
 		Sender->ReleaseCurrentAction();
 		return;
 	}
-	actor->CurrentActionState--;
+
+	actor->DecreaseActionState();
 }
 
 void GameScript::PlayDeadInterruptible(Scriptable* Sender, Action* parameters)
@@ -3323,7 +3324,7 @@ void GameScript::PlayDeadInterruptible(Scriptable* Sender, Action* parameters)
 		Sender->ReleaseCurrentAction();
 		return;
 	}
-	actor->CurrentActionState--;
+	actor->DecreaseActionState();
 }
 
 /* this is not correct, see #92 */
@@ -5225,7 +5226,7 @@ void GameScript::AttackOneRound( Scriptable* Sender, Action* parameters)
 	if (Sender->CurrentActionState <= 1) {
 		Sender->ReleaseCurrentAction();
 	} else {
-		Sender->CurrentActionState--;
+		Sender->DecreaseActionState();
 	}
 }
 
@@ -5384,7 +5385,7 @@ void GameScript::AttackReevaluate( Scriptable* Sender, Action* parameters)
 		return;
 	}
 
-	Sender->CurrentActionState--;
+	Sender->DecreaseActionState();
 	if (Sender->CurrentActionState <= 0) {
 		Sender->ReleaseCurrentAction();
 	}

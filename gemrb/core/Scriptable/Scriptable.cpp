@@ -90,6 +90,14 @@ Scriptable::~Scriptable(void)
 	}
 }
 
+int Scriptable::DecreaseActionState() {
+	Actor* act = Scriptable::As<Actor>(this);
+	if (Type != ST_ACTOR || !(core->IsTurnBased() && act->InInitiativeList())) {
+		CurrentActionState--;
+	}
+	return CurrentActionState;
+}
+
 ieDword Scriptable::GetLocal(const ieVariable& key, ieDword fallback) const {
 	auto lookup = locals.find(key);
 	if (lookup != locals.cend()) {

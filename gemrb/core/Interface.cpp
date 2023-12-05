@@ -4236,8 +4236,11 @@ void Interface::EndTurn() {
 		currentTurnBasedSlot = 0;
 
 		for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
-			if (initiatives[0][idx].actor->GetStance() == IE_ANI_CAST) {
+			if (initiatives[0][idx].actor->CurrentActionState) {
 				initiatives[0][idx].actor->CurrentActionState -= core->Time.defaultTicksPerSec;
+				if (initiatives[0][idx].actor->CurrentActionState < 0) {
+					initiatives[0][idx].actor->CurrentActionState = 0;
+				}
 			}
 		}
 
@@ -4250,8 +4253,11 @@ void Interface::EndTurn() {
 				timeTurnBasedNeed += core->Time.defaultTicksPerSec;
 
 				for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
-					if (initiatives[0][idx].actor->GetStance() == IE_ANI_CAST) {
+					if (initiatives[0][idx].actor->CurrentActionState) {
 						initiatives[0][idx].actor->CurrentActionState -= core->Time.defaultTicksPerSec;
+						if (initiatives[0][idx].actor->CurrentActionState < 0) {
+							initiatives[0][idx].actor->CurrentActionState = 0;
+						}
 					}
 				}
 

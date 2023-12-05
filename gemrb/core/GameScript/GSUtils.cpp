@@ -2795,11 +2795,7 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 
 	int duration;
 	if (!parameters->int2Parameter) {
-		if (!(core->IsTurnBased() && act->InInitiativeList())) {
-			duration = Sender->CurrentActionState--;
-		} else {
-			duration = std::max(Sender->CurrentActionState, 0);
-		}
+		duration = Sender->DecreaseActionState();
 	} else {
 		duration = Sender->CastSpell(tar, flags & SC_DEPLETE, flags & SC_INSTANT, flags & SC_NOINTERRUPT, level);
 	}
@@ -2923,11 +2919,7 @@ void SpellPointCore(Scriptable *Sender, Action *parameters, int flags)
 
 	int duration;
 	if (!parameters->int2Parameter) {
-		if (!(core->IsTurnBased() && act->InInitiativeList())) {
-			duration = Sender->CurrentActionState--;
-		} else {
-			duration = Sender->CurrentActionState;
-		}
+		duration = Sender->DecreaseActionState();
 	} else {
 		duration = Sender->CastSpellPoint(parameters->pointParameter, flags & SC_DEPLETE, flags & SC_INSTANT, flags & SC_NOINTERRUPT, level);
 	}
@@ -3078,13 +3070,7 @@ void RunAwayFromCore(Scriptable* Sender, const Action* parameters, int flags)
 
 	// already fleeing or just about to end?
 	if (Sender->CurrentActionState > 0) {
-		if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-			if (core->currentTurnBasedActor == actor && core->GetCurrentTurnBasedSlot().movesleft > 0) {
-				Sender->CurrentActionState--;
-			}
-		} else {
-			Sender->CurrentActionState--;
-		}
+		Sender->DecreaseActionState();
 		return;
 	} else if (Sender->CurrentActionTicks > 0) {
 		if (flags & RunAwayFlags::NoInterrupt) {

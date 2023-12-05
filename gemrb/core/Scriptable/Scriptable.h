@@ -413,6 +413,7 @@ public:
 	String GetName() const;
 	bool AuraPolluted();
 	ieDword GetLocal(const ieVariable& key, ieDword fallback) const;
+	int DecreaseActionState();
 	virtual std::string dump() const = 0;
 private:
 	/* used internally to handle start of spellcasting */
