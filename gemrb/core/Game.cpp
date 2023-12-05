@@ -1831,7 +1831,7 @@ bool Game::RestParty(int checks, int dream, int hp)
 			}
 		}
 	} else {
-		AdvanceTime(hours * core->Time.hour_size);
+		AdvanceTime(hours * core->Time.hour_size, false);
 	}
 
 	int i = GetPartySize(true); // party size, only alive

@@ -3463,7 +3463,7 @@ least one creature is summoned, regardless the difficulty cap.
 int Map::CheckRestInterruptsAndPassTime(const Point &pos, int hours, int day)
 {
 	if (!RestHeader.CreatureNum || !RestHeader.Enabled || !RestHeader.Maximum) {
-		core->GetGame()->AdvanceTime(hours * core->Time.hour_size);
+		core->GetGame()->AdvanceTime(hours * core->Time.hour_size, false);
 		return 0;
 	}
 
@@ -3477,7 +3477,7 @@ int Map::CheckRestInterruptsAndPassTime(const Point &pos, int hours, int day)
 	int chance=day?RestHeader.DayChance:RestHeader.NightChance;
 	bool interrupt = RAND(0, 99) < chance;
 	if (!interrupt) {
-		core->GetGame()->AdvanceTime(hours * core->Time.hour_size);
+		core->GetGame()->AdvanceTime(hours * core->Time.hour_size, false);
 		return 0;
 	}
 
@@ -3490,7 +3490,7 @@ int Map::CheckRestInterruptsAndPassTime(const Point &pos, int hours, int day)
 		int idx = RAND(0, RestHeader.CreatureNum - 1);
 		const Actor* creature = gamedata->GetCreature(RestHeader.CreResRef[idx]);
 		if (!creature) {
-			core->GetGame()->AdvanceTime(core->Time.hour_size);
+			core->GetGame()->AdvanceTime(core->Time.hour_size, false);
 			continue;
 		}
 
