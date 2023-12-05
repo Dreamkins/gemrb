@@ -4201,6 +4201,7 @@ void Interface::EndTurn() {
 		currentTurnBasedActorOld = nullptr;
 		currentTurnBasedListOld = 0;
 		currentTurnBasedSlotOld = 0;
+		currentTurnBasedActor->lastInit = core->GetGame()->GetGameTimeReal();
 
 		if (currentTurnBasedActor->IsPC()) {
 			core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
