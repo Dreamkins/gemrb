@@ -602,12 +602,12 @@ void Projectile::ChangePhase()
 			if (core->IsTurnBased()) {
 				if (timeTurnBasedExtencionDelay <= core->timeTurnBased) {
 					if (timeTurnBasedExtencionDelay) {
-						extensionDelay -= 5 * core->Time.defaultTicksPerSec;
+						extensionDelay -= core->Time.round_sec * core->Time.defaultTicksPerSec;
 						if (extensionDelay < 0) {
 							extensionDelay = 0;
 						}
 					}
-					timeTurnBasedExtencionDelay = core->timeTurnBased + 6 * core->Time.defaultTicksPerSec;
+					timeTurnBasedExtencionDelay = core->timeTurnBased + core->Time.round_sec * core->Time.defaultTicksPerSec;
 				}
 			} else {
 				extensionDelay--;
@@ -1486,13 +1486,15 @@ void Projectile::DrawSpreadChild(size_t idx, bool firstExplosion, const Point& o
 		pro->Speed -= RAND(0, 7);
 
 		int delay = Extension->Delay * extensionExplosionCount;
-		if (apFlags & APF_BOTH && delay) {
-			delay = RAND(0, delay - 1);
+		if (!core->IsTurnBased()) {
+			if (apFlags & APF_BOTH && delay) {
+				delay = RAND(0, delay - 1);
+			}
+			// this needs to be commented out for ToB horrid wilting
+			//if(ExtFlags&PEF_FREEZE) {
+			delay += Extension->Delay;
+			//}
 		}
-		// this needs to be commented out for ToB horrid wilting
-		//if(ExtFlags&PEF_FREEZE) {
-		delay += Extension->Delay;
-		//}
 		pro->SetDelay(delay);
 	}
 
