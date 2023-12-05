@@ -6382,7 +6382,8 @@ int Actor::BAB2APR(int pBAB, int pBABDecrement, int CheckRapidShot) const
 	// if you want to change it, don't forget to do the same for the bonus in GetNumberOfAttacks
 	return APR*2;
 }
-void Actor::RemoveFromAdditionInitiativeLists() {
+void Actor::RemoveFromAdditionInitiativeLists() 
+{
 	for (size_t list = 1; list < 6; list++) {
 		for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
 			if (core->initiatives[list][idx].actor == this) {
@@ -6393,7 +6394,8 @@ void Actor::RemoveFromAdditionInitiativeLists() {
 	}
 }
 
-Actor* Actor::FindActorInInitiativeList() {
+Actor* Actor::FindActorInInitiativeList() 
+{
 	for (size_t idx = 0; idx < core->initiatives[0].size(); idx++) {
 		if (core->initiatives[0][idx].actor == this) {
 			return this;
@@ -6402,15 +6404,22 @@ Actor* Actor::FindActorInInitiativeList() {
 	return nullptr;
 }
 
-bool Actor::InInitiativeList() {
+bool Actor::InInitiativeList() 
+{
 	if (!core || !core->GetGame()) {
 		return false;
 	}
 	return FindActorInInitiativeList() == this;
 }
 
-int Actor::CalculateInitiative(int from) {
-	int spdfactor = 0;
+int Actor::CalculateInitiative(int from) 
+{
+	WeaponInfo& wi = weaponInfo[0];
+	const ITMExtHeader* hittingheader = wi.extHeader;
+
+	int spdfactor = hittingheader->Speed;
+	spdfactor += LuckyRoll(from, 10, spdfactor, LR_NEGATIVE);
+
 	if (fxqueue.HasEffectWithParam(fx_set_haste_state_ref, 0) || fxqueue.HasEffectWithParam(fx_set_haste_state_ref, 1)) {
 		spdfactor -= 2;
 	}
@@ -6419,12 +6428,11 @@ int Actor::CalculateInitiative(int from) {
 	}
 	spdfactor -= GetAbilityBonus(IE_DEX);
 
-	if (from >= 10) return 10;
-
-	return LuckyRoll(from, 10, spdfactor, LR_NEGATIVE);
+	return spdfactor;
 }
 
-void Actor::MoveToInitiativeList() {
+void Actor::MoveToInitiativeList() 
+{
 	if (!core->turnBasedEnable || core->InCutSceneMode() || InInitiativeList() || !GetCurrentStanceAnim().size() || !GetCurrentStanceAnim()[0].first->GetFrame(0)) {
 		return;
 	}
