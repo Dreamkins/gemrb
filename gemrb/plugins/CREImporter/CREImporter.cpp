@@ -928,6 +928,14 @@ Actor* CREImporter::GetActor(unsigned char is_in_party)
 		ReadChrHeader(act);
 	}
 
+	// trolls must die
+	if (act->BaseStats[IE_GENERAL] == GEN_DEAD) {
+		act->BaseStats[IE_HITPOINTS] = 0;
+		act->BaseStats[IE_STATE_ID] |= STATE_DEAD;
+		act->SetInternalFlag(IF_JUSTDIED, BitOp::OR);
+		act->SetInternalFlag(IF_REALLYDIED, BitOp::OR);
+	}
+
 	act->InitStatsOnLoad();
 
 	return act;
