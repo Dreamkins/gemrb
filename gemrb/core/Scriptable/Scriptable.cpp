@@ -2100,13 +2100,15 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 	}
 
 	if (core->IsTurnBased()) {
-		if (core->opportunity || actor->InAttack() || GetStance() == IE_ANI_CAST || GetStance() == IE_ANI_CONJURE) {
+		if (path && core->opportunity || actor->InAttack() || GetStance() == IE_ANI_CAST || GetStance() == IE_ANI_CONJURE) {
 			ClearPath(true);
 			return;
 		}
-		if (actor->InInitiativeList() && (core->currentTurnBasedActor != actor || core->GetCurrentTurnBasedSlot().movesleft <= 0)) {
+		if (path && actor->InInitiativeList() && (core->currentTurnBasedActor != actor || core->GetCurrentTurnBasedSlot().movesleft <= 0)) {
 			ClearPath(true);
-			SetStance(IE_ANI_READY);
+			if (GetStance() == IE_ANI_WALK) {
+				SetStance(IE_ANI_READY);
+			}
 			return;
 		}
 	}
