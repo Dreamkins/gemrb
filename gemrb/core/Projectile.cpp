@@ -1864,9 +1864,11 @@ void Projectile::DrawTravel(const Region& viewport, BlitFlags flags)
 
 	pos.y -= ZPos;
 	
-	if (TFlags & PTF_LIGHT) {
-		flags |= BlitFlags::ADD;
-	} else if ((TFlags & PTF_TRANS_BLEND) == PTF_TRANS_BLEND) {
+	if (TFlags & PTF_TRANS) {
+		flags &= ~BlitFlags::STENCIL_MASK; // do not work with stencil mask
+	}
+
+	if ((TFlags & PTF_TRANS_BLEND) == PTF_TRANS_BLEND) {
 		flags |= BlitFlags::SRC;
 	} else if (TFlags & PTF_TRANS) {
 		flags |= BlitFlags::ONE_MINUS_DST;
