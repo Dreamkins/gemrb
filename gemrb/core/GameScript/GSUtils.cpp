@@ -1476,7 +1476,10 @@ void AttackCore(Scriptable *Sender, Scriptable *target, int flags)
 	}
 
 	if (core->IsTurnBased() && core->opportunity) {
-		target = attacker->GetCurrentArea()->GetActorByGlobalID(core->opportunity);
+		Actor* optar = attacker->GetCurrentArea()->GetActorByGlobalID(core->opportunity);
+		if (optar) {
+			target = optar;
+		}
 	}
 
 	Actor* tar = Scriptable::As<Actor>(target);
