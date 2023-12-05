@@ -895,8 +895,8 @@ const CharAnimations::PartAnim* CharAnimations::GetAnimation(unsigned char Stanc
 			break;
 		case IE_ANI_SLEEP: //going to sleep
 		case IE_ANI_DIE: //going to die
-			nextStanceID = IE_ANI_TWITCH;
-			autoSwitchOnEnd = true;
+			//nextStanceID = IE_ANI_TWITCH;
+			//autoSwitchOnEnd = true;
 			break;
 		case IE_ANI_WALK:
 		case IE_ANI_RUN:

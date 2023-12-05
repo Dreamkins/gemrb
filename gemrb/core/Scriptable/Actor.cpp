@@ -7843,13 +7843,15 @@ void Actor::UpdateAnimations() {
 
 	if (first->endReached) {
 		// restart animation for next time it is needed
-		first->endReached = false;
-		first->SetFrame(0);
+		if (!(first->Flags & A_ANI_PLAYONCE)) {
+			first->endReached = false;
+			first->SetFrame(0);
 
-		Animation* firstShadow = currentStance.shadow.empty() ? nullptr : currentStance.shadow[0].first;
-		if (firstShadow) {
-			firstShadow->endReached = false;
-			firstShadow->SetFrame(0);
+			Animation* firstShadow = currentStance.shadow.empty() ? nullptr : currentStance.shadow[0].first;
+			if (firstShadow) {
+				firstShadow->endReached = false;
+				firstShadow->SetFrame(0);
+			}
 		}
 
 		HandleActorStance();
