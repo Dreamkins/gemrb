@@ -632,6 +632,7 @@ void ScriptedAnimation::Draw(const Region &vp, Color tint, int height, BlitFlags
 		flags |= BlitFlags::COLOR_MOD | BlitFlags::ALPHA_MOD;
 	}
 	if (Transparency & IE_VVC_BLENDED) {
+		flags &= ~BlitFlags::STENCIL_MASK;
 		flags |= BlitFlags::ONE_MINUS_DST;
 	}
 

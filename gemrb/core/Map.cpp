@@ -4062,6 +4062,7 @@ void AreaAnimation::Draw(const Region &viewport, Color tint, BlitFlags flags) co
 	}
 	
 	if (Flags & A_ANI_BLEND) {
+		flags &= ~BlitFlags::STENCIL_MASK;
 		flags |= BlitFlags::ONE_MINUS_DST;
 	}
 
