@@ -2148,7 +2148,7 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 		Actor *actorInTheWay = nullptr;
 		// We can't use GetActorInRadius because we want to only check directly along the way
 		// and not be blocked by actors who are on the sides
-		int collisionLookaheadRadius = ((circleSize < 3 ? 3 : circleSize) - 1) * 3;
+		int collisionLookaheadRadius = ((circleSize < 3 ? 3 : circleSize) - 1);
 		for (int r = collisionLookaheadRadius; r > 0 && !actorInTheWay; r--) {
 			double xCollision = Pos.x + dx * r;
 			double yCollision = Pos.y + dy * r * 0.75;
