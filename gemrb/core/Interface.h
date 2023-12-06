@@ -758,7 +758,7 @@ public:
 	bool IsTurnBased() { return (currentTurnBasedActor != nullptr || timeTurnBased < timeTurnBasedNeed); }
 	int GetCurrentTurnBasedSlotNum() { return currentTurnBasedSlot; }
 	int GetCurrentTurnBasedListNum() { return currentTurnBasedList; }
-	InitiativeSlot& GetCurrentTurnBasedSlot() { return initiatives[currentTurnBasedList][currentTurnBasedSlot]; }
+	InitiativeSlot& GetCurrentTurnBasedSlot();
 	InitiativeSlot& GetTurnBasedSlot(Actor* actor);
 	InitiativeSlot& GetTurnBasedSlotWithAttack(Actor* actor);
 	void InitTurnBasedSlot();

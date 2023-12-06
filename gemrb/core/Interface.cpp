@@ -4430,4 +4430,19 @@ void Interface::resetTurnBased()
 	timeTurnBasedNeed = 0;
 }
 
+InitiativeSlot& Interface::GetCurrentTurnBasedSlot() 
+{ 
+	if (currentTurnBasedSlot >= initiatives[currentTurnBasedList].size()) {
+		currentTurnBasedSlot = 0;
+		for (size_t idx = 0; idx < initiatives[currentTurnBasedList].size(); idx++) {
+			if (initiatives[currentTurnBasedList][idx].actor == currentTurnBasedActor) {
+				currentTurnBasedSlot = idx;
+				break;
+			}
+		}
+	}
+
+	return initiatives[currentTurnBasedList][currentTurnBasedSlot]; 
+}
+
 }
