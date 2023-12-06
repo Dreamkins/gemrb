@@ -215,8 +215,7 @@ void Scriptable::Update()
 void Scriptable::TickScripting()
 {
 	// Stagger script updates.
-	int value = core->Time.defaultTicksPerSec / 2;
-	if (Ticks % value != globalID % value) {
+	if (Ticks % 16 != globalID % 16) {
 		return;
 	}
 
