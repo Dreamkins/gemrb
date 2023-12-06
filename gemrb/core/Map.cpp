@@ -3758,6 +3758,12 @@ int Map::GetCursor(const Point &p) const
 	}
 	switch (GetBlocked(p) & (PathMapFlags::PASSABLE | PathMapFlags::TRAVEL)) {
 		case PathMapFlags::IMPASSABLE:
+			if (core->GetGame()->selected.size() == 1) {
+				auto actors = GetAllActorsInRadius(p, GA_NO_DEAD | GA_NO_UNSCHEDULED, 3, core->GetGame()->selected[0]);
+				if (actors.size() == 1 && actors[0] == core->GetGame()->selected[0]) {
+					return IE_CURSOR_WALK;
+				}
+			}
 			return IE_CURSOR_BLOCKED;
 		case PathMapFlags::PASSABLE:
 			return IE_CURSOR_WALK;
