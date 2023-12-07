@@ -220,12 +220,12 @@ def UpdateControlStatus(init = False):
 		SetMWSize(Expand, GSFlags)
 		if GSFlags&GS_OPTIONPANE:
 			win = GemRB.GetView("OPTWIN")
-			ToggleWindowMinimize(win)
+			#ToggleWindowMinimize(win)
 		else:
 			ToggleActionbarClock(False)
 		if GSFlags&GS_PORTRAITPANE:
 			win = GemRB.GetView("PORTWIN")
-			ToggleWindowMinimize(win)
+			#ToggleWindowMinimize(win)
 	else:
 		if Expand == GS_LARGEDIALOG:
 			if MTARestoreSize is not None and (GSFlags&GS_DIALOG) == 0:
