@@ -1139,11 +1139,11 @@ String GameControl::TooltipText() const {
 	}
 
 	const Point& gameMousePos = GameMousePos();
-	if (!area->IsVisible(gameMousePos)) {
+	if (!area->IsVisible(gameMousePos) && !lastActorID) {
 		return View::TooltipText();
 	}
 
-	const Actor* actor = area->GetActor(gameMousePos, GA_NO_DEAD|GA_NO_UNSCHEDULED);
+	const Actor* actor = area->GetActorByGlobalID(lastActorID);
 	if (!actor || actor->GetStat(IE_MC_FLAGS) & MC_NO_TOOLTIPS) {
 		return View::TooltipText();
 	}
@@ -1285,7 +1285,7 @@ void GameControl::UpdateCursor()
 	Point gameMousePos = GameMousePos();
 	int nextCursor = area->GetCursor( gameMousePos );
 	//make the invisible area really invisible
-	if (nextCursor == IE_CURSOR_INVALID && targetMode == TargetMode::None) {
+	if (nextCursor == IE_CURSOR_INVALID && !lastActorID) {
 		lastCursor = IE_CURSOR_BLOCKED;
 		return;
 	}
@@ -1314,7 +1314,7 @@ void GameControl::UpdateCursor()
 			nextCursor = overInfoPoint->GetCursor(targetMode);
 		}
 		// recheck in case the position was different, resulting in a new isVisible check
-		if (nextCursor == IE_CURSOR_INVALID && targetMode == TargetMode::None) {
+		if (nextCursor == IE_CURSOR_INVALID && !lastActorID) {
 			lastCursor = IE_CURSOR_BLOCKED;
 			return;
 		}
@@ -1335,7 +1335,7 @@ void GameControl::UpdateCursor()
 	}
 	// recheck in case the position was different, resulting in a new isVisible check
 	// fixes bg2 long block door in ar0801 above vamp beds, crashing on mouseover (too big)
-	if (nextCursor == IE_CURSOR_INVALID && targetMode == TargetMode::None) {
+	if (nextCursor == IE_CURSOR_INVALID && !lastActorID) {
 		lastCursor = IE_CURSOR_BLOCKED;
 		return;
 	}
@@ -1383,7 +1383,7 @@ void GameControl::UpdateCursor()
 		// knock ignores that
 		bool blocked = bool(area->GetBlocked(gameMousePos) & (PathMapFlags::PASSABLE | PathMapFlags::TRAVEL | PathMapFlags::ACTOR));
 		bool ignoreSM = gamedata->GetSpecialSpell(spellName) & SPEC_AREA;
-		if (!ignoreSM && (!blocked || (!(target_types & GA_POINT) && !lastActor))) {
+		if (!ignoreSM && (!blocked || (!(target_types & GA_POINT))) && !lastActor) {
 			nextCursor |= IE_CURSOR_GRAY;
 		}
 	} else if (targetMode == TargetMode::Defend) {

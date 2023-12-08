@@ -1566,19 +1566,7 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 
 				if (region.PointInside(gc->ScreenMousePos())) {
 					gc->SetLastActor(actor);
-					if (gc->GetTargetMode() == TargetMode::None) {
-						ieDword type = actor->GetStat(IE_EA);
-						if (type >= EA_EVILCUTOFF || type == EA_GOODBUTRED) {
-							gc->SetCursor(core->Cursors[IE_CURSOR_ATTACK]);
-						} else {
-							gc->SetCursor(core->Cursors[IE_CURSOR_NORMAL]);
-						}
-					}
-				} else if (!gc->GetLastActor()) {
-					gc->SetLastActor(nullptr);
-					if (gc->GetTargetMode() == TargetMode::None) {
-						gc->ClearMouseState();
-					}
+					gc->UpdateCursor();
 				}
 
 				// actor image
