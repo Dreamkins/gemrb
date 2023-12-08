@@ -1802,7 +1802,7 @@ Action* GenerateActionCore(const char *src, const char *str, unsigned short acti
 			case 's': //String
 			{
 				SKIP_ARGUMENT();
-				//src++;
+				src++;
 				int i;
 				char* dst;
 				if (!stringsCount) {
