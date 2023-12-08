@@ -539,8 +539,10 @@ DirectoryIterator::DirectoryIterator(path_t path)
 
 DirectoryIterator::~DirectoryIterator()
 {
-	if (Directory)
-		closedir(static_cast<DIR*>(Directory));
+	if (Directory.size()) {
+		closedir(static_cast<DIR*>(Directory.back()));
+		Directory.pop_back();
+	}
 }
 
 void DirectoryIterator::SetFlags(int flags, bool reset)
@@ -585,7 +587,7 @@ DirectoryIterator& DirectoryIterator::operator++()
 	bool cont = false;
 	do {
 		errno = 0;
-		Entry = readdir(static_cast<DIR*>(Directory));
+		Entry = readdir(static_cast<DIR*>(Directory.back()));
 		cont = false;
 		if (Entry) {
 			const path_t& name = GetName();
@@ -612,10 +614,12 @@ DirectoryIterator& DirectoryIterator::operator++()
 
 void DirectoryIterator::Rewind()
 {
-	if (Directory)
-		closedir(static_cast<DIR*>(Directory));
-	Directory = opendir(Path.c_str());
-	if (Directory == NULL) {
+	if (Directory.size()) {
+		closedir(static_cast<DIR*>(Directory.back()));
+		Directory.pop_back();
+	}
+	Directory.push_back(opendir(Path.c_str()));
+	if (Directory.empty()) {
 		Entry = NULL;
 		//Log(WARNING, "DirectoryIterator", "Cannot open directory: {}\nError: {}", Path, strerror(errno));
 	} else {

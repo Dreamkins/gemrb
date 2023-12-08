@@ -187,7 +187,7 @@ public:
 	void Rewind();
 private:
 	FileFilterPredicate predicate;
-	void* Directory = nullptr;
+	std::vector<void*> Directory;
 	void* Entry = nullptr;
 	path_t Path;
 	Flags entrySkipFlags;
