@@ -970,7 +970,8 @@ int GAMImporter::PutActor(DataStream* stream, const Actor* ac, ieDword CRESize, 
 		std::string tmpstr = TLKStringFromString(ac->GetLongName());
 		stream->WriteVariable(ieVariable(tmpstr));
 	} else {
-		std::string tmpstr = core->GetMBString(ac->LongStrRef, STRING_FLAGS::STRREFOFF);
+		String string = core->GetString(ac->LongStrRef, STRING_FLAGS::STRREFOFF);
+		std::string tmpstr = TLKStringFromString(string);
 		stream->WriteVariable(ieVariable(tmpstr));
 	}
 	stream->WriteDword(ac->TalkCount);
