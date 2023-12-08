@@ -1502,8 +1502,8 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 		}
 	}
 
-#define SLOTSIZEX 46
-#define HPSIZEX 4
+#define SLOTSIZEX 42
+#define HPSIZEX 0
 
 	if (core->IsTurnBased() && !core->pause_before_fight) {
 
@@ -1591,30 +1591,25 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 						int sh = 0;
 						int oy = 0;
 						using AnimationPart = std::pair<Animation*, Holder<Palette>>;
-						std::vector<AnimationPart> animpart = core->initiatives[list][idx].actor->GetCurrentStanceAnim();
-						if (animpart.size()) {
-							if (animpart.size()) {
-								for (int a = 0; a < animpart.size(); a++) {
-									if (animpart[a].first->animArea.h > sh) {
-										sh = animpart[a].first->animArea.h;
-										oy = animpart[a].first->animArea.origin.y;
-									}
-								}
+						std::vector<AnimationPart> anim = actor->GetCurrentStanceAnim();
+						if (anim.size()) {
+							Animation* first = anim[0].first;
+							sh = first->animArea.h;
+							oy = first->animArea.origin.y;
 
-								int hoffset = 0;
-								if (sh < 60) {
-									hoffset = (60 - sh) / 2;
-								}
-								
-								sh = sh - (sh + oy) + hoffset;
-
-								// actor image background
-								Color bcolor = Color(64, 64, 64, 255);
-								VideoDriver->DrawRect(region, bcolor, true, BlitFlags::BLENDED);
-								// actor sprite
-								Region r(pos.x + 19, pos.y + sh + 4, 38, 60);
-								actor->Draw(r, color, color, BlitFlags::BLENDED, true);
+							int hoffset = 0;
+							if (sh < 60) {
+								hoffset = (60 - sh) / 2;
 							}
+								
+							sh = sh - (sh + oy) + hoffset;
+
+							// actor image background
+							Color bcolor = Color(64, 64, 64, 255);
+							VideoDriver->DrawRect(region, bcolor, true, BlitFlags::BLENDED);
+							// actor sprite
+							Region r(pos.x + 19, pos.y + sh + 4, 38, 60);
+							actor->Draw(r, color, color, BlitFlags::BLENDED, true);
 						}
 					}
 				}
@@ -1622,7 +1617,7 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 				VideoDriver->SetScreenClip(&oldClip);
 
 				// actor border
-				Color rcolor = actor->GetCircleColor();// core->currentTurnBasedActor == actor ? Color(192, 192, 192, 255) : Color(128, 128, 128, 255);
+				Color rcolor = actor->GetCircleColor();
 				Region actborder(region.x - HPSIZEX, region.y, region.w + HPSIZEX, region.h);
 				VideoDriver->DrawRect(actborder, rcolor, false, BlitFlags::BLENDED);
 
@@ -1641,7 +1636,7 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 					int movescur = core->GetCurrentTurnBasedSlot().movesleft;
 					movescur = std::min(movesmax, movescur);
 
-					float part = (SLOTSIZEX -HPSIZEX - 12) * (speed ? ((float)movescur / movesmax) : 0);
+					float part = (SLOTSIZEX - HPSIZEX - 10 - 2 - 4) * (speed ? ((float)movescur / movesmax) : 0);
 
 					Region r2(offs + 12, region.y - 15, part, 10);
 					VideoDriver->DrawRect(r2, r2color, true, BlitFlags::BLENDED);
@@ -1654,9 +1649,13 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 				float percent = (float)((float)hp / (float)maxhp);
 				int hpheight = 60 * percent;
 
-				Point hppos(xoffset + idx * SLOTSIZEX + 1, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 15 : 0) + 60 - hpheight + 1);
-				Region hpregion(hppos, Size(HPSIZEX, hpheight - 2));
-				Color hpcolor = Color(255 - (255 * percent), 255 * percent, 0, 255);
+				//Point hppos(xoffset + idx * SLOTSIZEX + 1, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 15 : 0) + 60 - hpheight + 1);
+				//Region hpregion(hppos, Size(HPSIZEX, hpheight - 2));
+				//Color hpcolor = Color(255 - (255 * percent), 255 * percent, 0, 255);
+				//VideoDriver->DrawRect(hpregion, hpcolor, true, BlitFlags::BLENDED);
+
+				Region hpregion(actborder.x + 1, actborder.y + 1 + actborder.h * percent, actborder.w - 2, (actborder.h - 2) * (1.0f - percent) );
+				Color hpcolor = Color(128, 0, 0, 128);
 				VideoDriver->DrawRect(hpregion, hpcolor, true, BlitFlags::BLENDED);
 			}
 			xoffset += core->initiatives[list].size() * SLOTSIZEX + 15;
