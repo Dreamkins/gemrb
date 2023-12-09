@@ -277,7 +277,7 @@ struct InitiativeSlot {
 	Actor* actor = nullptr;
 	Holder<Sprite2D> image;
 	int initiative = 10;
-	int movesleft = 0;
+	float movesleft = 1.0f;
 	bool haveattack = false;
 	bool opportunity = false;
 	bool haveOportunity = false;

@@ -1631,12 +1631,10 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 
 					// moves rect
 					Color r2color = Color(128, 128, 255, 255);
-					int speed = (actor->GetSpeed() ? gamedata->GetStepTime() / actor->GetSpeed() : 0);
-					int movesmax = speed * core->Time.defaultTicksPerSec * core->Time.round_sec * 10;
-					int movescur = core->GetCurrentTurnBasedSlot().movesleft;
-					movescur = std::min(movesmax, movescur);
+					float movescur = core->GetCurrentTurnBasedSlot().movesleft;
+					movescur = std::fmax(0, movescur);
 
-					float part = (SLOTSIZEX - HPSIZEX - 10 - 2 - 4) * (speed ? ((float)movescur / movesmax) : 0);
+					float part = (SLOTSIZEX - HPSIZEX - 10 - 2 - 4) * movescur;
 
 					Region r2(offs + 12, region.y - 15, part, 10);
 					VideoDriver->DrawRect(r2, r2color, true, BlitFlags::BLENDED);

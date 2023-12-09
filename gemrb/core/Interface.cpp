@@ -4079,8 +4079,7 @@ void Interface::InitTurnBasedSlot() {
 
 	if (!GetCurrentTurnBasedSlot().delayAttack) {
 		if (currentTurnBasedList == 0) {
-			int speed = (currentTurnBasedActor->GetSpeed() ? gamedata->GetStepTime() / currentTurnBasedActor->GetSpeed() : 0);
-			GetCurrentTurnBasedSlot().movesleft = speed * core->Time.defaultTicksPerSec * core->Time.round_sec * 10;
+			GetCurrentTurnBasedSlot().movesleft = 1.0f;
 		} else {
 			for (size_t idx = 0; idx < initiatives[currentTurnBasedList - 1].size(); idx++) {
 				if (initiatives[currentTurnBasedList - 1][idx].actor == currentTurnBasedActor) {

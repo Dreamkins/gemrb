@@ -2184,7 +2184,7 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 				if (core->IsTurnBased() && !actor->IsPC() && actor == core->currentTurnBasedActor) {
 					ClearPath(true);
 					NewOrientation = Orientation;
-					core->GetCurrentTurnBasedSlot().movesleft -= 150;
+					core->GetCurrentTurnBasedSlot().movesleft -= 0.1f;
 				}
 				Backoff();
 				return;
@@ -2261,8 +2261,9 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 				}
 			}
 
-			int dist = SquaredDistance(Pos, newPos);
-			core->GetCurrentTurnBasedSlot().movesleft -= dist;
+			float dist = SquaredDistance(Pos, newPos);
+			int speed = actor->GetSpeed() ? gamedata->GetStepTime() / actor->GetSpeed() : 0;
+			core->GetCurrentTurnBasedSlot().movesleft -= dist / (speed * core->Time.defaultTicksPerSec * core->Time.round_sec * 10);
 			actor->lastInit = core->GetGame()->GetGameTimeReal();
 		}
 
