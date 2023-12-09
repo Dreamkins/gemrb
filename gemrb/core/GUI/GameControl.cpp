@@ -1308,11 +1308,16 @@ void GameControl::UpdateCursor()
 			overMe = nullptr;
 		}
 	} else {
-		InfoPoint* overInfoPoint = area->TMap->GetInfoPoint(gameMousePos, false);
-		overMe = overInfoPoint;
-		if (overInfoPoint) {
-			nextCursor = overInfoPoint->GetCursor(targetMode);
+		overMe = overContainer = area->TMap->GetContainer(gameMousePos);
+
+		if (!overMe) {
+			InfoPoint* overInfoPoint = area->TMap->GetInfoPoint(gameMousePos, false);
+			overMe = overInfoPoint;
+			if (overInfoPoint) {
+				nextCursor = overInfoPoint->GetCursor(targetMode);
+			}
 		}
+
 		// recheck in case the position was different, resulting in a new isVisible check
 		if (nextCursor == IE_CURSOR_INVALID && !lastActorID) {
 			lastCursor = IE_CURSOR_BLOCKED;
@@ -1323,10 +1328,6 @@ void GameControl::UpdateCursor()
 		if (nextCursor == IE_CURSOR_TRAVEL && core->GetGame()->OnlyNPCsSelected()) {
 			lastCursor = IE_CURSOR_BLOCKED;
 			return;
-		}
-
-		if (!overMe) {
-			overMe = overContainer = area->TMap->GetContainer(gameMousePos);
 		}
 	}
 
