@@ -4352,9 +4352,6 @@ void Interface::UpdateTurnBased() {
 
 						if (currentTurnBasedActor->IsPC()) {
 							core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
-						} else {
-							Action* attack = GenerateAction("Attack()");
-							currentTurnBasedActor->AddActionInFront(attack);
 						}
 						break;
 					}
@@ -4365,10 +4362,9 @@ void Interface::UpdateTurnBased() {
 					return;
 				}
 			}
-		}
-
-		if (!currentTurnBasedActorOld) {
-			core->opportunity = 0;
+			if (!currentTurnBasedActorOld) {
+				core->opportunity = 0;
+			}
 		}
 
 		currentTurnBasedSlot = 0;
@@ -4429,6 +4425,7 @@ void Interface::resetTurnBased()
 	roundTurnBased = 0;
 	timeTurnBased = 0;
 	timeTurnBasedNeed = 0;
+	opportunity = 0;
 }
 
 InitiativeSlot& Interface::GetCurrentTurnBasedSlot() 
