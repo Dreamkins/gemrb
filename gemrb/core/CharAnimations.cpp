@@ -406,34 +406,40 @@ void CharAnimations::SetWeaponType(unsigned char wt)
 
 void CharAnimations::SetHelmetRef(AnimRef ref)
 {
-	HelmetRef = ref;
+	if (HelmetRef != ref) {
+		HelmetRef = ref;
 
-	// Only drop helmet anims?
-	// Note: this doesn't happen "often", so this isn't a performance
-	//       bottleneck. (wjp)
-	DropAnims();
-	PartPalettes[PAL_HELMET] = nullptr;
-	ModPartPalettes[PAL_HELMET] = nullptr;
+		// Only drop helmet anims?
+		// Note: this doesn't happen "often", so this isn't a performance
+		//       bottleneck. (wjp)
+		DropAnims();
+		PartPalettes[PAL_HELMET] = nullptr;
+		ModPartPalettes[PAL_HELMET] = nullptr;
+	}
 }
 
 void CharAnimations::SetWeaponRef(AnimRef ref)
 {
-	WeaponRef = ref;
+	if (WeaponRef != ref) {
+		WeaponRef = ref;
 
-	// TODO: Only drop weapon anims?
-	DropAnims();
-	PartPalettes[PAL_WEAPON] = nullptr;
-	ModPartPalettes[PAL_WEAPON] = nullptr;
+		// TODO: Only drop weapon anims?
+		DropAnims();
+		PartPalettes[PAL_WEAPON] = nullptr;
+		ModPartPalettes[PAL_WEAPON] = nullptr;
+	}
 }
 
 void CharAnimations::SetOffhandRef(AnimRef ref)
 {
-	OffhandRef = ref;
+	if (OffhandRef != ref) {
+		OffhandRef = ref;
 
-	// TODO: Only drop shield/offhand anims?
-	DropAnims();
-	PartPalettes[PAL_OFFHAND] = nullptr;
-	ModPartPalettes[PAL_OFFHAND] = nullptr;
+		// TODO: Only drop shield/offhand anims?
+		DropAnims();
+		PartPalettes[PAL_OFFHAND] = nullptr;
+		ModPartPalettes[PAL_OFFHAND] = nullptr;
+	}
 }
 
 void CharAnimations::LockPalette(const ieDword *gradients)

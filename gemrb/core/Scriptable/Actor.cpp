@@ -7656,6 +7656,13 @@ void Actor::AttackTurnBased(ieDword gameTime)
 
 	ClearPath(true);
 	SetStance(AttackStance);
+	HandleActorStance();
+	AdvanceAnimations();
+
+	if (currentStance.anim.size() && currentStance.anim[0].first->GetFrameCount()) {
+		currentStance.anim[0].first->SetFrame(0);
+	}
+
 	lastInit = core->GetGame()->GetGameTimeReal();
 	core->lastTurnBasedTarget = objects.LastTarget;
 

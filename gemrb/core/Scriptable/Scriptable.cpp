@@ -1987,10 +1987,6 @@ void Movable::SetStance(unsigned int arg)
 		}
 	}
 
-	if (StanceID != arg && caster->GetCurrentStanceAnim().size()) {
-		caster->GetAnims()->DropAnims();
-	}
-
 	StanceID = (unsigned char)arg;
 
 	// this doesn't get hit on movement, since movement overrides the stance manually
