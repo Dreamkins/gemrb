@@ -189,7 +189,6 @@ public:
 	unsigned char stanceID = 0;
 	bool autoSwitchOnEnd = false;
 	bool lockPalette = false;
-	bool dropOnEnd = false;
 
 	CharAnimations(unsigned int AnimID, ieDword ArmourLevel);
 	CharAnimations(const CharAnimations&) = delete;
@@ -230,7 +229,7 @@ public:
 	int GetWalkSoundCount() const;
 	const ResRef &GetArmourLevel(int ArmourLevel) const;
 	void PulseRGBModifiers();
-	void DropAnims(bool now = false);
+	void DropAnims();
 
 private:
 	void InitAvatarsTable() const;

@@ -671,15 +671,9 @@ CharAnimations::CharAnimations(unsigned int AnimID, ieDword ArmourLevel)
 }
 
 //we have to drop them when armourlevel changes
-void CharAnimations::DropAnims(bool now)
+void CharAnimations::DropAnims()
 {
-	if (now) {
-		Anims.fill({});
-		dropOnEnd = false;
-	} else {
-		dropOnEnd = true;
-	}
-	
+	Anims.fill({});
 }
 
 CharAnimations::~CharAnimations(void)
@@ -943,12 +937,6 @@ const CharAnimations::PartAnim* CharAnimations::GetAnimation(unsigned char Stanc
 	}
 
 	PartAnim& anims = Anims[stanceID][Orient];
-
-	if (anims.size() && dropOnEnd) {
-		if (!(anims[0]->Flags & A_ANI_PLAYONCE) || anims[0]->frameIdx == 0 || (anims[0]->playReversed && anims[0]->frameIdx == anims[0]->GetFrameCount() - 1)) {
-			DropAnims(true);
-		}
-	}
 
 	if (!anims.empty()) {
 		const SharedAnim& anim = anims[0];
