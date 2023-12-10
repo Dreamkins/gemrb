@@ -334,6 +334,8 @@ bool DialogHandler::DialogChoose(unsigned int choose)
 				target->ReleaseCurrentAction();
 			}
 
+			target->ClearActions();
+
 			// do not interrupt during dialog actions (needed for aerie.d polymorph block)
 			target->AddAction("SetInterrupt(FALSE)");
 			// delay all other actions until the next cycle (needed for the machine of Lum the Mad (gorlum2.dlg))
