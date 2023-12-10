@@ -1592,7 +1592,7 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 						int oy = 0;
 						using AnimationPart = std::pair<Animation*, Holder<Palette>>;
 						std::vector<AnimationPart> anim = actor->GetCurrentStanceAnim();
-						if (anim.size()) {
+						if (anim.size() && anim[0].first->GetFrameCount()) {
 							Animation* first = anim[0].first;
 							sh = first->animArea.h;
 							oy = first->animArea.origin.y;
