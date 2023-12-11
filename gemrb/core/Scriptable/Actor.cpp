@@ -6421,8 +6421,8 @@ int Actor::CalculateInitiative(int from)
 	WeaponInfo& wi = weaponInfo[0];
 	const ITMExtHeader* hittingheader = wi.extHeader;
 
-	int spdfactor = hittingheader->Speed;
-	spdfactor += LuckyRoll(from, 10, spdfactor, LR_NEGATIVE);
+	int spdfactor = hittingheader ? hittingheader->Speed : 5;
+	spdfactor += LuckyRoll(from, 10, 0, LR_NEGATIVE);
 
 	if (fxqueue.HasEffectWithParam(fx_set_haste_state_ref, 0) || fxqueue.HasEffectWithParam(fx_set_haste_state_ref, 1)) {
 		spdfactor -= 2;
