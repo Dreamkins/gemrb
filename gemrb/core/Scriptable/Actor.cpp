@@ -8383,6 +8383,7 @@ bool Actor::AdvanceAnimations()
 	const auto* stanceAnim = anims->GetAnimation(stanceID, face);
 	
 	if (stanceAnim == nullptr) {
+		SetStance(IE_ANI_READY);
 		return false;
 	}
 	
