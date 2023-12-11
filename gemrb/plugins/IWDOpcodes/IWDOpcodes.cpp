@@ -625,14 +625,10 @@ int fx_iwd_monster_summoning (Scriptable* Owner, Actor* target, Effect* fx)
 	}
 	core->GetResRefFrom2DA(iwd_monster_2da[fx->Parameter2], monster, hit, areahit);
 
-	int amount = core->Roll(fx->DiceSides, fx->DiceThrown , 0);
+	//the monster should appear near the effect position
+	Effect* newfx = EffectQueue::CreateUnsummonEffect(fx);
+	core->SummonCreature(monster, areahit, Owner, target, fx->Pos, EAM_SOURCEALLY, fx->Parameter1, newfx);
 
-	while (amount) {
-		//the monster should appear near the effect position
-		Effect* newfx = EffectQueue::CreateUnsummonEffect(fx);
-		core->SummonCreature(monster, areahit, Owner, target, fx->Pos, EAM_SOURCEALLY, fx->Parameter1, newfx);
-		amount--;
-	}
 	return FX_NOT_APPLIED;
 }
 
@@ -688,9 +684,13 @@ int fx_animate_dead (Scriptable* Owner, Actor* target, Effect* fx)
 	}
 	core->GetResRefFrom2DA(animate_dead_2da[fx->Parameter2], monster, hit, areahit);
 
-	//the monster should appear near the effect position
-	Effect *newfx = EffectQueue::CreateUnsummonEffect(fx);
-	core->SummonCreature(monster, areahit, Owner, target, fx->Pos, EAM_SOURCEALLY, fx->Parameter1, newfx);
+	int count = target->GetClericLevel();
+	while (count) {
+		//the monster should appear near the effect position
+		Effect* newfx = EffectQueue::CreateUnsummonEffect(fx);
+		core->SummonCreature(monster, areahit, Owner, target, fx->Pos, EAM_SOURCEALLY, fx->Parameter1, newfx);
+		count--;
+	}
 	return FX_NOT_APPLIED;
 }
 //f4 Prayer
