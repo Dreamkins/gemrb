@@ -2175,28 +2175,44 @@ void CharAnimations::AddTwoFileSuffix(ResRef& dest, unsigned char StanceID,
 	switch(StanceID) {
 		case IE_ANI_HEAD_TURN:
 			Cycle = 16 + Orient / 2;
+			dest.Append("g1");
 			break;
 		case IE_ANI_DAMAGE:
 			Cycle = 24 + Orient / 2;
+			dest.Append("g1");
 			break;
 		case IE_ANI_SLEEP:
 		case IE_ANI_TWITCH:
 			Cycle = 40 + Orient / 2;
+			dest.Append("g1");
 			break;
 		case IE_ANI_GET_UP:
 		case IE_ANI_EMERGE:
 		case IE_ANI_DIE:
 		case IE_ANI_PST_START:
 			Cycle = 32 + Orient / 2;
+			dest.Append("g1");
 			break;
 		case IE_ANI_WALK:
 			Cycle = Orient / 2;
+			dest.Append("g1");
+			break;
+		case IE_ANI_ATTACK:
+		case IE_ANI_SHOOT:
+		case IE_ANI_ATTACK_BACKSLASH:
+			Cycle = Orient / 2;
+			dest.Append("g2");
+			break;
+		case IE_ANI_ATTACK_JAB:
+			Cycle = 8 + Orient / 2;
+			dest.Append("g2");
 			break;
 		default:
 			Cycle = 8 + Orient / 2;
+			dest.Append("g1");
 			break;
 	}
-	dest.Append("g1");
+
 	if (Orient > 9) {
 		dest.Append("e");
 	}
