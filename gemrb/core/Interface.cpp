@@ -4240,10 +4240,7 @@ void Interface::EndTurn() {
 
 		for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
 			if (initiatives[0][idx].actor->CurrentActionState) {
-				initiatives[0][idx].actor->CurrentActionState -= core->Time.defaultTicksPerSec;
-				if (initiatives[0][idx].actor->CurrentActionState < 0) {
-					initiatives[0][idx].actor->CurrentActionState = 0;
-				}
+				initiatives[0][idx].CurrentActionStateDescrease += core->Time.defaultTicksPerSec;
 			}
 		}
 
@@ -4257,10 +4254,7 @@ void Interface::EndTurn() {
 
 				for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
 					if (initiatives[0][idx].actor->CurrentActionState) {
-						initiatives[0][idx].actor->CurrentActionState -= core->Time.defaultTicksPerSec;
-						if (initiatives[0][idx].actor->CurrentActionState < 0) {
-							initiatives[0][idx].actor->CurrentActionState = 0;
-						}
+						initiatives[0][idx].CurrentActionStateDescrease += core->Time.defaultTicksPerSec;
 					}
 				}
 

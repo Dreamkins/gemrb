@@ -282,6 +282,7 @@ struct InitiativeSlot {
 	bool opportunity = false;
 	bool haveOportunity = true;
 	bool delayAttack = false;
+	int CurrentActionStateDescrease = 0;
 };
 
 /**

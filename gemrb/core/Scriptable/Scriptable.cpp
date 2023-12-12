@@ -94,6 +94,15 @@ int Scriptable::DecreaseActionState() {
 	Actor* act = Scriptable::As<Actor>(this);
 	if (Type != ST_ACTOR || !(core->IsTurnBased() && act->InInitiativeList())) {
 		CurrentActionState--;
+	} else {
+		auto& slot = core->GetTurnBasedSlot(act);
+		if (slot.CurrentActionStateDescrease) {
+			CurrentActionState -= slot.CurrentActionStateDescrease;
+			if (CurrentActionState < 0) {
+				CurrentActionState = 0;
+			}
+			slot.CurrentActionStateDescrease = 0;
+		}
 	}
 	return CurrentActionState;
 }
