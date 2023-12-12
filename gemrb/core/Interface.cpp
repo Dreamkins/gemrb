@@ -3858,7 +3858,7 @@ PauseState Interface::TogglePause() const
 	if (core->IsTurnBased()) {
 		Actor* actor = core->currentTurnBasedActor;
 		if (actor) {
-			bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->GetMod(IE_STATE_ID) & STATE_MINDLESS);
+			bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->GetMod(IE_STATE_ID) & (STATE_MINDLESS^STATE_BERSERK));
 			if (actor->lastInit && game->GetGameTimeReal() - actor->lastInit > 4 && !notPlayerControl && !actor->InMove() && !actor->InAttack()) {
 				core->EndTurn();
 			}
