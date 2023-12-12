@@ -278,9 +278,9 @@ struct InitiativeSlot {
 	Holder<Sprite2D> image;
 	int initiative = 10;
 	float movesleft = 1.0f;
-	bool haveattack = false;
+	bool haveattack = true;
 	bool opportunity = false;
-	bool haveOportunity = false;
+	bool haveOportunity = true;
 	bool delayAttack = false;
 };
 
