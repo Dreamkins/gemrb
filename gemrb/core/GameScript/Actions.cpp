@@ -1297,6 +1297,10 @@ void GameScript::MoveToPoint(Scriptable* Sender, Action* parameters)
 		return;
 	}
 
+	if (core->IsTurnBased() && actor->InInitiativeList() && core->currentTurnBasedActor != actor) {
+		return;
+	}
+
 	// iwd2 is the only one with special handling:
 	// -2 is used as HomeLocation; no other unusual values are used
 	if (parameters->pointParameter.x < 0) {

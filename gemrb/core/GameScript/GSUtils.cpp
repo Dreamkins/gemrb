@@ -1461,6 +1461,10 @@ void AttackCore(Scriptable *Sender, Scriptable *target, int flags)
 	assert(attacker);
 	assert(target);
 
+	if (core->IsTurnBased() && attacker->InInitiativeList() && core->currentTurnBasedActor != Sender) {
+		return;
+	}
+
 	// if held or disabled, etc, then cannot start or continue attacking
 	if (attacker->Immobile()) {
 		attacker->roundTime = 0;
