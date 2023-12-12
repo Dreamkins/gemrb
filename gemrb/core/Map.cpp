@@ -1602,13 +1602,22 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 								hoffset = (60 - sh) / 2;
 							}
 								
+							int woffset = 0;
+							if ((first->animArea.w - 38) > 10) {
+								if (actor->GetOrientation() >= 2 && actor->GetOrientation() <= 6) {
+									woffset += 10;
+								} else if (actor->GetOrientation() >= 10 && actor->GetOrientation() <= 14) {
+									woffset -= 10;
+								}
+							}
+
 							sh = sh - (sh + oy) + hoffset;
 
 							// actor image background
 							Color bcolor = Color(64, 64, 64, 255);
 							VideoDriver->DrawRect(region, bcolor, true, BlitFlags::BLENDED);
 							// actor sprite
-							Region r(pos.x + 19, pos.y + sh + 4, 38, 60);
+							Region r(pos.x + 19 + woffset, pos.y + sh + 4, 38, 60);
 							actor->Draw(r, color, color, BlitFlags::BLENDED, true);
 						}
 					}
