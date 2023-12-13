@@ -2223,19 +2223,19 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 					Actor* enemy = core->initiatives[list][idx].actor;
 
 					// can attack?
-					if (enemy->GetStance() == IE_ANI_DIE || enemy->GetStance() == IE_ANI_SLEEP || enemy->GetStance() == IE_ANI_CAST) {
+					if (enemy->GetStance() == IE_ANI_DIE || 
+						enemy->GetStance() == IE_ANI_TWITCH  || 
+						enemy->GetStance() == IE_ANI_SLEEP || 
+						enemy->GetStance() == IE_ANI_CAST) {
 						continue;
 					}
 
-					if (enemy->Immobile() || (enemy->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_MINDLESS))) {
+					// can move?
+					if (enemy->Immobile() || (enemy->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) {
 						continue;
 					}
 
-					// have attacks?
-					if (!core->initiatives[list][idx].haveattack && enemy->attackcount < core->currentTurnBasedList + 2) {
-						continue;
-					}
-
+					// current area?
 					if (enemy->GetCurrentArea() != GetCurrentArea()) {
 						continue;
 					}
@@ -2251,10 +2251,16 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 						continue;
 					}
 
+					InitiativeSlot* slot = core->GetTurnBasedSlotWithAttack(enemy);
+
+					// have attacks?
+					if (!slot) {
+						continue;
+					}
+
 					unsigned int weaponRange = enemy->GetWeaponRange(false);
-					InitiativeSlot& slot = core->GetTurnBasedSlotWithAttack(enemy);
-					if (slot.actor == enemy && slot.haveOportunity && slot.haveattack && WithinPersonalRange(enemy, Pos, weaponRange) && !WithinPersonalRange(enemy, newPos, weaponRange)) {
-						slot.opportunity = true;
+					if (slot->actor == enemy && slot->haveOportunity && slot->haveattack && WithinPersonalRange(enemy, Pos, weaponRange) && !WithinPersonalRange(enemy, newPos, weaponRange)) {
+						slot->opportunity = true;
 						core->opportunity = GetGlobalID();
 					}
 				}

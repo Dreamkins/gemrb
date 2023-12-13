@@ -761,7 +761,7 @@ public:
 	int GetCurrentTurnBasedListNum() { return currentTurnBasedList; }
 	InitiativeSlot& GetCurrentTurnBasedSlot();
 	InitiativeSlot& GetTurnBasedSlot(Actor* actor);
-	InitiativeSlot& GetTurnBasedSlotWithAttack(Actor* actor);
+	InitiativeSlot* GetTurnBasedSlotWithAttack(Actor* actor);
 	void InitTurnBasedSlot();
 	void FirstRoundStart();
 	void EndTurn();

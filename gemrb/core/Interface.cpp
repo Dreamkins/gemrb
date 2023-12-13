@@ -4108,6 +4108,7 @@ void Interface::InitTurnBasedSlot() {
 void Interface::FirstRoundStart() {
 	currentTurnBasedSlot = 0;
 	currentTurnBasedList = 0;
+	opportunity = 0;
 	roundTurnBased++;
 
 	if (roundTurnBased == 1) {
@@ -4124,17 +4125,29 @@ void Interface::FirstRoundStart() {
 
 	for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
 		initiatives[0][idx].actor->InitRound(timeTurnBased);
-		if (initiatives[0][idx].actor->attackcount) {
-			initiatives[0][idx].haveattack = true;
-			initiatives[0][idx].haveOportunity = true;
-			initiatives[0][idx].delayAttack = false;
-		}
+		initiatives[0][idx].haveattack = initiatives[0][idx].actor->attackcount > 0;
+		initiatives[0][idx].haveOportunity = initiatives[0][idx].actor->attackcount > 0;
+		initiatives[0][idx].delayAttack = false;
 	}
 
-	for (size_t attacks = 1; attacks < core->Time.round_sec; attacks++) {
+	for (size_t attacks = 1; attacks < 10; attacks++) {
 		initiatives[attacks].clear();
 		for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
-			if (!initiatives[0][idx].actor->Immobile() && initiatives[0][idx].actor->attackcount >= attacks + 1) {
+			auto actor = initiatives[0][idx].actor;
+			// can attack?
+			if (actor->GetStance() == IE_ANI_DIE ||
+				actor->GetStance() == IE_ANI_TWITCH ||
+				actor->GetStance() == IE_ANI_SLEEP ||
+				actor->GetStance() == IE_ANI_CAST) {
+				continue;
+			}
+
+			// can move?
+			if (actor->Immobile() || (actor->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) {
+				continue;
+			}
+
+			if (initiatives[0][idx].actor->attackcount >= attacks + 1) {
 				initiatives[attacks].push_back(initiatives[0][idx]);
 				initiatives[attacks].back().haveattack = true;
 				initiatives[attacks].back().haveOportunity = true;
@@ -4167,18 +4180,18 @@ InitiativeSlot& Interface::GetTurnBasedSlot(Actor* actor) {
 	}
 }
 
-InitiativeSlot& Interface::GetTurnBasedSlotWithAttack(Actor* actor) {
+InitiativeSlot* Interface::GetTurnBasedSlotWithAttack(Actor* actor) {
 	for (size_t list = 0; initiatives[list].size(); list++) {
 		for (size_t idx = 0; idx < initiatives[list].size(); idx++) {
 			if (initiatives[list][idx].actor != actor) {
 				continue;
 			}
 			if (initiatives[list][idx].haveattack) {
-				return initiatives[list][idx];
+				return &initiatives[list][idx];
 			}
 		}
 	}
-	return initiatives[0][0];
+	return nullptr;
 }
 
 void Interface::EndTurn() {
@@ -4224,8 +4237,8 @@ void Interface::EndTurn() {
 	}
 
 	// delayed attack
-	if (actor->GetStance() != IE_ANI_DIE && actor->GetStance() != IE_ANI_SLEEP && !(actor->Immobile() || 
-		(actor->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_MINDLESS))) && GetCurrentTurnBasedSlot().haveattack && 
+	if (actor->GetStance() != IE_ANI_DIE && actor->GetStance() != IE_ANI_TWITCH && actor->GetStance() != IE_ANI_SLEEP &&
+		!(actor->Immobile() || (actor->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) && GetCurrentTurnBasedSlot().haveattack &&
 		!GetCurrentTurnBasedSlot().delayAttack && currentTurnBasedSlot < initiatives[currentTurnBasedList].size() - 1) {
 		InitiativeSlot delayedSlot = GetCurrentTurnBasedSlot();
 		delayedSlot.delayAttack = true;
