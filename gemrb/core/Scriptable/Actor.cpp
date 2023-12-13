@@ -7659,8 +7659,10 @@ void Actor::AttackTurnBased(ieDword gameTime)
 	HandleActorStance();
 	AdvanceAnimations();
 
-	if (currentStance.anim.size() && currentStance.anim[0].first->GetFrameCount()) {
-		currentStance.anim[0].first->SetFrame(0);
+	if (currentStance.anim.size()) {
+		for (auto current : currentStance.anim) {
+			current.first->SetFrame(0);
+		}
 	}
 
 	lastInit = core->GetGame()->GetGameTimeReal();
@@ -7862,15 +7864,13 @@ void Actor::UpdateAnimations() {
 
 	if (first->endReached) {
 		// restart animation for next time it is needed
-		if (!(first->Flags & A_ANI_PLAYONCE)) {
-			first->endReached = false;
-			first->SetFrame(0);
+		first->endReached = false;
+		first->SetFrame(0);
 
-			Animation* firstShadow = currentStance.shadow.empty() ? nullptr : currentStance.shadow[0].first;
-			if (firstShadow) {
-				firstShadow->endReached = false;
-				firstShadow->SetFrame(0);
-			}
+		Animation* firstShadow = currentStance.shadow.empty() ? nullptr : currentStance.shadow[0].first;
+		if (firstShadow) {
+			firstShadow->endReached = false;
+			firstShadow->SetFrame(0);
 		}
 
 		HandleActorStance();
