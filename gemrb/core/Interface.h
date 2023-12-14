@@ -718,7 +718,8 @@ public:
 	uint32_t timeTurnBased = 0;
 	uint32_t timeTurnBasedNeed = 0;
 	int lastTurnBasedTarget = 0;
-
+	int offsetPanelTurnBased = 0;
+	int currentMouseWheel = 0;
 	/** The Main program loop */
 	void Main(void);
 	/** returns true if the game is paused */

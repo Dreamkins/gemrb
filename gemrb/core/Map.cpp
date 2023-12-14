@@ -1507,6 +1507,10 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 
 	if (core->IsTurnBased() && !core->pause_before_fight) {
 
+		GameControl* gc = core->GetGameControl();
+
+		Region panelTBC(Point(0, 40 - 5), Size(0, 60 + 10));
+
 		int xoffset = 0;
 		for (size_t list = 0; list < 10; list++) {
 			if (!core->initiatives[list].size()) {
@@ -1514,6 +1518,8 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 			}
 			xoffset += core->initiatives[list].size() * SLOTSIZEX + 15;
 		}
+
+		panelTBC.w += xoffset;
 
 		// to center of screen
 		xoffset = core->config.Width / 2 - xoffset / 2;
@@ -1542,6 +1548,25 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 			testoffset += core->initiatives[list].size() * SLOTSIZEX + 15;
 		}
 
+		panelTBC.x = xoffset - 5;
+
+		if (!(panelTBC.x > core->config.Width / 8 && panelTBC.x + panelTBC.w < (core->config.Width - core->config.Width / 8))) {
+			if (panelTBC.PointInside(gc->ScreenMousePos())) {
+				core->offsetPanelTurnBased += (core->currentMouseWheel > 0 ? core->GetMouseScrollSpeed() : core->currentMouseWheel < 0 ? -core->GetMouseScrollSpeed() : 0) * 4;
+			} else {
+				core->offsetPanelTurnBased = 0;
+			}
+			core->currentMouseWheel = 0;
+
+			if (xoffset + core->offsetPanelTurnBased > core->config.Width / 8) {
+				core->offsetPanelTurnBased = core->config.Width / 8 - xoffset;
+			} else if (xoffset + core->offsetPanelTurnBased + panelTBC.w < (core->config.Width - core->config.Width / 8)) {
+				core->offsetPanelTurnBased = (core->config.Width - core->config.Width / 8) - panelTBC.w - xoffset;
+			}
+
+			xoffset += core->offsetPanelTurnBased;
+		}
+
 		for (size_t list = 0; list < 10; list++) {
 			if (!core->initiatives[list].size()) {
 				break;
@@ -1555,8 +1580,6 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 				VideoDriver->DrawLine(pos + Point(-5, 10), pos + Point(-5, 60), color, BlitFlags::BLENDED);
 			}
 			VideoDriver->DrawRect(region, color, false, BlitFlags::BLENDED);
-
-			GameControl* gc = core->GetGameControl();
 
 			for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
 				Actor* actor = core->initiatives[list][idx].actor;

@@ -2354,11 +2354,12 @@ void GameControl::CommandSelectedMovement(const Point& p, bool formation, bool a
 }
 bool GameControl::OnMouseWheelScroll(const Point& delta)
 {
+	core->currentMouseWheel = delta.x ? delta.x : delta.y;
 	// Game coordinates start at the top left to the bottom right
 	// so we need to invert the 'y' axis
-	Point d = delta;
-	d.y *= -1;
-	Scroll(d);
+	//Point d = delta;
+	//d.y *= -1;
+	//Scroll(d);
 	return true;
 }
 
