@@ -1659,7 +1659,7 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 					// action rect
 					Color rcolor = Color(128, 192, 128, 255);
 					Region r(offs, region.y -15, 10, 10);
-					VideoDriver->DrawRect(r, rcolor, core->GetCurrentTurnBasedSlot().haveattack, BlitFlags::BLENDED);
+					VideoDriver->DrawRect(r, rcolor, core->GetCurrentTurnBasedSlot().haveaction && !actor->AuraCooldown, BlitFlags::BLENDED);
 
 					// moves rect
 					Color r2color = Color(128, 128, 255, 255);

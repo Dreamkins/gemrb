@@ -842,7 +842,7 @@ bool Interface::ReadGameTimeTable()
 	Time.turn_sec = table->QueryFieldUnsigned<unsigned int>("TURN_SECONDS", "DURATION");
 	Time.round_size = Time.round_sec * Time.defaultTicksPerSec;
 	Time.rounds_per_turn = Time.turn_sec / Time.round_sec;
-	Time.attack_round_size = table->QueryFieldUnsigned<unsigned int>("ATTACK_ROUND", "DURATION");
+	Time.attack_round_size = Time.round_size;// table->QueryFieldUnsigned<unsigned int>("ATTACK_ROUND", "DURATION");
 	Time.hour_sec = 300; // move to table if pst turns out to be different
 	Time.hour_size = Time.hour_sec * Time.defaultTicksPerSec;
 	Time.day_sec = Time.hour_sec * 24; // move to table if pst turns out to be different
@@ -4077,7 +4077,7 @@ void Interface::InitTurnBasedSlot() {
 	currentTurnBasedActor = GetCurrentTurnBasedSlot().actor;
 	lastTurnBasedTarget = 0;
 
-	if (!GetCurrentTurnBasedSlot().delayAttack) {
+	if (!GetCurrentTurnBasedSlot().delayaction) {
 		if (currentTurnBasedList == 0) {
 			GetCurrentTurnBasedSlot().movesleft = 1.0f;
 		} else {
@@ -4125,9 +4125,8 @@ void Interface::FirstRoundStart() {
 
 	for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
 		initiatives[0][idx].actor->InitRound(timeTurnBased);
-		initiatives[0][idx].haveattack = initiatives[0][idx].actor->attackcount > 0;
-		initiatives[0][idx].haveOportunity = initiatives[0][idx].actor->attackcount > 0;
-		initiatives[0][idx].delayAttack = false;
+		initiatives[0][idx].haveaction = true;
+		initiatives[0][idx].delayaction = false;
 	}
 
 	for (size_t attacks = 1; attacks < 10; attacks++) {
@@ -4137,9 +4136,8 @@ void Interface::FirstRoundStart() {
 
 			if (initiatives[0][idx].actor->attackcount >= attacks + 1) {
 				initiatives[attacks].push_back(initiatives[0][idx]);
-				initiatives[attacks].back().haveattack = true;
-				initiatives[attacks].back().haveOportunity = true;
-				initiatives[attacks].back().delayAttack = false;
+				initiatives[attacks].back().haveaction = true;
+				initiatives[attacks].back().delayaction = false;
 			}
 		}
 	}
@@ -4169,12 +4167,15 @@ InitiativeSlot& Interface::GetTurnBasedSlot(Actor* actor) {
 }
 
 InitiativeSlot* Interface::GetTurnBasedSlotWithAttack(Actor* actor) {
-	for (size_t list = 0; initiatives[list].size(); list++) {
+	if (actor->AuraCooldown) {
+		return nullptr;
+	}
+	for (size_t list = 0; list < 10; list++) {
 		for (size_t idx = 0; idx < initiatives[list].size(); idx++) {
 			if (initiatives[list][idx].actor != actor) {
 				continue;
 			}
-			if (initiatives[list][idx].haveattack) {
+			if (initiatives[list][idx].haveaction) {
 				return &initiatives[list][idx];
 			}
 		}
@@ -4189,10 +4190,7 @@ void Interface::EndTurn() {
 		return;
 	}
 
-	if (core->opportunity && initiatives[currentTurnBasedList][currentTurnBasedSlot].opportunity) {
-		initiatives[currentTurnBasedList][currentTurnBasedSlot].opportunity = false;
-		initiatives[currentTurnBasedList][currentTurnBasedSlot].haveOportunity = false;
-
+	if (core->opportunity && currentTurnBasedActorOld) {
 		if (currentTurnBasedActor->IsPC()) {
 			core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
 		}
@@ -4227,10 +4225,10 @@ void Interface::EndTurn() {
 
 		// delayed attack
 		if (actor->GetStance() != IE_ANI_DIE && actor->GetStance() != IE_ANI_TWITCH && actor->GetStance() != IE_ANI_SLEEP &&
-			!(actor->Immobile() || (actor->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) && GetCurrentTurnBasedSlot().haveattack &&
-			!GetCurrentTurnBasedSlot().delayAttack && currentTurnBasedSlot < initiatives[currentTurnBasedList].size() - 1) {
+			!(actor->Immobile() || (actor->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) && GetCurrentTurnBasedSlot().haveaction && !actor->AuraCooldown &&
+			!GetCurrentTurnBasedSlot().delayaction && currentTurnBasedSlot < initiatives[currentTurnBasedList].size() - 1) {
 			InitiativeSlot delayedSlot = GetCurrentTurnBasedSlot();
-			delayedSlot.delayAttack = true;
+			delayedSlot.delayaction = true;
 			initiatives[currentTurnBasedList].erase(initiatives[currentTurnBasedList].begin() + currentTurnBasedSlot);
 			initiatives[currentTurnBasedList].push_back(delayedSlot);
 		} else {
@@ -4254,11 +4252,28 @@ void Interface::EndTurn() {
 			}
 
 			for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
-				if (initiatives[0][idx].actor->CurrentActionState) {
+				Actor* act = initiatives[0][idx].actor;
+				// AuraCooldown
+				if (act->AuraCooldown) {
+					act->AuraCooldown -= (core->Time.defaultTicksPerSec * core->Time.round_sec) / 10;
+					if (currentTurnBasedList == 10) {
+						act->AuraCooldown -= (core->Time.defaultTicksPerSec * core->Time.round_sec) % 10;
+					}
+					if ((int)act->AuraCooldown < 0) {
+						act->AuraCooldown = 0;
+					}
+				}
+				// CurrentActionState
+				if (act->CurrentActionState) {
 					initiatives[0][idx].CurrentActionStateDescrease += (core->Time.defaultTicksPerSec * core->Time.round_sec) / 10;
 					if (currentTurnBasedList == 10) {
 						initiatives[0][idx].CurrentActionStateDescrease += (core->Time.defaultTicksPerSec * core->Time.round_sec) % 10;
 					}
+				}
+				// IdleTicks
+				act->IdleTicks += (core->Time.defaultTicksPerSec * core->Time.round_sec) / 10;
+				if (currentTurnBasedList == 10) {
+					act->IdleTicks += (core->Time.defaultTicksPerSec * core->Time.round_sec) % 10;
 				}
 			}
 
@@ -4367,44 +4382,66 @@ void Interface::UpdateTurnBased() {
 		if (core->opportunity) {
 			if (!core->GetGame()->GetActorByGlobalID(core->opportunity) ||
 				(core->GetGame()->GetActorByGlobalID(core->opportunity)->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP))) {
-				for (size_t list = 0; list < 10; list++) {
-					for (size_t idx = 0; idx < initiatives[list].size(); idx++) {
-						if (initiatives[list][idx].opportunity) {
-							initiatives[list][idx].opportunity = false;
-						}
-					}
-				}
+				core->opportunists.clear();
 				core->opportunity = 0;
 			} else if (!currentTurnBasedActorOld) {
-				for (size_t list = 0; list < 10; list++) {
-					for (size_t idx = 0; idx < initiatives[list].size(); idx++) {
-						if (initiatives[list][idx].opportunity) {
-							currentTurnBasedActorOld = currentTurnBasedActor;
-							currentTurnBasedListOld = currentTurnBasedList;
-							currentTurnBasedSlotOld = currentTurnBasedSlot;
+				Actor* opportunist = nullptr;
+				while (opportunists.size()) {
+					opportunist = core->GetGame()->GetActorByGlobalID(opportunists.back());
+					opportunists.pop_back();
+					if (!opportunist || opportunist->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP)) {
+						continue;
+					}
 
-							if (currentTurnBasedActor->IsPC()) {
-								core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
+					currentTurnBasedActorOld = currentTurnBasedActor;
+					currentTurnBasedListOld = currentTurnBasedList;
+					currentTurnBasedSlotOld = currentTurnBasedSlot;
+
+					if (currentTurnBasedActor->IsPC()) {
+						core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
+					}
+
+					currentTurnBasedSlot = 0;
+					for (size_t list = 0; list < 10; list++) {
+						for (size_t idx = 0; idx < initiatives[list].size(); idx++) {
+							if (initiatives[list][idx].actor != opportunist) {
+								continue;
 							}
-
-							currentTurnBasedActor = initiatives[list][idx].actor;
-							currentTurnBasedList = list;
-							currentTurnBasedSlot = idx;
-							currentTurnBasedActor->lastInit = game->GetGameTimeReal();
-
-							if (currentTurnBasedActor->IsPC()) {
-								core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
+							if (initiatives[list][idx].haveaction && !initiatives[list][idx].actor->AuraCooldown) {
+								currentTurnBasedList = list;
+								currentTurnBasedSlot = idx;
+								break;
 							}
+						}
+						if (currentTurnBasedSlot) {
 							break;
 						}
 					}
-					if (currentTurnBasedActorOld) {
-						String rollLog = fmt::format(u">>> OPPORTUNITY ATTACK <<<");
-						displaymsg->DisplayString(std::move(rollLog), GUIColors::GOLD, 0);
-						return;
+
+					if (!currentTurnBasedSlot) {
+						currentTurnBasedActor = currentTurnBasedActorOld;
+						currentTurnBasedList = currentTurnBasedListOld;
+						currentTurnBasedSlot = currentTurnBasedSlotOld;
+						continue;
 					}
+
+					currentTurnBasedActor = opportunist;
+					currentTurnBasedActor->lastInit = game->GetGameTimeReal();
+
+					if (currentTurnBasedActor->IsPC()) {
+						core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
+						currentTurnBasedActor->ClearPath(true);
+						currentTurnBasedActor->ReleaseCurrentAction();
+					}
+					break;
+
 				}
-				if (!currentTurnBasedActorOld) {
+
+				if (currentTurnBasedActorOld) {
+					String rollLog = fmt::format(u">>> OPPORTUNITY ATTACK <<<");
+					displaymsg->DisplayString(std::move(rollLog), GUIColors::GOLD, 0);
+					return;
+				} else {
 					core->opportunity = 0;
 				}
 			}

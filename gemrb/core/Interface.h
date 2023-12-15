@@ -278,10 +278,8 @@ struct InitiativeSlot {
 	Holder<Sprite2D> image;
 	int initiative = 10;
 	float movesleft = 1.0f;
-	bool haveattack = true;
-	bool opportunity = false;
-	bool haveOportunity = true;
-	bool delayAttack = false;
+	bool haveaction = true;
+	bool delayaction = false;
 	int CurrentActionStateDescrease = 0;
 };
 
@@ -705,6 +703,7 @@ public:
 
 	bool turnBasedEnable = true;
 	std::vector<InitiativeSlot> initiatives[10];
+	std::vector<int> opportunists;
 	int currentTurnBasedSlot = 0;
 	int currentTurnBasedSlotOld = 0;
 	int currentTurnBasedList = 0;

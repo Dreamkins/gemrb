@@ -108,6 +108,7 @@ static bool third = false;
 static bool iwd2class = false;
 //used in many places, but different in engines
 static ieDword state_invisible = STATE_INVISIBLE;
+static constexpr ieWord IT_POTION = 9;
 static constexpr ieWord IT_SCROLL = 11;
 static constexpr ieWord IT_WAND = 35;
 
@@ -7528,7 +7529,7 @@ void Actor::CalculateAttackResult()
 		ApplyCriticalEffect(this, target, wi, false);
 		ResetState();
 
-		core->GetCurrentTurnBasedSlot().haveattack = false;
+		core->GetCurrentTurnBasedSlot().haveaction = false;
 
 		return;
 	}
@@ -7547,7 +7548,7 @@ void Actor::CalculateAttackResult()
 			target->overHead.SetText(std::move(text), true, true, Color(255, 255, 255, 255));
 		}
 
-		core->GetCurrentTurnBasedSlot().haveattack = false;
+		core->GetCurrentTurnBasedSlot().haveaction = false;
 		return;
 	}
 
@@ -7577,7 +7578,7 @@ void Actor::CalculateAttackResult()
 	UseItem(wi.slot, wi.wflags & WEAPON_RANGED ? -2 : -1, target, (critical ? UI_CRITICAL : 0) | UI_NOAURA, damage);
 	ResetState();
 
-	core->GetCurrentTurnBasedSlot().haveattack = false;
+	core->GetCurrentTurnBasedSlot().haveaction = false;
 }
 
 void Actor::AttackTurnBased(ieDword gameTime)
@@ -7601,10 +7602,10 @@ void Actor::AttackTurnBased(ieDword gameTime)
 	}
 
 	//only return if we don't have any attacks left this round
-	if (!core->GetCurrentTurnBasedSlot().haveattack) {
-		if (!InAttack()) {
-			ReleaseCurrentAction();
-		}
+	if (!core->GetCurrentTurnBasedSlot().haveaction || AuraCooldown) {
+		//if (!InAttack()) {
+		//	ReleaseCurrentAction();
+		//}
 		return;
 	}
 
@@ -9495,6 +9496,13 @@ bool Actor::UseItemPoint(ieDword slot, ieDword header, const Point &target, ieDw
 		Log(WARNING, "Actor", "Invalid quick slot item: {}!", itemRef);
 		return false; //quick item slot contains invalid item resref
 	}
+
+	if (core->IsTurnBased() && InInitiativeList()) {
+		if (this != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+			return false;
+		}
+	}
+
 	gamedata->FreeItem(itm, itemRef, false);
 
 	if (!TryUsingMagicDevice(itm, header)) {
@@ -9836,6 +9844,13 @@ bool Actor::UseItem(ieDword slot, ieDword header, const Scriptable* target, ieDw
 		Log(WARNING, "Actor", "Invalid quick slot item: {}!", itemRef);
 		return false; //quick item slot contains invalid item resref
 	}
+
+	if (core->IsTurnBased() && InInitiativeList()) {
+		if (this != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+			return false;
+		}
+	}
+
 	gamedata->FreeItem(itm, itemRef, false);
 
 	if (!TryUsingMagicDevice(itm, header)) {

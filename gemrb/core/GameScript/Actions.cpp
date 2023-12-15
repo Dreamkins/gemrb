@@ -2354,11 +2354,10 @@ void GameScript::Unlock(Scriptable* Sender, Action* parameters)
 
 	Actor* actor = Scriptable::As<Actor>(Sender);
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
-			actor->ReleaseCurrentAction();
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
-		core->GetCurrentTurnBasedSlot().haveattack = false;
+		core->GetCurrentTurnBasedSlot().haveaction = false;
 		actor->RemoveFromAdditionInitiativeLists();
 	}
 
@@ -2513,11 +2512,10 @@ void GameScript::PickLock(Scriptable* Sender, Action* parameters)
 	Actor* actor = Scriptable::As<Actor>(Sender);
 
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
-			actor->ReleaseCurrentAction();
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
-		core->GetCurrentTurnBasedSlot().haveattack = false;
+		core->GetCurrentTurnBasedSlot().haveaction = false;
 		actor->RemoveFromAdditionInitiativeLists();
 	}
 
@@ -2594,11 +2592,10 @@ void GameScript::OpenDoor(Scriptable* Sender, Action* parameters) {
 	Actor* actor = Scriptable::As<Actor>(Sender);
 
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
-			actor->ReleaseCurrentAction();
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
-		core->GetCurrentTurnBasedSlot().haveattack = false;
+		core->GetCurrentTurnBasedSlot().haveaction = false;
 		actor->RemoveFromAdditionInitiativeLists();
 	}
 
@@ -2623,11 +2620,10 @@ void GameScript::CloseDoor(Scriptable* Sender, Action* parameters) {
 	Actor* actor = Scriptable::As<Actor>(Sender);
 
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
-			actor->ReleaseCurrentAction();
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
-		core->GetCurrentTurnBasedSlot().haveattack = false;
+		core->GetCurrentTurnBasedSlot().haveaction = false;
 		actor->RemoveFromAdditionInitiativeLists();
 	}
 
@@ -4676,11 +4672,10 @@ void GameScript::PickPockets(Scriptable *Sender, Action* parameters)
 
 	Actor* actor = Scriptable::As<Actor>(Sender);
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
-			actor->ReleaseCurrentAction();
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
-		core->GetCurrentTurnBasedSlot().haveattack = false;
+		core->GetCurrentTurnBasedSlot().haveaction = false;
 		actor->RemoveFromAdditionInitiativeLists();
 	}
 
@@ -6878,16 +6873,6 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 		return;
 	}
 
-	Actor* actor = Scriptable::As<Actor>(Sender);
-	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
-			actor->ReleaseCurrentAction();
-			return;
-		}
-		core->GetCurrentTurnBasedSlot().haveattack = false;
-		actor->RemoveFromAdditionInitiativeLists();
-	}
-
 	Sender->ReleaseCurrentAction();
 	act->UseItem(Slot, header, tar, flags);
 }
@@ -6938,8 +6923,10 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 		return;
 	}
 
+	Point targetPos = parameters->pointParameter;
+
 	Sender->ReleaseCurrentAction();
-	act->UseItemPoint(Slot, header, parameters->pointParameter, flags);
+	act->UseItemPoint(Slot, header, targetPos, flags);
 }
 
 //addfeat will be able to remove feats too

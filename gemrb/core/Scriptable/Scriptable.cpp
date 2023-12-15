@@ -199,7 +199,10 @@ void Scriptable::Update()
 
 	Ticks++;
 	AdjustedTicks++;
-	if (AuraCooldown) AuraCooldown--;
+
+	if (AuraCooldown && !(Type == ST_ACTOR && ((Actor*)this)->InInitiativeList())) {
+		AuraCooldown--;
+	}
 
 	if (UnselectableTimer) {
 		UnselectableTimer--;
@@ -262,7 +265,9 @@ void Scriptable::TickScripting()
 	}
 
 	if (!needsUpdate) {
-		IdleTicks++;
+		if (!(Type == ST_ACTOR && ((Actor*)this)->InInitiativeList())) {
+			IdleTicks++;
+		}
 		return;
 	}
 
@@ -1242,15 +1247,6 @@ int Scriptable::CastSpellPoint(const Point& target, bool deplete, bool instant, 
 	objects.LastTargetPos.Invalidate();
 	Actor* actor = Scriptable::As<Actor>(this);
 
-	if (!noInterrupt && core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
-			actor->ReleaseCurrentAction();
-			return -1;
-		}
-		core->GetCurrentTurnBasedSlot().haveattack = false;
-		actor->RemoveFromAdditionInitiativeLists();
-	}
-
 	if (actor && actor->HandleCastingStance(SpellResRef, deplete, instant)) {
 		Log(ERROR, "Scriptable", "Spell {} not known or memorized, aborting cast!", SpellResRef);
 		return -1;
@@ -1286,15 +1282,6 @@ int Scriptable::CastSpell(Scriptable* target, bool deplete, bool instant, bool n
 	objects.LastSpellTarget = 0;
 	objects.LastTargetPos.Invalidate();
 	Actor* actor = Scriptable::As<Actor>(this);
-
-	if (!noInterrupt && core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
-			actor->ReleaseCurrentAction();
-			return -1;
-		}
-		core->GetCurrentTurnBasedSlot().haveattack = false;
-		actor->RemoveFromAdditionInitiativeLists();
-	}
 
 	if (actor && actor->HandleCastingStance(SpellResRef, deplete, instant)) {
 		Log(ERROR, "Scriptable", "Spell {} not known or memorized, aborting cast!", SpellResRef);
@@ -1841,11 +1828,10 @@ bool Highlightable::TryUnlock(Actor *actor, bool removekey) const {
 	}
 
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveattack) {
-			actor->ReleaseCurrentAction();
+		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return false;
 		}
-		core->GetCurrentTurnBasedSlot().haveattack = false;
+		core->GetCurrentTurnBasedSlot().haveaction = false;
 		actor->RemoveFromAdditionInitiativeLists();
 	}
 
@@ -2212,15 +2198,17 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 		if (core->IsTurnBased() && core->currentTurnBasedActor == actor) {
 			Point newPos(Pos.x + dx, Pos.y + dy);
 
-			size_t list = core->currentTurnBasedList;
 			if (core->lasOpportunityPos != Pos) {
 				// check enemys for opportunity
-				for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
-					// enemy?
-					if (EARelation(actor, core->initiatives[list][idx].actor) != EAR_HOSTILE) {
+				for (size_t idx = 0; idx < core->initiatives[0].size(); idx++) {
+					if (core->initiatives[0][idx].actor == this) {
 						continue;
 					}
-					Actor* enemy = core->initiatives[list][idx].actor;
+					// enemy?
+					if (EARelation(actor, core->initiatives[0][idx].actor) != EAR_HOSTILE) {
+						continue;
+					}
+					Actor* enemy = core->initiatives[0][idx].actor;
 
 					// can attack?
 					if (enemy->GetStance() == IE_ANI_DIE || 
@@ -2261,8 +2249,8 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 					}
 
 					unsigned int weaponRange = enemy->GetWeaponRange(false);
-					if (slot->actor == enemy && slot->haveOportunity && slot->haveattack && WithinPersonalRange(enemy, Pos, weaponRange) && !WithinPersonalRange(enemy, newPos, weaponRange)) {
-						slot->opportunity = true;
+					if (slot->actor == enemy && WithinPersonalRange(enemy, Pos, weaponRange) && !WithinPersonalRange(enemy, newPos, weaponRange)) {
+						core->opportunists.push_back(enemy->GetGlobalID());
 						core->opportunity = GetGlobalID();
 					}
 				}
