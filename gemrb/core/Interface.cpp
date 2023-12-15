@@ -3839,7 +3839,7 @@ int Interface::GetLoreBonus(int column, int value) const
 	if (column<0 || column>0)
 		return -9999;
 
-	return abilityTables->lorebon[value];
+	return abilityTables->lorebon[value < 0 ? 0 : value];
 }
 
 int Interface::GetWisdomBonus(int column, int value) const
