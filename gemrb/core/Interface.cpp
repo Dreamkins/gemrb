@@ -4347,7 +4347,9 @@ void Interface::UpdateTurnBased() {
 				}
 
 				// can move?
-				if (actor->Immobile() || (actor->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) {
+				if (actor->Immobile() || 
+					(actor->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC)) ||
+					(actor->GetBase(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) {
 					actor->RemoveFromAdditionInitiativeLists();
 					continue;
 				}

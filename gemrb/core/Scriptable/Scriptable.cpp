@@ -2231,7 +2231,9 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 					}
 
 					// can move?
-					if (enemy->Immobile() || (enemy->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) {
+					if (enemy->Immobile() || 
+						(enemy->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC)) || 
+						(enemy->GetBase(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) {
 						continue;
 					}
 
