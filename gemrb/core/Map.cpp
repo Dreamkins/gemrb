@@ -1576,7 +1576,8 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 			Region region(pos, Size(core->initiatives[list].size() * SLOTSIZEX + 5, 60 + 10));
 			Color color = Color(128, 128, 128, 255);
 			if (list) {
-				VideoDriver->DrawLine(pos + Point(-5, 10), pos + Point(-5, 60), color, BlitFlags::BLENDED);
+				//VideoDriver->DrawLine(pos + Point(-5, 10), pos + Point(-5, 60), color, BlitFlags::BLENDED);
+				VideoDriver->DrawRect(Region(Point(pos.x - 6, pos.y + 15), Size(2, 40)), color, true, BlitFlags::BLENDED);
 			}
 			VideoDriver->DrawRect(region, color, false, BlitFlags::BLENDED);
 
