@@ -110,7 +110,7 @@ void OverHeadText::Draw()
 	for (auto msgIter = messages.begin(); msgIter != messages.end(); ++msgIter) {
 		auto& msg = *msgIter;
 		if (msg.timeStartDisplaying == 0) continue;
-		if (msg.Draw(height, owner->Pos, owner->Type)) {
+		if (msg.Draw(height, owner->Pos + Point(0, (messages.size() - (msgIter-messages.begin())) * -10), owner->Type)) {
 			show = true;
 		} else if (msgIter != messages.begin()) { // always keep the one reserved slot
 			msgIter = messages.erase(msgIter);
