@@ -2558,10 +2558,18 @@ void CharAnimations::AddMMR2Suffix(ResRef& dest, unsigned char StanceID,
 		case IE_ANI_ATTACK_SLASH:
 		case IE_ANI_ATTACK_BACKSLASH:
 		case IE_ANI_ATTACK_JAB:
-		case IE_ANI_CONJURE:
-		case IE_ANI_CAST:
 			dest.Append("a1");
 			Cycle = ( Orient / 2 );
+			break;
+
+		case IE_ANI_CONJURE:
+			dest.Append("ca");
+			Cycle = (Orient / 2);
+			break;
+
+		case IE_ANI_CAST:
+			dest.Append("sp");
+			Cycle = (Orient / 2);
 			break;
 
 		case IE_ANI_SHOOT:
