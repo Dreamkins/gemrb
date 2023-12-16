@@ -2199,15 +2199,22 @@ void Movable::DoStep(unsigned int walkScale, ieDword time) {
 			Point newPos(Pos.x + dx, Pos.y + dy);
 
 			if (core->lasOpportunityPos != Pos) {
+				core->opportunists.clear();
 				// check enemys for opportunity
 				for (size_t idx = 0; idx < core->initiatives[0].size(); idx++) {
 					if (core->initiatives[0][idx].actor == this) {
 						continue;
 					}
+
+					if (actor->IsPC() && core->initiatives[0][idx].actor->IsPC()) {
+						continue;
+					}
+
 					// enemy?
 					if (EARelation(actor, core->initiatives[0][idx].actor) != EAR_HOSTILE) {
 						continue;
 					}
+
 					Actor* enemy = core->initiatives[0][idx].actor;
 
 					// can attack?

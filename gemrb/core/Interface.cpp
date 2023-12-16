@@ -4379,12 +4379,15 @@ void Interface::UpdateTurnBased() {
 			}
 		}
 
+		// opportunity
 		if (core->opportunity) {
+			// target is dead?
 			if (!core->GetGame()->GetActorByGlobalID(core->opportunity) ||
 				(core->GetGame()->GetActorByGlobalID(core->opportunity)->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP))) {
 				core->opportunists.clear();
 				core->opportunity = 0;
-			} else if (!currentTurnBasedActorOld) {
+				opportunists.clear();
+			} else if (!currentTurnBasedActorOld) { // no current opportunist
 				Actor* opportunist = nullptr;
 				while (opportunists.size()) {
 					opportunist = core->GetGame()->GetActorByGlobalID(opportunists.back());
@@ -4443,6 +4446,7 @@ void Interface::UpdateTurnBased() {
 					return;
 				} else {
 					core->opportunity = 0;
+					opportunists.clear();
 				}
 			}
 		}
