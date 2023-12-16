@@ -1584,6 +1584,21 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 			for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
 				Actor* actor = core->initiatives[list][idx].actor;
 
+				// opportunist
+				if (core->currentTurnBasedActorOld && core->currentTurnBasedActor == actor && core->currentTurnBasedList == list) {
+					Point opportunityTarget;
+					for (size_t idxt = 0; idxt < core->initiatives[0].size(); idxt++) {
+						// opportunity target
+						if (core->opportunity && core->GetGame()->GetActorByGlobalID(core->opportunity) == core->initiatives[0][idxt].actor) {
+							opportunityTarget = Point(xoffset + idxt * SLOTSIZEX + HPSIZEX + 20, 125);
+							break;
+						}
+					}
+					Color color = Color(255, 0, 0, 255);
+					VideoDriver->DrawLine(Point(xoffset + idx * SLOTSIZEX + HPSIZEX + 20, 100), Point(xoffset + idx * SLOTSIZEX + HPSIZEX + 20, 125), color, BlitFlags::BLENDED);
+					VideoDriver->DrawLine(Point(xoffset + idx * SLOTSIZEX + HPSIZEX + 20, 125), opportunityTarget, color, BlitFlags::BLENDED);
+					VideoDriver->DrawLine(opportunityTarget, opportunityTarget + Point(0, - 25), color, BlitFlags::BLENDED);
+				}
 				Point pos(xoffset + idx * SLOTSIZEX + HPSIZEX, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 15 : 0));
 				Region region(pos, Size(38, 60));
 
