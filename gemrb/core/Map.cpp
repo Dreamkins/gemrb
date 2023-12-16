@@ -1585,11 +1585,11 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 				Actor* actor = core->initiatives[list][idx].actor;
 
 				// opportunist
-				if (core->currentTurnBasedActorOld && core->currentTurnBasedActor == actor && core->currentTurnBasedList == list) {
+				if (core->opportunity && core->currentTurnBasedActorOld && core->currentTurnBasedActor == actor && core->currentTurnBasedList == list) {
 					Point opportunityTarget;
 					for (size_t idxt = 0; idxt < core->initiatives[0].size(); idxt++) {
 						// opportunity target
-						if (core->opportunity && core->GetGame()->GetActorByGlobalID(core->opportunity) == core->initiatives[0][idxt].actor) {
+						if (core->GetGame()->GetActorByGlobalID(core->opportunity) == core->initiatives[0][idxt].actor) {
 							opportunityTarget = Point(xoffset + idxt * SLOTSIZEX + HPSIZEX + 20, 125);
 							break;
 						}

@@ -4190,7 +4190,7 @@ void Interface::EndTurn() {
 		return;
 	}
 
-	if (core->opportunity && currentTurnBasedActorOld) {
+	if (currentTurnBasedActorOld) {
 		if (currentTurnBasedActor->IsPC()) {
 			core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
 		}
@@ -4336,6 +4336,7 @@ void Interface::UpdateTurnBased() {
 		if (currentTurnBasedActor && (currentTurnBasedActor->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP))) {
 			EndTurn();
 		}
+
 		for (size_t list = 0; list < 10; list++) {
 			if (!initiatives[list].size()) {
 				break;
