@@ -2665,15 +2665,6 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 		return;
 	}
 
-	if (!Sender->CurrentActionState && core->IsTurnBased() && Sender->Type == ST_ACTOR && ((Actor*)Sender)->InInitiativeList()) {
-		if (Sender != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
-			return;
-		}
-		core->GetCurrentTurnBasedSlot().haveaction = false;
-		((Actor*)Sender)->RemoveFromAdditionInitiativeLists();
-		parameters->int2Parameter = 1;
-	}
-
 	// handle iwd2 marked spell casting (MARKED_SPELL is 0)
 	// NOTE: supposedly only casting via SpellWait checks this, so refactor if needed
 	if (third && parameters->int0Parameter == 0 && parameters->resref0Parameter.IsEmpty()) {
@@ -2803,6 +2794,15 @@ void SpellCore(Scriptable *Sender, Action *parameters, int flags)
 		return;
 	}
 
+	if (!Sender->CurrentActionState && core->IsTurnBased() && Sender->Type == ST_ACTOR && ((Actor*)Sender)->InInitiativeList()) {
+		if (Sender != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+			return;
+		}
+		core->GetCurrentTurnBasedSlot().haveaction = false;
+		((Actor*)Sender)->RemoveFromAdditionInitiativeLists();
+		parameters->int2Parameter = 1;
+	}
+
 	// mark as uninterruptible in the action sense, so further script
 	// updates don't remove the action before the casting is done
 	// the originals or at least iwd2 even marked it as IF_NOINT,
@@ -2860,15 +2860,6 @@ void SpellPointCore(Scriptable *Sender, Action *parameters, int flags)
 
 	if (core->IsTurnBased() && core->opportunity) {
 		return;
-	}
-
-	if (!Sender->CurrentActionState && core->IsTurnBased() && Sender->Type == ST_ACTOR && ((Actor*)Sender)->InInitiativeList()) {
-		if (Sender != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
-			return;
-		}
-		core->GetCurrentTurnBasedSlot().haveaction = false;
-		((Actor*)Sender)->RemoveFromAdditionInitiativeLists();
-		parameters->int2Parameter = 1;
 	}
 
 	//resolve spellname
@@ -2934,6 +2925,15 @@ void SpellPointCore(Scriptable *Sender, Action *parameters, int flags)
 
 	if ((flags&SC_AURA_CHECK) && parameters->int2Parameter && Sender->AuraPolluted()) {
 		return;
+	}
+
+	if (!Sender->CurrentActionState && core->IsTurnBased() && Sender->Type == ST_ACTOR && ((Actor*)Sender)->InInitiativeList()) {
+		if (Sender != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+			return;
+		}
+		core->GetCurrentTurnBasedSlot().haveaction = false;
+		((Actor*)Sender)->RemoveFromAdditionInitiativeLists();
+		parameters->int2Parameter = 1;
 	}
 
 	// mark as uninterruptible in the action sense, so further script
