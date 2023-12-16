@@ -6873,6 +6873,12 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 		return;
 	}
 
+	if (core->IsTurnBased() && act->InInitiativeList()) {
+		if (act != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+			return;
+		}
+	}
+
 	Sender->ReleaseCurrentAction();
 	act->UseItem(Slot, header, tar, flags);
 }
@@ -6921,6 +6927,12 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 	// only one use per round; skip for our internal attack projectile
 	if (!(flags & UI_NOAURA) && act->AuraPolluted()) {
 		return;
+	}
+
+	if (core->IsTurnBased() && act->InInitiativeList()) {
+		if (act != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+			return;
+		}
 	}
 
 	Point targetPos = parameters->pointParameter;

@@ -9497,12 +9497,6 @@ bool Actor::UseItemPoint(ieDword slot, ieDword header, const Point &target, ieDw
 		return false; //quick item slot contains invalid item resref
 	}
 
-	if (core->IsTurnBased() && InInitiativeList()) {
-		if (this != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
-			return false;
-		}
-	}
-
 	gamedata->FreeItem(itm, itemRef, false);
 
 	if (!TryUsingMagicDevice(itm, header)) {
@@ -9843,12 +9837,6 @@ bool Actor::UseItem(ieDword slot, ieDword header, const Scriptable* target, ieDw
 	if (!itm) {
 		Log(WARNING, "Actor", "Invalid quick slot item: {}!", itemRef);
 		return false; //quick item slot contains invalid item resref
-	}
-
-	if (core->IsTurnBased() && InInitiativeList()) {
-		if (this != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
-			return false;
-		}
 	}
 
 	gamedata->FreeItem(itm, itemRef, false);
