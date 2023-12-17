@@ -4397,48 +4397,45 @@ void Interface::UpdateTurnBased() {
 						continue;
 					}
 
-					currentTurnBasedActorOld = currentTurnBasedActor;
-					currentTurnBasedListOld = currentTurnBasedList;
-					currentTurnBasedSlotOld = currentTurnBasedSlot;
-
 					if (currentTurnBasedActor->IsPC()) {
 						core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
 					}
 
-					currentTurnBasedSlot = 0;
+					int opportunistList = -1;
+					int opportunistSlot = -1;
 					for (size_t list = 0; list < 10; list++) {
 						for (size_t idx = 0; idx < initiatives[list].size(); idx++) {
 							if (initiatives[list][idx].actor != opportunist) {
 								continue;
 							}
 							if (initiatives[list][idx].haveaction && !initiatives[list][idx].actor->AuraCooldown) {
-								currentTurnBasedList = list;
-								currentTurnBasedSlot = idx;
+								opportunistList = list;
+								opportunistSlot = idx;
 								break;
 							}
 						}
-						if (currentTurnBasedSlot) {
+						if (opportunistSlot != -1) {
 							break;
 						}
 					}
 
-					if (!currentTurnBasedSlot) {
-						currentTurnBasedActor = currentTurnBasedActorOld;
-						currentTurnBasedList = currentTurnBasedListOld;
-						currentTurnBasedSlot = currentTurnBasedSlotOld;
-						continue;
+					if (opportunistSlot != -1) {
+						currentTurnBasedActorOld = currentTurnBasedActor;
+						currentTurnBasedListOld = currentTurnBasedList;
+						currentTurnBasedSlotOld = currentTurnBasedSlot;
+
+						currentTurnBasedActor = opportunist;
+						currentTurnBasedList = opportunistList;
+						currentTurnBasedSlot = opportunistSlot;
+						currentTurnBasedActor->lastInit = game->GetGameTimeReal();
+
+						if (currentTurnBasedActor->IsPC()) {
+							core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
+							currentTurnBasedActor->ClearPath(true);
+							currentTurnBasedActor->ReleaseCurrentAction();
+						}
+						break;
 					}
-
-					currentTurnBasedActor = opportunist;
-					currentTurnBasedActor->lastInit = game->GetGameTimeReal();
-
-					if (currentTurnBasedActor->IsPC()) {
-						core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
-						currentTurnBasedActor->ClearPath(true);
-						currentTurnBasedActor->ReleaseCurrentAction();
-					}
-					break;
-
 				}
 
 				if (currentTurnBasedActorOld) {

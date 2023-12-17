@@ -1566,6 +1566,9 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 			xoffset += core->offsetPanelTurnBased;
 		}
 
+		Point opportunityTarget;
+		Point opportunitySource;
+
 		for (size_t list = 0; list < 10; list++) {
 			if (!core->initiatives[list].size()) {
 				break;
@@ -1584,20 +1587,13 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 			for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
 				Actor* actor = core->initiatives[list][idx].actor;
 
-				// opportunist
-				if (core->opportunity && core->currentTurnBasedActorOld && core->currentTurnBasedActor == actor && core->currentTurnBasedList == list) {
-					Point opportunityTarget;
-					for (size_t idxt = 0; idxt < core->initiatives[0].size(); idxt++) {
-						// opportunity target
-						if (core->GetGame()->GetActorByGlobalID(core->opportunity) == core->initiatives[0][idxt].actor) {
-							opportunityTarget = Point(xoffset + idxt * SLOTSIZEX + HPSIZEX + 20, 125);
-							break;
-						}
-					}
-					Color color = Color(255, 0, 0, 255);
-					VideoDriver->DrawLine(Point(xoffset + idx * SLOTSIZEX + HPSIZEX + 20, 100), Point(xoffset + idx * SLOTSIZEX + HPSIZEX + 20, 125), color, BlitFlags::BLENDED);
-					VideoDriver->DrawLine(Point(xoffset + idx * SLOTSIZEX + HPSIZEX + 20, 125), opportunityTarget, color, BlitFlags::BLENDED);
-					VideoDriver->DrawLine(opportunityTarget, opportunityTarget + Point(0, - 25), color, BlitFlags::BLENDED);
+				// opportunity target
+				if (core->opportunity && !opportunityTarget.y && core->GetGame()->GetActorByGlobalID(core->opportunity) == core->initiatives[0][idx].actor && list == 0) {
+					opportunityTarget = Point(xoffset + idx * SLOTSIZEX + HPSIZEX + 20, 125);
+				}
+				// opportunity source
+				if (core->opportunity && !opportunitySource.y && core->currentTurnBasedActorOld && core->currentTurnBasedActor == actor && core->currentTurnBasedList == list) {
+					opportunitySource = Point(xoffset + idx * SLOTSIZEX + HPSIZEX + 20, 125);
 				}
 				Point pos(xoffset + idx * SLOTSIZEX + HPSIZEX, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 15 : 0));
 				Region region(pos, Size(38, 60));
@@ -1704,6 +1700,13 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 				VideoDriver->DrawRect(hpregion, hpcolor, true, BlitFlags::BLENDED);
 			}
 			xoffset += core->initiatives[list].size() * SLOTSIZEX + 15;
+		}
+
+		if (core->opportunity && opportunityTarget.y && opportunitySource.y) {
+			Color color = Color(255, 0, 0, 255);
+			VideoDriver->DrawLine(opportunitySource, opportunitySource + Point(0, -10), color, BlitFlags::BLENDED);
+			VideoDriver->DrawLine(opportunitySource, opportunityTarget, color, BlitFlags::BLENDED);
+			VideoDriver->DrawLine(opportunityTarget, opportunityTarget + Point(0, -25), color, BlitFlags::BLENDED);
 		}
 	}
 }
