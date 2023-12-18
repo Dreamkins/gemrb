@@ -719,6 +719,7 @@ public:
 	int lastTurnBasedTarget = 0;
 	int offsetPanelTurnBased = 0;
 	int currentMouseWheel = 0;
+	bool resetFrame = false;
 	/** The Main program loop */
 	void Main(void);
 	/** returns true if the game is paused */

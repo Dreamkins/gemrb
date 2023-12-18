@@ -7657,14 +7657,8 @@ void Actor::AttackTurnBased(ieDword gameTime)
 
 	ClearPath(true);
 	SetStance(AttackStance);
-	HandleActorStance();
-	AdvanceAnimations();
+	core->resetFrame = true;
 
-	if (currentStance.anim.size()) {
-		for (auto current : currentStance.anim) {
-			current.first->SetFrame(0);
-		}
-	}
 
 	lastInit = core->GetGame()->GetGameTimeReal();
 	core->lastTurnBasedTarget = objects.LastTarget;
@@ -8413,6 +8407,14 @@ bool Actor::AdvanceAnimations()
 	Animation* first = currentStance.anim[0].first;
 	Animation* firstShadow = currentStance.shadow.empty() ? nullptr : currentStance.shadow[0].first;
 	
+	if (core->IsTurnBased() && core->currentTurnBasedActor == this && core->resetFrame) {
+		core->resetFrame = false;
+		first->SetFrame(0);
+		if (firstShadow) {
+			firstShadow->SetFrame(0);
+		}
+	}
+
 	// advance first (main) animation by one frame (in sync)
 	if (Immobile()) {
 		// update animation, continue last-displayed frame
