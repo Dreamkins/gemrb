@@ -684,13 +684,15 @@ int fx_animate_dead (Scriptable* Owner, Actor* target, Effect* fx)
 	}
 	core->GetResRefFrom2DA(animate_dead_2da[fx->Parameter2], monster, hit, areahit);
 
-	int count = target->GetClericLevel();
-	while (count) {
-		//the monster should appear near the effect position
-		Effect* newfx = EffectQueue::CreateUnsummonEffect(fx);
-		core->SummonCreature(monster, areahit, Owner, target, fx->Pos, EAM_SOURCEALLY, fx->Parameter1, newfx);
-		count--;
+	int level = fx->Parameter1;
+	if (!level) {
+		level = fx->CasterLevel;
 	}
+
+	//the monster should appear near the effect position
+	Effect* newfx = EffectQueue::CreateUnsummonEffect(fx);
+	core->SummonCreature(monster, areahit, Owner, target, fx->Pos, EAM_SOURCEALLY, level, newfx);
+
 	return FX_NOT_APPLIED;
 }
 //f4 Prayer
