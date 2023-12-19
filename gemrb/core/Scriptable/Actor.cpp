@@ -7334,6 +7334,8 @@ void Actor::CalculateAttackResult()
 		usedLeftHand = (bool)((attacksperround - attackcount) & 1);
 	}
 
+	inventory.CacheAllWeaponInfo();
+
 	WeaponInfo& wi = weaponInfo[usedLeftHand];
 	if (!wi.extHeader && usedLeftHand) {
 		// nothing in left hand, use right
