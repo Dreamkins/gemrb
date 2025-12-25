@@ -251,8 +251,8 @@ def UpdateRecordsWindow (Window):
 	Text.SetText (stats_overview)
 	return
 
-ToggleRecordsWindow = GUICommonWindows.CreateTopWinLoader(3, "GUIREC", GUICommonWindows.ToggleWindow, InitRecordsWindow, UpdateRecordsWindow, WINDOW_TOP|WINDOW_HCENTER, True)
-OpenRecordsWindow = GUICommonWindows.CreateTopWinLoader(3, "GUIREC", GUICommonWindows.OpenWindowOnce, InitRecordsWindow, UpdateRecordsWindow, WINDOW_TOP|WINDOW_HCENTER, True)
+ToggleRecordsWindow = GUICommonWindows.CreateTopWinLoader(3, "GUIREC", GUICommonWindows.ToggleWindow, InitRecordsWindow, UpdateRecordsWindow, True)
+OpenRecordsWindow = GUICommonWindows.CreateTopWinLoader(3, "GUIREC", GUICommonWindows.OpenWindowOnce, InitRecordsWindow, UpdateRecordsWindow, True)
 
 # puts default info to textarea (overview of PC's bonuses, saves, etc.
 def OnRecordsButtonLeave ():
@@ -652,7 +652,7 @@ def OpenInformationWindow ():
 
 		return
 
-	InformationWindow = Window = GemRB.LoadWindow (5)
+	InformationWindow = Window = GemRB.LoadWindow (5, "GUIREC")
 
 	# Biography
 	Button = Window.GetControl (1)
@@ -759,7 +759,7 @@ def OpenBiographyWindow ():
 		InformationWindow.ShowModal (MODAL_SHADOW_GRAY)
 		return
 
-	BiographyWindow = Window = GemRB.LoadWindow (12)
+	BiographyWindow = Window = GemRB.LoadWindow (12, "GUIREC")
 
 	# These are used to get the bio
 	pc = GemRB.GameGetSelectedPCSingle ()

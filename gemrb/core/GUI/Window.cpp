@@ -50,8 +50,8 @@ void Window::Close()
 	if (eventHandlers[Closed]) {
 		eventHandlers[Closed](this);
 	}
-	
-	if (flags&DestroyOnClose) {
+
+	if (flags & DestroyOnClose) {
 		ClearScriptingRefs();
 		manager.CloseWindow(this);
 	} else {
@@ -137,20 +137,20 @@ void Window::SizeChanged(const Size& /*oldSize*/)
 
 void Window::FlagsChanged(unsigned int oldflags)
 {
-	if ((flags&AlphaChannel) != (oldflags&AlphaChannel)) {
+	if ((flags & AlphaChannel) != (oldflags & AlphaChannel)) {
 		RecreateBuffer();
 	}
 
-	if ((flags&View::Invisible) && focusView) {
+	if ((flags & View::Invisible) && focusView) {
 		focusView->DidUnFocus();
-	} else if ((oldflags&View::Invisible) && focusView) {
+	} else if ((oldflags & View::Invisible) && focusView) {
 		focusView->DidFocus();
 	}
 }
 
 void Window::RecreateBuffer()
 {
-	Video::BufferFormat fmt = (flags&AlphaChannel) ? Video::BufferFormat::DISPLAY_ALPHA : Video::BufferFormat::DISPLAY;
+	Video::BufferFormat fmt = (flags & AlphaChannel) ? Video::BufferFormat::DISPLAY_ALPHA : Video::BufferFormat::DISPLAY;
 	backBuffer = VideoDriver->CreateBuffer(frame, fmt);
 
 	// the entire window must be invalidated, because the new buffer is blank
@@ -166,6 +166,14 @@ const VideoBufferPtr& Window::DrawWithoutComposition()
 	return backBuffer;
 }
 
+void Window::DrawAfterSubviews(const Region& /*drawFrame*/, const Region& /*clip*/)
+{
+	if (IsDisabled()) {
+		Region winrgn(Point(), Dimensions());
+		VideoDriver->DrawRect(winrgn, ColorBlack, true, BlitFlags::HALFTRANS | BlitFlags::BLENDED);
+	}
+}
+
 void Window::WillDraw(const Region& /*drawFrame*/, const Region& /*clip*/)
 {
 	backBuffer->SetOrigin(frame.origin);
@@ -177,20 +185,20 @@ void Window::DidDraw(const Region& /*drawFrame*/, const Region& /*clip*/)
 	if (!InDebugMode(DebugMode::WINDOWS)) return;
 
 	VideoDriver->SetScreenClip(nullptr);
-	
+
 	auto lock = manager.DrawHUD();
 
 	if (focusView) {
 		Region r = focusView->ConvertRegionToScreen(Region(Point(), focusView->Dimensions()));
 		VideoDriver->DrawRect(r, ColorWhite, false);
 	}
-	
+
 	if (hoverView) {
 		Region r = hoverView->ConvertRegionToScreen(Region(Point(), hoverView->Dimensions()));
 		r.ExpandAllSides(-5);
 		VideoDriver->DrawRect(r, ColorBlue, false);
 	}
-	
+
 	if (trackingView) {
 		Region r = trackingView->ConvertRegionToScreen(Region(Point(), trackingView->Dimensions()));
 		r.ExpandAllSides(-10);
@@ -200,7 +208,11 @@ void Window::DidDraw(const Region& /*drawFrame*/, const Region& /*clip*/)
 
 void Window::Focus()
 {
-	manager.FocusWindow(this);
+	if (!HasFocus()) {
+		manager.FocusWindow(this);
+	} else if (responderStack.empty()) {
+		FocusGained(); // fire the focus handler anyway
+	}
 }
 
 void Window::SetFocused(View* ctrl)
@@ -221,7 +233,7 @@ Holder<Sprite2D> Window::Cursor() const
 	if (drag) {
 		return drag->cursor;
 	}
-	
+
 	Holder<Sprite2D> cursor = ScrollView::Cursor();
 	if (cursor == NULL && hoverView) {
 		cursor = hoverView->Cursor();
@@ -239,6 +251,11 @@ bool Window::IsDisabledCursor() const
 	return isDisabled;
 }
 
+bool Window::IsReceivingEvents() const
+{
+	return !IsDisabled();
+}
+
 void Window::SetPosition(WindowPosition pos)
 {
 	// start at top left
@@ -246,16 +263,16 @@ void Window::SetPosition(WindowPosition pos)
 	Size screen = manager.ScreenSize();
 
 	// adjust horizontal
-	if ((pos&PosHmid) == PosHmid) {
+	if ((pos & PosHmid) == PosHmid) {
 		newFrame.x = (screen.w / 2) - (newFrame.w) / 2;
-	} else if (pos&PosRight) {
+	} else if (pos & PosRight) {
 		newFrame.x = screen.w - newFrame.w;
 	}
 
 	// adjust vertical
-	if ((pos&PosVmid) == PosVmid) {
+	if ((pos & PosVmid) == PosVmid) {
 		newFrame.y = (screen.h / 2) - (newFrame.h) / 2;
-	} else if (pos&PosBottom) {
+	} else if (pos & PosBottom) {
 		newFrame.y = screen.h - newFrame.h;
 	}
 	SetFrame(newFrame);
@@ -293,19 +310,18 @@ View* Window::TrySetFocus(View* target)
 
 bool Window::IsDraggable() const
 {
-	if (trackingView != this)
-	{
+	if (trackingView != this) {
 		return false;
 	}
 
-	return (flags&Draggable) ||
-	       (EventMgr::ModState(GEM_MOD_CTRL) && EventMgr::MouseButtonState(GEM_MB_ACTION));
+	return (flags & Draggable) ||
+		(EventMgr::ModState(GEM_MOD_CTRL) && EventMgr::MouseButtonState(GEM_MB_ACTION));
 }
 
 bool Window::HitTest(const Point& p) const
 {
 	bool hit = View::HitTest(p);
-	if (hit == false){
+	if (hit == false) {
 		// check the control list. we could make View::HitTest optionally recursive, but this is cheaper
 		for (const auto& ctrl : Controls) {
 			if (ctrl->IsVisible() && ctrl->View::HitTest(ctrl->ConvertPointFromWindow(p))) {
@@ -340,14 +356,14 @@ bool Window::SupportsAction(const ActionKey& key)
 void Window::DispatchMouseMotion(View* target, const MouseEvent& me)
 {
 	if (hoverView && target != hoverView) {
-			hoverView->MouseLeave(me, drag.get());
+		hoverView->MouseLeave(me, drag.get());
 	}
-	
+
 	if (target && target != hoverView) {
 		// must create the drag event before calling MouseEnter
 		target->MouseEnter(me, drag.get());
 	}
-	
+
 	if (trackingView && Distance(dragOrigin, me.Pos()) > EventMgr::mouseDragRadius) {
 		// tracking will eat this event
 		if (me.buttonStates) {
@@ -367,10 +383,8 @@ void Window::DispatchMouseMotion(View* target, const MouseEvent& me)
 void Window::DispatchMouseDown(View* target, const MouseEvent& me, unsigned short mod)
 {
 	assert(target);
-	
-	if (me.button == GEM_MB_ACTION
-		&& !(Flags() & View::IgnoreEvents)
-	) {
+
+	if (me.button == GEM_MB_ACTION && !(Flags() & View::IgnoreEvents)) {
 		Focus();
 	}
 
@@ -384,10 +398,10 @@ void Window::DispatchMouseDown(View* target, const MouseEvent& me, unsigned shor
 void Window::DispatchMouseUp(View* target, const MouseEvent& me, unsigned short mod)
 {
 	assert(target);
-	
+
 	if (drag && drag->dragView != target && target->AcceptsDragOperation(*drag)) {
-			drag->dropView = target;
-			target->CompleteDragOperation(*drag);
+		drag->dropView = target;
+		target->CompleteDragOperation(*drag);
 	} else if (trackingView) {
 		if (trackingView == target || trackingView->TracksMouseDown()) {
 			trackingView->MouseUp(me, mod);
@@ -403,8 +417,7 @@ void Window::DispatchTouchDown(View* target, const TouchEvent& te, unsigned shor
 {
 	assert(target);
 
-	if (te.numFingers == 1
-		&& !(Flags() & View::IgnoreEvents)) {
+	if (te.numFingers == 1 && !(Flags() & View::IgnoreEvents)) {
 		Focus();
 	}
 
@@ -453,17 +466,13 @@ bool Window::DispatchKey(View* keyView, const Event& event)
 	// try the keyView view first, if it fails have the window itself try
 	bool handled = false;
 	if (keyView) {
-		handled = (event.type == Event::KeyDown)
-		? keyView->KeyPress(event.keyboard, event.mod)
-		: keyView->KeyRelease(event.keyboard, event.mod);
+		handled = (event.type == Event::KeyDown) ? keyView->KeyPress(event.keyboard, event.mod) : keyView->KeyRelease(event.keyboard, event.mod);
 	}
-	
+
 	if (!handled) {
 		// FIXME: using OnKeyPress to avoid eventProxy from eating esc key
 		// would be better if we could delegate proxies for different event classes (keys, mouse, etc)
-		handled = (event.type == Event::KeyDown)
-		? OnKeyPress(event.keyboard, event.mod)
-		: OnKeyRelease(event.keyboard, event.mod);
+		handled = (event.type == Event::KeyDown) ? OnKeyPress(event.keyboard, event.mod) : OnKeyRelease(event.keyboard, event.mod);
 	}
 	return handled;
 }
@@ -566,7 +575,7 @@ bool Window::DispatchEvent(const Event& event)
 	// absorb other screen events i guess
 	return true;
 }
-	
+
 bool Window::InActionHandler() const
 {
 	for (const auto& ctrl : Controls) {
@@ -574,8 +583,8 @@ bool Window::InActionHandler() const
 			return true;
 		}
 	}
-	
-	return executingResponseHandler;
+
+	return !responderStack.empty();
 }
 
 bool Window::RegisterHotKeyCallback(EventMgr::EventCallback cb, KeyboardKey key)
@@ -617,7 +626,7 @@ bool Window::OnMouseDrag(const MouseEvent& me)
 	}
 	return true;
 }
-	
+
 void Window::OnMouseLeave(const MouseEvent& me, const DragOp*)
 {
 	DispatchMouseMotion(NULL, me);
@@ -628,13 +637,23 @@ bool Window::OnKeyPress(const KeyboardEvent& key, unsigned short mod)
 	if (Flags() & View::IgnoreEvents) {
 		return false;
 	}
-	
+
 	if (key.keycode == GEM_ESCAPE && mod == 0) {
 		Close();
 		return true;
 	}
 
-	return ScrollView::OnKeyPress(key, mod);
+	if (ScrollView::OnKeyPress(key, mod)) {
+		return true;
+	}
+
+	// This way, we can assign GameControl as EP and handle some left-over keys,
+	// e.g. Pause from the Container window.
+	if (GetEventProxy()) {
+		return View::KeyPress(key, mod);
+	}
+
+	return false;
 }
 
 bool Window::OnControllerButtonDown(const ControllerEvent& ce)
@@ -643,10 +662,10 @@ bool Window::OnControllerButtonDown(const ControllerEvent& ce)
 		Close();
 		return true;
 	}
-		
+
 	return View::OnControllerButtonDown(ce);
 }
-	
+
 ViewScriptingRef* Window::CreateScriptingRef(ScriptingId id, ScriptingGroup_t group)
 {
 	return new WindowScriptingRef(this, id, group);

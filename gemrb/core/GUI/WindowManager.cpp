@@ -18,18 +18,20 @@
 
 #include "WindowManager.h"
 
-#include "Debug.h"
-#include "GameData.h"
-#include "Interface.h"
-#include "ImageMgr.h"
-#include "Window.h"
-#include "GUI/GameControl.h"
-#include "GUI/GUIFactory.h"
-
 #include "defsounds.h"
 
+#include "Debug.h"
+#include "GameData.h"
+#include "ImageMgr.h"
+#include "Interface.h"
+#include "Tooltip.h"
+#include "Window.h"
+
+#include "GUI/GUIFactory.h"
+#include "GUI/GameControl.h"
+
 #define WIN_IT(w) \
-std::find(windows.begin(), windows.end(), w)
+	std::find(windows.begin(), windows.end(), w)
 
 namespace GemRB {
 
@@ -41,7 +43,8 @@ Holder<Sprite2D> WindowManager::CursorMouseDown;
 
 void WindowManager::SetTooltipDelay(int delay)
 {
-	ToolTipDelay = delay;
+	// Max setting disables tooltips in originals, we just set it to an extremely high value for simplicity.
+	ToolTipDelay = (delay == 10 * Tooltip::DELAY_FACTOR) ? 10000000 : delay;
 }
 
 WindowManager::WindowManager(PluginHolder<Video> vid, std::shared_ptr<GUIFactory> fact)
@@ -66,7 +69,7 @@ WindowManager::WindowManager(PluginHolder<Video> vid, std::shared_ptr<GUIFactory
 	video->SetEventMgr(&eventMgr);
 
 	gameWin = new Window(screen, *this);
-	gameWin->SetFlags(Window::Borderless|View::Invisible, BitOp::SET);
+	gameWin->SetFlags(Window::Borderless | View::Invisible, BitOp::SET);
 	gameWin->SetFrame(screen);
 
 	HUDBuf = video->CreateBuffer(screen, Video::BufferFormat::DISPLAY_ALPHA);
@@ -88,7 +91,7 @@ void WindowManager::MarkAllDirty() const
 WindowManager::~WindowManager()
 {
 	CloseAllWindows();
-	
+
 	DestroyClosedWindows();
 	assert(closedWindows.empty());
 
@@ -97,17 +100,16 @@ WindowManager::~WindowManager()
 
 Window* WindowManager::LoadWindow(ScriptingId WindowID, const ScriptingGroup_t& ref, Window::WindowPosition pos)
 {
-	if (ref) // is the winpack changing?
-		guifact->LoadWindowPack(ref);
+	guifact->LoadWindowPack(ref);
 
 	Window* win = GetWindow(WindowID, ref);
 	if (!win) {
-		win = guifact->GetWindow( WindowID );
+		win = guifact->GetWindow(WindowID);
 	}
 	if (win) {
 		assert(win->GetScriptingRef());
 		win->SetPosition(pos);
-		FocusWindow( win );
+		FocusWindow(win);
 	}
 	return win;
 }
@@ -149,14 +151,14 @@ Window* WindowManager::ModalWindow() const
 /** Show a Window in Modal Mode */
 bool WindowManager::PresentModalWindow(Window* win)
 {
-	if (!IsOpenWindow( win )) return false;
+	if (!IsOpenWindow(win)) return false;
 
 	OrderFront(win);
 	win->SetDisabled(false);
 	win->SetFlags(Window::Modal, BitOp::OR);
 
 	if (win->Flags() & Window::Borderless && !(win->Flags() & Window::NoSounds)) {
-		core->PlaySound(DS_WINDOW_OPEN, SFX_CHAN_GUI);
+		core->PlaySound(DS_WINDOW_OPEN, SFXChannel::GUI);
 	}
 
 	return true;
@@ -180,7 +182,7 @@ bool WindowManager::FocusWindow(Window* win)
 			return false;
 		}
 	}
-	
+
 	if (OrderFront(win)) {
 		if (gameWin == win) {
 			core->SetEventFlag(EF_CONTROL);
@@ -229,7 +231,7 @@ bool WindowManager::OrderRelativeTo(Window* win, Window* win2, bool front)
 	if ((front && frontWin == win2) || win == frontWin) {
 		TooltipTime = 0;
 	}
-	
+
 	if (oldFront != frontWin) {
 		if (front) {
 			if (trackingWin == win2) {
@@ -244,7 +246,7 @@ bool WindowManager::OrderRelativeTo(Window* win, Window* win2, bool front)
 		auto event = EventMgr::CreateMouseMotionEvent(EventMgr::MousePos());
 		WindowList::const_iterator it = windows.begin();
 		hoverWin = NextEventWindow(event, it);
-		
+
 		oldFront->FocusLost();
 		frontWin->FocusGained();
 	}
@@ -279,7 +281,7 @@ void WindowManager::CloseWindow(Window* win)
 
 	if (win == ModalWindow()) {
 		if (win->Flags() & Window::Borderless && !(win->Flags() & Window::NoSounds)) {
-			core->PlaySound(DS_WINDOW_CLOSE, SFX_CHAN_GUI);
+			core->PlaySound(DS_WINDOW_CLOSE, SFXChannel::GUI);
 		}
 
 		win->SetFlags(Window::Modal, BitOp::NAND);
@@ -324,9 +326,13 @@ void WindowManager::CloseAllWindows() const
 bool WindowManager::HotKey(const Event& event) const
 {
 	if (event.type == Event::KeyDown && event.keyboard.repeats == 1) {
+		auto& vars = core->GetDictionary();
+		bool fullscreen;
 		switch (event.keyboard.keycode) {
 			case 'f':
 				video->ToggleFullscreenMode();
+				fullscreen = (bool) vars.Get("Full Screen", 0);
+				vars.Set("Full Screen", !fullscreen);
 				return true;
 			case GEM_GRAB:
 				video->ToggleGrabInput();
@@ -356,7 +362,7 @@ Window* WindowManager::GetFocusWindow() const
 }
 
 #define HIT_TEST(e, w) \
-((w)->HitTest((w)->ConvertPointFromScreen(e.mouse.Pos())))
+	((w)->HitTest((w)->ConvertPointFromScreen(e.mouse.Pos())))
 
 Window* WindowManager::NextEventWindow(const Event& event, WindowList::const_iterator& current)
 {
@@ -374,11 +380,11 @@ Window* WindowManager::NextEventWindow(const Event& event, WindowList::const_ite
 		current = windows.end(); // invalidate the iterator, no other target is possible.
 		return mwin;
 	}
-	
+
 	if (event.isScreen) {
 		while (current != windows.end()) {
 			Window* win = *current++;
-			if (win->IsVisible() && HIT_TEST(event,win)) {
+			if (win->IsVisible() && HIT_TEST(event, win)) {
 				// NOTE: we want to "target" the first window hit regardless of it being disabled or otherwise
 				// we still need to update which window is under the mouse and block events from reaching the windows below
 				return win;
@@ -427,13 +433,13 @@ bool WindowManager::DispatchEvent(const Event& event)
 
 	if (Event::EventMaskFromType(event.type) & Event::AllMouseMask) {
 		TooltipTime = GetMilliseconds();
-		
+
 		// handle when mouse leaves the window
 		if (hoverWin && HIT_TEST(event, hoverWin) == false) {
 			hoverWin->MouseLeave(event.mouse, NULL);
 			hoverWin = NULL;
 		}
-	// handled here instead of as a hotkey, so also gamecontrol can do its thing
+		// handled here instead of as a hotkey, so also gamecontrol can do its thing
 	} else if (event.type == Event::KeyDown && event.keyboard.keycode == GEM_TAB) {
 		if (TooltipTime + ToolTipDelay > GetMilliseconds()) {
 			TooltipTime -= ToolTipDelay;
@@ -449,8 +455,7 @@ bool WindowManager::DispatchEvent(const Event& event)
 				if (event.type == Event::MouseDown || event.type == Event::TouchDown) {
 					trackingWin = target;
 				}
-			} else if ((target->Flags()&(View::IgnoreEvents|View::Disabled)) == View::Disabled
-					   && event.type == Event::KeyDown && event.keyboard.keycode == GEM_ESCAPE) {
+			} else if ((target->Flags() & (View::IgnoreEvents | View::Disabled)) == View::Disabled && event.type == Event::KeyDown && event.keyboard.keycode == GEM_ESCAPE) {
 				// force close disabled windows if they aren't also ignoring events
 				target->Close();
 			}
@@ -485,7 +490,7 @@ void WindowManager::DrawMouse() const
 
 void WindowManager::DrawCursor(const Point& pos) const
 {
-	if (cursorFeedback&MOUSE_NO_CURSOR) {
+	if (cursorFeedback & MOUSE_NO_CURSOR) {
 		return;
 	}
 	// Cursor draw priority:
@@ -495,7 +500,7 @@ void WindowManager::DrawCursor(const Point& pos) const
 	// 4. WindowManager cursors
 
 	Holder<Sprite2D> cur(gameWin->View::Cursor());
-	
+
 	if (!cur && hoverWin) {
 		cur = hoverWin->Cursor();
 	}
@@ -508,7 +513,7 @@ void WindowManager::DrawCursor(const Point& pos) const
 
 	if (hoverWin && hoverWin->IsDisabledCursor()) {
 		// draw greyed cursor
-		video->BlitGameSprite(cur, pos, BlitFlags::GREY|BlitFlags::BLENDED, ColorGray);
+		video->BlitGameSprite(cur, pos, BlitFlags::GREY | BlitFlags::BLENDED, ColorGray);
 	} else {
 		// draw normal cursor
 		video->BlitSprite(cur, pos);
@@ -517,7 +522,7 @@ void WindowManager::DrawCursor(const Point& pos) const
 
 void WindowManager::DrawTooltip(Point pos) const
 {
-	if (cursorFeedback&MOUSE_NO_TOOLTIPS) {
+	if (cursorFeedback & MOUSE_NO_TOOLTIPS) {
 		return;
 	}
 
@@ -539,14 +544,14 @@ void WindowManager::DrawTooltip(Point pos) const
 				tooltip.tooltip_sound.reset();
 			}
 			if (text.length()) {
-				tooltip.tooltip_sound = core->PlaySound(DS_TOOLTIP, SFX_CHAN_GUI);
+				tooltip.tooltip_sound = core->PlaySound(DS_TOOLTIP, SFXChannel::GUI);
 			}
 			tooltip.reset = false;
 		}
 
 		// clamp pos so that the TT is all visible (TT draws centered at pos)
-		int halfW = tooltip.tt.TextSize().w/2 + 16;
-		int halfH = tooltip.tt.TextSize().h/2 + 11;
+		int halfW = tooltip.tt.TextSize().w / 2 + 16;
+		int halfH = tooltip.tt.TextSize().h / 2 + 11;
 		pos.x = Clamp<int>(pos.x, halfW, screen.w - halfW);
 		pos.y = Clamp<int>(pos.y, halfW, screen.h - halfH);
 
@@ -564,7 +569,7 @@ void WindowManager::DrawWindowFrame(BlitFlags flags) const
 	// ... I'm not 100% certain this works for all use cases.
 	// if it doesn't... i think it might be better to just forget about the window frames once the game is loaded
 
-	video->SetScreenClip( NULL );
+	video->SetScreenClip(NULL);
 
 	Holder<Sprite2D> left_edge = WinFrameEdge(0);
 	if (left_edge) {
@@ -578,7 +583,7 @@ void WindowManager::DrawWindowFrame(BlitFlags flags) const
 		int v_margin = (screen.h - left_edge->Frame.h) / 2;
 		// Also assume top and bottom are the same width.
 		int h_margin = (screen.w - left_w - right_w - top_edge->Frame.w) / 2;
-		
+
 		const static Color dummy;
 		video->BlitGameSprite(left_edge, Point(h_margin, v_margin), flags, dummy);
 		video->BlitGameSprite(right_edge, Point(screen.w - right_w - h_margin, v_margin), flags, dummy);
@@ -594,6 +599,7 @@ WindowManager::HUDLock WindowManager::DrawHUD() const
 
 void WindowManager::DrawWindows() const
 {
+	TRACY(ZoneScoped);
 	HUDBuf->Clear();
 
 	if (windows.empty()) {
@@ -624,14 +630,14 @@ void WindowManager::DrawWindows() const
 			continue;
 
 		if (win == modalWin) {
-			drawFrame = drawFrame || !(win->Flags()&Window::Borderless);
+			drawFrame = drawFrame || !(win->Flags() & Window::Borderless);
 			continue; // will draw this later
 		}
 
 		const Region& frame = win->Frame();
 
 		// FYI... this only checks if the front window obscures... could be covered by another window too
-		if ((frontWin->Flags()&(Window::AlphaChannel|View::Invisible)) == 0 && win != frontWin && win->NeedsDraw()) {
+		if ((frontWin->Flags() & (Window::AlphaChannel | View::Invisible)) == 0 && win != frontWin && win->NeedsDraw()) {
 			Region intersect = frontWinFrame.Intersect(frame);
 			if (intersect == frame) {
 				// this window is completely obscured by the front window
@@ -640,16 +646,12 @@ void WindowManager::DrawWindows() const
 			}
 		}
 
-		if (!drawFrame && !(win->Flags()&Window::Borderless) && (frame.w < screen.w || frame.h < screen.h)) {
+		if (!drawFrame && !(win->Flags() & Window::Borderless) && (frame.w < screen.w || frame.h < screen.h)) {
 			// the window requires us to draw the frame border (happens later, on the cursor buffer)
 			drawFrame = true;
 		}
 
 		win->Draw();
-		if (win->IsDisabled()) {
-			Region winrgn(Point(), win->Dimensions());
-			video->DrawRect(winrgn, ColorBlack, true, BlitFlags::HALFTRANS | BlitFlags::BLENDED);
-		}
 	}
 
 	video->PushDrawingBuffer(HUDBuf);
@@ -665,11 +667,11 @@ void WindowManager::DrawWindows() const
 		auto& modalBuffer = modalWin->DrawWithoutComposition();
 		video->BlitVideoBuffer(modalBuffer, Point(), BlitFlags::BLENDED);
 	}
-	
+
 	if (drawFrame) {
 		DrawWindowFrame(frame_flags);
 	}
-	
+
 	if (InDebugMode(DebugMode::WINDOWS)) {
 		// ensure this is drawing over the window frames
 		if (trackingWin) {
@@ -702,13 +704,13 @@ Holder<Sprite2D> WindowManager::GetScreenshot(Window* win)
 	if (win) { // we don't really care if we are managing the window
 		// only a screen shot of passed win
 		auto& winBuf = win->DrawWithoutComposition();
-		screenshot = video->GetScreenshot( Region(Point(), win->Dimensions()), winBuf );
+		screenshot = video->GetScreenshot(Region(Point(), win->Dimensions()), winBuf);
 	} else {
 		// redraw the windows without the mouse elements
 		auto mouseState = SetCursorFeedback(MOUSE_NONE);
 		DrawWindows();
 		video->SwapBuffers(0);
-		screenshot = video->GetScreenshot( screen );
+		screenshot = video->GetScreenshot(screen);
 		SetCursorFeedback(mouseState);
 	}
 

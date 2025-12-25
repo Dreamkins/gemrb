@@ -97,7 +97,7 @@ def OpenSpellsWindow (actor, table, level, diff, kit=0, gen=0, recommend=True, b
 	SpellsToMemoTable = GemRB.LoadTable (table)
 	if not SpellsToMemoTable.GetValue (str(level), str(1), GTV_INT):
 		if chargen:
-			if GameCheck.IsBG2():
+			if GameCheck.IsBG2OrEE ():
 				GemRB.SetNextScript("GUICG6")
 			elif GameCheck.IsBG1():
 				# HACK
@@ -111,10 +111,10 @@ def OpenSpellsWindow (actor, table, level, diff, kit=0, gen=0, recommend=True, b
 	if chargen:
 		SpellsWindow = GemRB.LoadWindow (7, "GUICG")
 
-		if GameCheck.IsBG2():
+		if GameCheck.IsBG2OrEE ():
 			import CharGenCommon
 			CharGenCommon.PositionCharGenWin (SpellsWindow)
-		elif GameCheck.IsIWD2():
+		elif IWD2:
 			import CharOverview
 			CharOverview.PositionCharGenWin (SpellsWindow)
 
@@ -140,7 +140,7 @@ def OpenSpellsWindow (actor, table, level, diff, kit=0, gen=0, recommend=True, b
 			SpellsPickButton.OnPress (SpellsPickPress)
 			SpellsPickButton.SetText(34210)
 	else:
-		SpellsWindow = GemRB.LoadWindow (8)
+		SpellsWindow = GemRB.LoadWindow (8, "GUIREC")
 		if IWD2:
 			DoneButton = SpellsWindow.GetControl (33)
 			SpellsTextArea = SpellsWindow.GetControl(30)
@@ -162,7 +162,7 @@ def OpenSpellsWindow (actor, table, level, diff, kit=0, gen=0, recommend=True, b
 	Memorization = 0
 	Class = GemRB.GetPlayerStat (pc, IE_CLASS)
 	if IWD2 and not chargen:
-		LUClass = GemRB.GetVar ("LUClass")
+		LUClass = GemRB.GetVar ("LUClass") or 0
 		LUClassName = CommonTables.Classes.GetRowName (LUClass)
 		LUClassID = CommonTables.Classes.GetValue (LUClassName, "ID")
 		Class = LUClassID
@@ -179,6 +179,8 @@ def OpenSpellsWindow (actor, table, level, diff, kit=0, gen=0, recommend=True, b
 		SpellLearnTable = "SPLSRCKN"
 	elif SpellLearnTable == "MXSPLBRD":
 		SpellLearnTable = "SPLBRDKN"
+	elif SpellLearnTable == "MXSPLSHM":
+		SpellLearnTable = "SPLSHMKN"
 	# ... which is also important for mages during chargen and then never again
 	elif SpellLearnTable == "MXSPLWIZ":
 		SpellLearnTable = "SPLWIZKN"
@@ -246,7 +248,7 @@ def OpenSpellsWindow (actor, table, level, diff, kit=0, gen=0, recommend=True, b
 		if recommend:
 			SpellsWindow.Focus()
 		else:
-			SpellsWindow.ShowModal (MODAL_SHADOW_NONE)
+			SpellsWindow.ShowModal (MODAL_SHADOW_GRAY)
 	else:
 		SpellsWindow.ShowModal (MODAL_SHADOW_GRAY)
 
@@ -291,12 +293,10 @@ def SpellsDonePress ():
 
 	# save all the spells
 	if not Memorization:
+		sbt = SpellBookType if IWD2 else -1
 		for i in range (len (Spells[SpellLevel])):
 			if SpellBook[i]: # we need to learn this spell
-				if IWD2:
-					GemRB.LearnSpell (pc, Spells[SpellLevel][i][0], 0, 1<<SpellBookType)
-				else:
-					GemRB.LearnSpell (pc, Spells[SpellLevel][i][0])
+				GemRB.LearnSpell (pc, Spells[SpellLevel][i][0], 0, sbt)
 
 		# check to see if we need to update again
 		for i in range (SpellLevel+1, 9):
@@ -334,13 +334,13 @@ def SpellsDonePress ():
 			return
 
 	# close our window and update our records
-	if SpellsWindow and (not chargen or GameCheck.IsBG2() or IWD2):
+	if SpellsWindow and (not chargen or GameCheck.IsBG2OrEE () or IWD2):
 		SpellsWindow.Close ()
 		SpellsWindow = None
 
 	# move to the next script if this is chargen
 	if chargen:
-		if GameCheck.IsBG2():
+		if GameCheck.IsBG2OrEE ():
 			GemRB.SetNextScript("GUICG6")
 		elif GameCheck.IsBG1():
 			SpellsWindow.Close ()
@@ -384,7 +384,7 @@ def ShowKnownSpells ():
 		SpellButton.SetTooltip(Spell['SpellName'])
 		SpellButton.SetValue (i)
 		SpellButton.OnPress (MemorizePress)
-		if GameCheck.IsBG2():
+		if GameCheck.IsBG2OrEE ():
 			SpellButton.SetSprites("GUIBTBUT",0, 0,1,2,3)
 		else:
 			SpellButton.SetSprites("GUIBTBUT",0, 0,1,24,25)
@@ -468,7 +468,7 @@ def ShowSpells ():
 		SpellButton.SetTooltip(Spell['SpellName'])
 		SpellButton.SetVarAssoc("ButtonPressed", i)
 		SpellButton.OnPress (SpellsSelectPress)
-		if GameCheck.IsBG2():
+		if GameCheck.IsBG2OrEE ():
 			SpellButton.SetSprites("GUIBTBUT",0, 0,1,2,3)
 		else:
 			SpellButton.SetSprites("GUIBTBUT",0, 0,1,24,25)
@@ -599,7 +599,7 @@ def SpellsCancelPress ():
 	# remove all learned spells
 	Spellbook.RemoveKnownSpells (pc, SpellBookType, 1, 9, 1)
 
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		# unload teh window and go back
 		if SpellsWindow:
 			SpellsWindow.Close ()
@@ -626,7 +626,11 @@ def SpellsPickPress ():
 	global SpellBook, SpellsSelectPointsLeft
 
 	# load up our table
-	AutoTable = GemRB.LoadTable ("splautop")
+	if Spellbook.HasSorcererBook (pc) & 3 == 3:
+		# priestly sorcerer like shaman
+		AutoTable = GemRB.LoadTable ("splautos")
+	else:
+		AutoTable = GemRB.LoadTable ("splautop")
 
 	for i in range (AutoTable.GetRowCount ()):
 		if SpellsSelectPointsLeft[SpellLevel] == 0:

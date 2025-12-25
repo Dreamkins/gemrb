@@ -27,12 +27,14 @@
 #include "GlobalTimer.h"
 #include "Interface.h"
 #include "Light.h"
+#include "Map.h"
 #include "ProjectileServer.h"
+#include "RNG.h"
+#include "ScriptedAnimation.h"
 #include "Sprite2D.h"
 #include "VEFObject.h"
-#include "RNG.h"
+
 #include "Scriptable/Actor.h"
-#include "ScriptedAnimation.h"
 
 #include <cstdlib>
 
@@ -40,18 +42,18 @@ namespace GemRB {
 
 constexpr uint8_t PALSIZE = 32;
 
-static const ieByte SixteenToNine[MAX_ORIENT]={0,1,2,3,4,5,6,7,8,7,6,5,4,3,2,1};
-static const ieByte SixteenToFive[MAX_ORIENT]={0,1,2,3,4,3,2,1,0,1,2,3,4,3,2,1};
+// different conversion than in Orientation.h
+static const ieByte SixteenToFive2[MAX_ORIENT] = { 0, 1, 2, 3, 4, 3, 2, 1, 0, 1, 2, 3, 4, 3, 2, 1 };
 
-static ProjectileServer *server = NULL;
+static ProjectileServer* server = NULL;
 
 Projectile::Projectile() noexcept
 {
 	if (!server) {
 		server = core->GetProjectileServer();
 	}
-	travel.resize(MAX_ORIENT);
-	shadow.resize(MAX_ORIENT);
+	travelAnim.resize(MAX_ORIENT);
+	shadowAnim.resize(MAX_ORIENT);
 }
 
 Projectile::AnimArray Projectile::CreateAnimations(const ResRef& bam, ieByte seq)
@@ -74,7 +76,7 @@ Projectile::AnimArray Projectile::CreateAnimations(const ResRef& bam, ieByte seq
 	//reporting bigger face count than possible by the animation
 	if (Aim > maxCycle) Aim = maxCycle;
 
-	if(ExtFlags&PEF_PILLAR) {
+	if (ExtFlags & PEF_PILLAR) {
 		Aim = maxCycle;
 		return CreateCompositeAnimation(*af, seq);
 	} else {
@@ -91,15 +93,15 @@ Projectile::AnimArray Projectile::CreateCompositeAnimation(const AnimationFactor
 		AnimationFactory::index_t c = cycle + seq;
 		Animation* a = af.GetCycle(c);
 		if (!a) continue;
-		
+
 		//animations are started at a random frame position
 		//Always start from 0, unless set otherwise
-		if (!(ExtFlags&PEF_RANDOM)) {
+		if (!(ExtFlags & PEF_RANDOM)) {
 			a->SetFrame(0);
 		}
 
 		a->gameAnimation = true;
-		
+
 		anims[cycle] = std::move(*a);
 		delete a;
 	}
@@ -115,44 +117,44 @@ Projectile::AnimArray Projectile::CreateOrientedAnimations(const AnimationFactor
 	for (ieByte cycle = 0; cycle < MAX_ORIENT; cycle++) {
 		BlitFlags mirrorFlags = BlitFlags::NONE;
 		AnimationFactory::index_t c;
-		switch(Aim) {
-		case 5:
-			c = SixteenToFive[cycle];
-			// orientations go counter-clockwise, starting south
-			if (cycle > 4 && cycle <= 8) {
-				// top-left quadrant
-				mirrorFlags = BlitFlags::MIRRORY;
-			} else if (cycle > 8 && cycle < 12) {
-				// top-right quadrant
-				mirrorFlags = BlitFlags::MIRRORX | BlitFlags::MIRRORY;
-			} else if (cycle >= 12 && cycle <= 15) {
-				// bottom-right quadrant
-				mirrorFlags = BlitFlags::MIRRORX;
-			}
-			break;
-		case 9:
-			c = SixteenToNine[cycle];
-			if (cycle > 8) mirrorFlags = BlitFlags::MIRRORX;
-			break;
-		case 16:
-			c = cycle;
-			break;
-		default:
-			c = seq;
-			break;
+		switch (Aim) {
+			case 5:
+				c = SixteenToFive2[cycle];
+				// orientations go counter-clockwise, starting south
+				if (cycle > 4 && cycle <= 8) {
+					// top-left quadrant
+					mirrorFlags = BlitFlags::MIRRORY;
+				} else if (cycle > 8 && cycle < 12) {
+					// top-right quadrant
+					mirrorFlags = BlitFlags::MIRRORX | BlitFlags::MIRRORY;
+				} else if (cycle >= 12 && cycle <= 15) {
+					// bottom-right quadrant
+					mirrorFlags = BlitFlags::MIRRORX;
+				}
+				break;
+			case 9:
+				c = SixteenToNine[cycle];
+				if (cycle > 8) mirrorFlags = BlitFlags::MIRRORX;
+				break;
+			case 16:
+				c = cycle;
+				break;
+			default:
+				c = seq;
+				break;
 		}
 		Animation* a = af.GetCycle(c);
 		if (!a) continue;
-		
+
 		//animations are started at a random frame position
 		//Always start from 0, unless set otherwise
-		if (!(ExtFlags&PEF_RANDOM)) {
+		if (!(ExtFlags & PEF_RANDOM)) {
 			a->SetFrame(0);
 		}
 
 		a->MirrorAnimation(mirrorFlags);
 		a->gameAnimation = true;
-		
+
 		anims[cycle] = std::move(*a);
 		delete a;
 	}
@@ -160,12 +162,12 @@ Projectile::AnimArray Projectile::CreateOrientedAnimations(const AnimationFactor
 }
 
 //apply gradient colors
-void Projectile::SetupPalette(const AnimArray& anim, Holder<Palette> &pal, const ieByte *gradients) const
+void Projectile::SetupPalette(const AnimArray& anim, Holder<Palette>& pal, const ieByte* gradients) const
 {
 	ieDword Colors[7];
 
-	for (int i=0;i<7;i++) {
-		Colors[i]=gradients[i];
+	for (int i = 0; i < 7; i++) {
+		Colors[i] = gradients[i];
 	}
 	GetPaletteCopy(anim, pal);
 	if (pal) {
@@ -173,7 +175,7 @@ void Projectile::SetupPalette(const AnimArray& anim, Holder<Palette> &pal, const
 	}
 }
 
-void Projectile::GetPaletteCopy(const AnimArray& anims, Holder<Palette> &pal) const
+void Projectile::GetPaletteCopy(const AnimArray& anims, Holder<Palette>& pal) const
 {
 	if (pal)
 		return;
@@ -189,11 +191,11 @@ void Projectile::GetPaletteCopy(const AnimArray& anims, Holder<Palette> &pal) co
 //create another projectile with type-1 (iterate magic missiles and call lightning)
 void Projectile::CreateIteration()
 {
-	Projectile *pro = server->GetProjectileByIndex(type-1);
+	Projectile* pro = server->GetProjectileByIndex(type - 1);
 	pro->SetEffectsCopy(effects, Pos);
 	pro->SetCaster(Caster, Level);
-	if (ExtFlags&PEF_CURVE) {
-		pro->bend=bend+1;
+	if (ExtFlags & PEF_CURVE) {
+		pro->bend = bend + 1;
 		pro->Speed = Speed; // fix the different speed of MAGICMIS.pro compared to SPMAGMIS.pro
 	}
 
@@ -204,63 +206,45 @@ void Projectile::CreateIteration()
 	}
 
 	// added by fuzzie, to make magic missiles instant, maybe wrong place
-	pro->Setup();
+	pro->Update();
 }
 
 void Projectile::GetSmokeAnim()
 {
 	size_t AvatarsRowNum = CharAnimations::GetAvatarsCount();
 
-	SmokeAnimID&=0xfff0; //this is a hack, i'm too lazy to figure out the subtypes
+	SmokeAnimID &= 0xfff0; //this is a hack, i'm too lazy to figure out the subtypes
 
 	for (size_t i = 0; i < AvatarsRowNum; ++i) {
-		const AvatarStruct &as = CharAnimations::GetAvatarStruct(i);
-		if (as.AnimID==SmokeAnimID) {
+		const AvatarStruct& as = CharAnimations::GetAvatarStruct(i);
+		if (as.AnimID == SmokeAnimID) {
 			smokebam = as.Prefixes[0];
 			return;
 		}
 	}
 	//turn off smoke animation if its animation was not found
 	//you might want to issue some warning here
-	TFlags&=PTF_SMOKE;
+	TFlags &= PTF_SMOKE;
 }
 // load animations, start sound
 void Projectile::Setup()
 {
-	tint.r=128;
-	tint.g=128;
-	tint.b=128;
-	tint.a=255;
+	tint = ColorGray;
+	timeStartStep = GetMilliseconds();
 
-	if (SFlags & PSF_FLYING) {
-		SFlags &= ~PSF_FLYING;
+	const Actor* act = area->GetActorByGlobalID(Caster);
+	if (act && ExtFlags & PEF_TEXT) {
+		displaymsg->DisplayStringName(StrRef, GUIColors::LIGHTGREY, act, STRING_FLAGS::NONE);
 	}
-
-	timeStartStep = core->Time.Ticks2Ms(core->GetGame()->Ticks);
-
-	Actor* act = area->GetActorByGlobalID(Caster);
-
-	if (act) {
-		ZPos = ProHeights::Normal;
-		if (act->ValidTarget(GA_BIGBAD)) {
-			ZPos = ProHeights::Dragon;
-		}
-
-		if (ExtFlags & PEF_TEXT) {
-			displaymsg->DisplayStringName(StrRef, GUIColors::LIGHTGREY, act, STRING_FLAGS::NONE);
-		}
-	}
-	if (ZPos != ProHeights::Dragon && SFlags & PSF_FLYING) {
-		ZPos = ProHeights::Flying;
-	}
+	SetupZPos();
 
 	//falling = vertical
 	//incoming = right side
 	//both = left side
-	if (ExtFlags & (PEF_FALLING|PEF_INCOMING)) {
+	if (ExtFlags & (PEF_FALLING | PEF_INCOMING)) {
 		Pos.x = Destination.x;
-		if (ExtFlags&PEF_INCOMING) {
-			if (ExtFlags&PEF_FALLING) {
+		if (ExtFlags & PEF_INCOMING) {
+			if (ExtFlags & PEF_FALLING) {
 				Pos.x -= 200;
 			} else {
 				Pos.x += 200;
@@ -270,24 +254,25 @@ void Projectile::Setup()
 		NextTarget(Destination);
 	}
 
-	if(ExtFlags&PEF_WALL) {
+	if (ExtFlags & PEF_WALL) {
 		SetupWall();
 	}
 
 	//cone area of effect always disables the travel flag
 	//but also makes the caster immune to the effect
 	if (Extension) {
-		if (Extension->AFlags&PAF_CONE) {
-			NewOrientation = Orientation = GetOrient(Destination, Pos);
-			Destination=Pos;
-			ExtFlags|=PEF_NO_TRAVEL;
+		if (Extension->AFlags & PAF_CONE) {
+			// no need to recalculate orientation
+			// Pos and Destination should be the same here already and would then autoresolve to S
+			Destination = Pos;
+			ExtFlags |= PEF_NO_TRAVEL;
 		}
 
 		//this flag says the first explosion is delayed
 		//(works for delaying triggers too)
 		//getting the explosion count here, so an absent caster won't cut short
 		//on the explosion count
-		if(Extension->AFlags&PAF_DELAY) {
+		if (Extension->AFlags & PAF_DELAY) {
 			extensionDelay = Extension->Delay;
 		} else {
 			extensionDelay = 0;
@@ -296,8 +281,8 @@ void Projectile::Setup()
 	}
 
 	//set any static tint
-	if(ExtFlags&PEF_TINT) {
-		uint8_t idx = PALSIZE/2;
+	if (ExtFlags & PEF_TINT) {
+		uint8_t idx = PALSIZE / 2;
 		const auto& pal32 = core->GetPalette32(Gradients[0]);
 		const Color& tmpColor = pal32[idx];
 		// PALSIZE is usually 12, but pst has it at 32, which is now the default, so make sure we're not trying to read an empty (black) entry
@@ -306,62 +291,65 @@ void Projectile::Setup()
 		StaticTint(pal32[idx]);
 	}
 
-	travel = CreateAnimations(BAMRes1, Seq1);
+	travelAnim = CreateAnimations(BAMRes1, Seq1);
 
-	if (TFlags&PTF_SHADOW) {
-		shadow = CreateAnimations(BAMRes2, Seq2);
+	if (TFlags & PTF_SHADOW) {
+		shadowAnim = CreateAnimations(BAMRes2, Seq2);
 	}
 
-	if (TFlags&PTF_SMOKE) {
+	if (TFlags & PTF_SMOKE) {
 		GetSmokeAnim();
 	}
 
 	//there is no travel phase, create the projectile right at the target
-	if (ExtFlags&PEF_NO_TRAVEL) {
+	if (ExtFlags & PEF_NO_TRAVEL) {
 		Pos = Destination;
 
 		//the travel projectile should linger after explosion
-		if(ExtFlags&PEF_POP) {
+		if (ExtFlags & PEF_POP) {
 			//the explosion consists of a pop in/hold/pop out of the travel projectile (dimension door)
-			if (travel[0] && shadow[0]) {
-				extensionDelay = travel[0].GetFrameCount() * 2 + shadow[0].GetFrameCount();
-				travel[0].Flags |= A_ANI_PLAYONCE;
-				shadow[0].Flags |= A_ANI_PLAYONCE;
+			if (travelAnim[0] && shadowAnim[0]) {
+				extensionDelay = travelAnim[0].GetFrameCount() * 2 + shadowAnim[0].GetFrameCount();
+				travelAnim[0].flags |= Animation::Flags::Once;
+				shadowAnim[0].flags |= Animation::Flags::Once;
 			}
-		} else if (travel[0]) {
-			extensionDelay = travel[0].GetFrameCount();
-			travel[0].Flags |= A_ANI_PLAYONCE;
+		} else if (travelAnim[0]) {
+			extensionDelay = travelAnim[0].GetFrameCount();
+			travelAnim[0].flags |= Animation::Flags::Once;
 		}
 	}
 
-	if (TFlags&PTF_COLOUR) {
-		SetupPalette(travel, palette, Gradients);
+	if (TFlags & PTF_COLOUR) {
+		SetupPalette(travelAnim, palette, Gradients);
 	} else {
 		palette = gamedata->GetPalette(PaletteRes);
 	}
 
-	if (TFlags&PTF_LIGHT) {
+	if (TFlags & PTF_LIGHT) {
 		light = CreateLight(Size(LightX, LightY), LightZ);
 	}
 
-	phase = P_TRAVEL;
-	travel_handle.sound = core->GetAudioDrv()->Play(FiringSound, SFX_CHAN_MISSILE,
-				Pos, (SFlags & PSF_LOOPING ? GEM_SND_LOOPING : 0));
+	unsigned int flags = GEM_SND_SPATIAL;
+	if (SFlags & PSF_LOOPING) {
+		flags |= GEM_SND_LOOPING;
+	}
+
+	travelHandle.sound = core->GetAudioDrv()->Play(FiringSound, SFXChannel::Missile, Pos, flags);
 
 	//create more projectiles
-	if(ExtFlags&PEF_ITERATION) {
+	if (ExtFlags & PEF_ITERATION) {
 		CreateIteration();
 	}
 }
 
-Actor *Projectile::GetTarget()
+Actor* Projectile::GetTarget()
 {
-	Actor *target;
+	Actor* target;
 
 	if (Target) {
 		target = area->GetActorByGlobalID(Target);
 		if (!target) return NULL;
-		Actor *original = area->GetActorByGlobalID(Caster);
+		Actor* original = area->GetActorByGlobalID(Caster);
 		if (!effects) {
 			return target;
 		}
@@ -370,12 +358,12 @@ Actor *Projectile::GetTarget()
 			return target;
 		}
 
-		int res = effects.CheckImmunity ( target );
+		int res = effects.CheckImmunity(target);
 		//resisted
 		if (!res) {
 			return NULL;
 		}
-		if (res==-1) {
+		if (res == -1) {
 			if (original) {
 				Target = original->GetGlobalID();
 				target = original;
@@ -399,19 +387,19 @@ Actor *Projectile::GetTarget()
 void Projectile::SetDelay(int delay)
 {
 	extensionDelay = delay;
-	ExtFlags|=PEF_FREEZE;
+	ExtFlags |= PEF_FREEZE;
 }
 
-bool Projectile::FailedIDS(const Actor *target) const
+bool Projectile::FailedIDS(const Actor* target) const
 {
-	bool fail = !EffectQueue::match_ids( target, IDSType, IDSValue);
-	if (ExtFlags&PEF_NOTIDS) {
+	bool fail = !EffectQueue::match_ids(target, IDSType, IDSValue);
+	if (ExtFlags & PEF_NOTIDS) {
 		fail = !fail;
 	}
-	if (ExtFlags&PEF_BOTH) {
+	if (ExtFlags & PEF_BOTH) {
 		if (!fail) {
-			fail = !EffectQueue::match_ids( target, IDSType2, IDSValue2);
-			if (ExtFlags&PEF_NOTIDS2) {
+			fail = !EffectQueue::match_ids(target, IDSType2, IDSValue2);
+			if (ExtFlags & PEF_NOTIDS2) {
 				fail = !fail;
 			}
 		}
@@ -427,7 +415,7 @@ bool Projectile::FailedIDS(const Actor *target) const
 
 void Projectile::Payload()
 {
-	if(Shake) {
+	if (Shake) {
 		core->timer.SetScreenShake(Point(Shake, Shake), Shake);
 		Shake = 0;
 	}
@@ -447,8 +435,8 @@ void Projectile::Payload()
 		return;
 	}
 
-	Actor *target;
-	Scriptable *Owner;
+	Actor* target;
+	Scriptable* Owner;
 
 	if (Target) {
 		target = GetTarget();
@@ -491,7 +479,7 @@ void Projectile::Payload()
 			core->ApplySpell(successSpell, target, Owner, Level);
 		}
 
-		if(ExtFlags & PEF_RGB) {
+		if (ExtFlags & PEF_RGB) {
 			target->SetColorMod(0xff, RGBModifier::ADD, ColorSpeed, RGB);
 		}
 
@@ -534,7 +522,7 @@ void Projectile::ProcessEffects(EffectQueue& projQueue, Scriptable* owner, Actor
 
 void Projectile::ApplyDefault() const
 {
-	Actor *actor = area->GetActorByGlobalID(Caster);
+	Actor* actor = area->GetActorByGlobalID(Caster);
 	if (actor) {
 		//name is the projectile's name
 		//for simplicity, we apply a spell of the same name
@@ -544,59 +532,62 @@ void Projectile::ApplyDefault() const
 
 void Projectile::StopSound()
 {
-	if (travel_handle) {
-		travel_handle.sound->Stop();
-		travel_handle.sound = nullptr;
+	if (travelHandle) {
+		travelHandle.sound->Stop();
+		travelHandle.sound = nullptr;
 	}
 }
 
 void Projectile::UpdateSound()
 {
-	if (!(SFlags&PSF_SOUND2)) {
+	if (!(SFlags & PSF_SOUND2)) {
 		StopSound();
 	}
-	if (!travel_handle || !travel_handle->Playing()) {
-		travel_handle.sound = core->GetAudioDrv()->Play(ArrivalSound, SFX_CHAN_MISSILE,
-				Pos, (SFlags & PSF_LOOPING2 ? GEM_SND_LOOPING : 0));
-		SFlags|=PSF_SOUND2;
+	if (!travelHandle || !travelHandle->Playing()) {
+		unsigned int flags = GEM_SND_SPATIAL;
+		if (SFlags & PSF_LOOPING2) {
+			flags |= GEM_SND_LOOPING;
+		}
+
+		travelHandle.sound = core->GetAudioDrv()->Play(ArrivalSound, SFXChannel::Missile, Pos, flags);
+		SFlags |= PSF_SOUND2;
 	}
 }
 
-//control the phase change when the projectile reached its target
+//control the state change when the projectile reached its target
 //possible actions: vanish, hover over point, explode
 //depends on the area extension
 //play explosion sound
-void Projectile::ChangePhase()
+Projectile::ProjectileState Projectile::GetNextTravelState()
 {
 	if (Target) {
-		const Actor *target = area->GetActorByGlobalID(Target);
+		const Actor* target = area->GetActorByGlobalID(Target);
 		if (!target) {
-			phase = P_EXPIRED;
-			return;
+			return ProjectileState::EXPIRED;
 		}
 	}
 
-	if (phase == P_TRAVEL && (ExtFlags & PEF_DELAY) && extensionDelay) {
-		 extensionDelay--;
-		 UpdateSound();
-		 return;
+	if (state == ProjectileState::TRAVELLING && (ExtFlags & PEF_DELAY) && extensionDelay) {
+		extensionDelay--;
+		UpdateSound();
+		return state;
 	}
 
 	//reached target, and explodes now
 	if (Extension) {
-		EndTravel();
-		return;
+		return EndTravel();
 	}
 
 	// there are no-effect projectiles, like missed arrows
 	// Payload can redirect the projectile in case of projectile reflection
-	if (phase == P_TRAVEL) {
+	if (state == ProjectileState::TRAVELLING) {
 		if (ExtFlags & PEF_DEFSPELL) {
 			ApplyDefault();
 		}
 		if (!ArrivalSound.IsEmpty()) StopSound();
 		Payload();
-		phase = P_TRAVEL2;
+
+		return ProjectileState::HIT;
 	}
 
 	// freeze on target, this is recommended only for child projectiles
@@ -618,34 +609,35 @@ void Projectile::ChangePhase()
 			}
 			UpdateSound();
 		}
-		return;
+
+		return state;
 	}
 
-	if (phase == P_TRAVEL2 && extensionDelay) {
-			extensionDelay--;
-			return;
+	if (state == ProjectileState::HIT && extensionDelay) {
+		extensionDelay--;
+		return state;
 	}
 
 	if (ExtFlags & PEF_FADE) {
 		TFlags &= ~PTF_TINT; // turn off area tint
 		tint.a--;
 		if (tint.a > 0) {
-			return;
+			return state;
 		}
 	}
 
-	EndTravel();
+	return EndTravel();
 }
 
 //Call this only if Extension exists!
 int Projectile::CalculateExplosionCount() const
 {
 	int count = 0;
-	const Actor *act = area->GetActorByGlobalID(Caster);
+	const Actor* act = area->GetActorByGlobalID(Caster);
 	if (act) {
-		if (Extension->AFlags&PAF_LEV_MAGE) {
+		if (Extension->AFlags & PAF_LEV_MAGE) {
 			count = static_cast<int>(act->GetMageLevel());
-		} else if (Extension->AFlags&PAF_LEV_CLERIC) {
+		} else if (Extension->AFlags & PAF_LEV_CLERIC) {
 			count = static_cast<int>(act->GetClericLevel());
 		}
 	}
@@ -656,26 +648,24 @@ int Projectile::CalculateExplosionCount() const
 	return count;
 }
 
-void Projectile::EndTravel()
+Projectile::ProjectileState Projectile::EndTravel()
 {
 	StopSound();
 	UpdateSound();
-	if(!Extension) {
-		phase = P_EXPIRED;
-		return;
+	if (!Extension) {
+		return ProjectileState::EXPIRED;
 	}
 
 	//this flag says that the explosion should occur only when triggered
-	if (Extension->AFlags&PAF_TRIGGER) {
-		phase = P_TRIGGER;
-		return;
+	if (Extension->AFlags & PAF_TRIGGER) {
+		return ProjectileState::AWAITING_TRIGGER;
 	} else {
-		phase = P_EXPLODING1;
+		return ProjectileState::EXPLODING;
 	}
 }
 
 //Note: trails couldn't be higher than VVC, but this shouldn't be a problem
-int Projectile::AddTrail(const ResRef& BAM, const ieByte *pal) const
+int Projectile::AddTrail(const ResRef& BAM, const ieByte* pal) const
 {
 	VEFObject* vef = gamedata->GetVEFObject(BAM, false);
 	if (!vef) return 0;
@@ -686,14 +676,14 @@ int Projectile::AddTrail(const ResRef& BAM, const ieByte *pal) const
 		return 0;
 	}
 
-	if(pal) {
+	if (pal) {
 		if (ExtFlags & PEF_TINT) {
-			const auto& pal32 = core->GetPalette32( pal[0] );
-			sca->Tint = pal32[PALSIZE/2];
+			const auto& pal32 = core->GetPalette32(pal[0]);
+			sca->Tint = pal32[PALSIZE / 2];
 			sca->Transparency |= BlitFlags::COLOR_MOD;
 		} else {
-			for(int i=0;i<7;i++) {
-				sca->SetPalette(pal[i], 4+i*PALSIZE);
+			for (int i = 0; i < 7; i++) {
+				sca->SetPalette(pal[i], 4 + i * PALSIZE);
 			}
 		}
 	}
@@ -708,32 +698,30 @@ int Projectile::AddTrail(const ResRef& BAM, const ieByte *pal) const
 	return sca->GetSequenceDuration(core->Time.defaultTicksPerSec);
 }
 
-void Projectile::DoStep()
+Projectile::ProjectileState Projectile::DoStep()
 {
-	if(pathcounter) {
+	if (pathcounter) {
 		pathcounter--;
 	} else {
-		ClearPath();
+		path.Clear();
 	}
 
 	//intro trailing, drawn only once at the beginning
-	if (pathcounter==0x7ffe) {
-		for(int i=0;i<3;i++) {
+	if (pathcounter == 0x7ffe) {
+		for (int i = 0; i < 3; i++) {
 			if (!TrailSpeed[i] && !TrailBAM[i].IsEmpty()) {
 				extensionDelay = AddTrail(TrailBAM[i], (ExtFlags & PEF_TINT) ? Gradients : nullptr);
 			}
 		}
 	}
 
-	if (path.empty()) {
-		ChangePhase();
-		return;
+	if (!path) {
+		return GetNextTravelState();
 	}
 
-	if (Pos==Destination) {
-		ClearPath();
-		ChangePhase();
-		return;
+	if (Pos == Destination) {
+		path.Clear();
+		return GetNextTravelState();
 	}
 
 	//don't bug out on 0 smoke frequency like the original IE
@@ -741,25 +729,27 @@ void Projectile::DoStep()
 		AddTrail(smokebam, SmokeGrad);
 	}
 
-	for(int i=0;i<3;i++) {
-		if(TrailSpeed[i] && !(pathcounter%TrailSpeed[i])) {
-			AddTrail(TrailBAM[i], (ExtFlags&PEF_TINT)?Gradients:NULL);
+	for (int i = 0; i < 3; i++) {
+		if (TrailSpeed[i] && !(pathcounter % TrailSpeed[i])) {
+			AddTrail(TrailBAM[i], (ExtFlags & PEF_TINT) ? Gradients : NULL);
 		}
 	}
 
-	if (ExtFlags&PEF_LINE) {
-		if(Extension) {
+	if (ExtFlags & PEF_LINE) {
+		ProjectileState newState;
+
+		if (Extension) {
 			//transform into an explosive line
-			EndTravel();
+			newState = EndTravel();
 		} else {
-			if(!(ExtFlags&PEF_FREEZE) && travel[0]) {
+			if (!(ExtFlags & PEF_FREEZE) && travelAnim[0]) {
 				//switch to 'fading' phase
 				SetDelay(100);
 			}
-			ChangePhase();
+			newState = GetNextTravelState();
 		}
 		//don't change position
-		return;
+		return newState;
 	}
 
 	// path shouldn't be calculated if Speed == 0, so this shouldn't be reached
@@ -770,16 +760,13 @@ void Projectile::DoStep()
 	// ... but we slow it down manually any way
 	unsigned int timePerPx = static_cast<unsigned int>(1 * core->Time.Ticks2Ms(1) / Speed);
 	static constexpr unsigned int slowDownFactor = 2; // TODO: empirical, shouldn't be needed!
-	unsigned int timePerStep = slowDownFactor * timePerPx;
-	tick_t time =  core->Time.Ticks2Ms(core->GetGame()->Ticks);
-	auto step = path.begin();
-	if (stepIdx) {
-		step += stepIdx;
-	}
+	unsigned int timePerStep = slowDownFactor * std::max(1U, timePerPx);
+	tick_t time = GetMilliseconds();
 
+	auto step = path.begin() + path.currentStep;
 	auto start = step;
 	auto last = --path.end();
-	tick_t count = timePerStep ? (time - timeStartStep) / timePerStep : 0;
+	tick_t count = (time - timeStartStep) / timePerStep;
 	while (step != last && count > 0) {
 		++step;
 		--count;
@@ -792,25 +779,21 @@ void Projectile::DoStep()
 		LineTarget(start, std::next(step));
 	}
 
-	SetOrientation (step->orient, false);
+	SetOrientation(step->orient, false);
 	Pos = step->point;
-	stepIdx = step - path.begin();
+	path.currentStep = step - path.begin();
 
-	if (travel_handle) {
-		travel_handle->SetPos(Pos);
+	if (travelHandle) {
+		travelHandle->SetPos(Pos);
 	}
-	
+
 	if (step == last) {
-		ClearPath();
+		path.Clear();
 		NewOrientation = Orientation;
-		ChangePhase();
-		return;
-	}
-	if (!timePerStep) {
-		return;
+		return GetNextTravelState();
 	}
 
-	if (SFlags&PSF_SPARKS) {
+	if (SFlags & PSF_SPARKS) {
 		drawSpark = 1;
 	}
 
@@ -825,12 +808,13 @@ void Projectile::DoStep()
 	else
 		Pos.y -= (Pos.y - next->point.y) * delta / timePerStep;
 
+	return state;
 }
 
 void Projectile::SetCaster(ieDword caster, int level)
 {
-	Caster=caster;
-	Level=level;
+	Caster = caster;
+	Level = level;
 }
 
 ieDword Projectile::GetCaster() const
@@ -838,31 +822,37 @@ ieDword Projectile::GetCaster() const
 	return Caster;
 }
 
-void Projectile::NextTarget(const Point &p)
+void Projectile::NextTarget(const Point& p)
 {
-	ClearPath();
+	path.Clear();
 	Destination = p;
 	if (!Speed) {
 		Pos = Destination;
 		return;
 	}
-	NewOrientation = Orientation = GetOrient(Destination, Pos);
+	NewOrientation = Orientation = GetOrient(Pos, Destination);
 
 	//this hack ensures that the projectile will go away after its time
 	//by the time it reaches this part, it was already expired, so Target
 	//needs to be cleared.
-	if(ExtFlags&PEF_NO_TRAVEL) {
+	Point fakeDestination = Destination;
+	if (ExtFlags & PEF_NO_TRAVEL) {
 		Target = 0;
 		Destination = Pos;
 		return;
+	} else if (ExtFlags & PEF_LINE && !Extension) {
+		// reduce the distance by roughly a bam width to not overshoot as much
+		// but only for single target scorchers (bg1 vs bg2)
+		Point offset = OrientedOffset(Orientation, 48);
+		fakeDestination -= offset;
 	}
 
-	int flags = (ExtFlags&PEF_BOUNCE) ? GL_REBOUND : GL_PASS;
+	int flags = (ExtFlags & PEF_BOUNCE) ? GL_REBOUND : GL_PASS;
 	int stepping = (ExtFlags & PEF_LINE) ? Speed : 1;
-	path = area->GetLinePath(Pos, Destination, stepping, Orientation, flags);
+	path = area->GetLinePath(Pos, fakeDestination, stepping, Orientation, flags);
 }
 
-void Projectile::SetTarget(const Point &p)
+void Projectile::SetTarget(const Point& p)
 {
 	Target = 0;
 	NextTarget(p);
@@ -870,7 +860,7 @@ void Projectile::SetTarget(const Point &p)
 
 void Projectile::SetTarget(ieDword tar, bool fake)
 {
-	const Actor *target = nullptr;
+	const Actor* target = nullptr;
 
 	if (fake) {
 		Target = 0;
@@ -880,39 +870,47 @@ void Projectile::SetTarget(ieDword tar, bool fake)
 		Target = tar;
 		target = area->GetActorByGlobalID(tar);
 	}
-	 
+
 	if (!target) {
-		phase = P_EXPIRED;
+		state = ProjectileState::EXPIRED;
 		return;
 	}
 
-	if (ExtFlags&PEF_CONTINUE) {
+	if (ExtFlags & PEF_CONTINUE) {
 		const Point& A = Origin;
 		const Point& B = target->Pos;
-		double angle = AngleFromPoints(B, A);
-		double adjustedRange = Feet2Pixels(Range, angle);
-		Point C(A.x + adjustedRange * cos(angle), A.y + adjustedRange * sin(angle));
+		float_t angle = AngleFromPoints(B, A);
+		float_t adjustedRange = Feet2Pixels(Range, angle);
+		Point C(A.x + adjustedRange * std::cos(angle), A.y + adjustedRange * std::sin(angle));
 		SetTarget(C);
 	} else {
 		//replan the path in case the target moved
-		if(target->Pos!=Destination) {
+		if (target->Pos != Destination) {
 			NextTarget(target->Pos);
 			return;
 		}
 
 		//replan the path in case the source moved (only for line projectiles)
-		if(ExtFlags&PEF_LINE) {
-			const Actor *c = area->GetActorByGlobalID(Caster);
-			if(c && c->Pos!=Pos) {
-				// readd the casting offsets
-				Pos = c->Pos - Point(0, ZPos) + GetStartOffset(c);
+		if (ExtFlags & PEF_LINE) {
+			Actor* c = area->GetActorByGlobalID(Caster);
+			if (!c) return;
+			// the original forced the actor to always face the target even when moving
+			// this avoids the line going through the caster when facing the opposite way
+			// we're losing the race to the movement code, but at least this reorients at the end
+			if (GetOrient(c->Pos, target->Pos) != c->GetOrientation()) {
+				c->SetOrientation(c->Pos, target->Pos, false);
+			}
+
+			Point start = GetStartOffset(c);
+			if (c->Pos != Pos - start) {
+				Pos = c->Pos + start;
 				NextTarget(target->Pos);
 			}
 		}
 	}
 }
 
-void Projectile::MoveTo(Map *map, const Point &Des)
+void Projectile::MoveTo(Map* map, const Point& Des)
 {
 	area = map;
 	Origin = Des;
@@ -927,59 +925,55 @@ void Projectile::MoveTo(Map *map, const Point &Des)
 	Destination = Des;
 }
 
-void Projectile::ClearPath()
-{
-	path.clear();
-	stepIdx = 0;
-}
-
 int Projectile::CalculateTargetFlag() const
 {
 	//if there are any, then change phase to exploding
-	int flags = GA_NO_DEAD|GA_NO_UNSCHEDULED;
+	int flags = GA_NO_DEAD | GA_NO_UNSCHEDULED;
 	bool checkingEA = false;
 
 	if (Extension) {
-		if (Extension->AFlags&PAF_NO_WALL) {
-			flags|=GA_NO_LOS;
+		if (Extension->AFlags & PAF_NO_WALL) {
+			flags |= GA_NO_LOS;
 		}
 
 		//projectiles don't affect dead/inanimate normally
-		if (Extension->AFlags&PAF_INANIMATE) {
-			flags&=~GA_NO_DEAD;
+		if (Extension->AFlags & PAF_INANIMATE) {
+			flags &= ~GA_NO_DEAD;
 		}
 
 		//affect only enemies or allies
-		switch (Extension->AFlags&PAF_TARGET) {
-		case PAF_ENEMY:
-			flags|=GA_NO_NEUTRAL|GA_NO_ALLY;
-			break;
-		case PAF_PARTY: //this doesn't exist in IE
-			flags|=GA_NO_ENEMY;
-			break;
-		case PAF_TARGET:
-			flags|=GA_NO_NEUTRAL|GA_NO_ENEMY;
-			break;
-		default:
-			return flags;
+		switch (Extension->AFlags & PAF_TARGET) {
+			case PAF_ENEMY:
+				flags |= GA_NO_NEUTRAL | GA_NO_ALLY;
+				break;
+			case PAF_PARTY: //this doesn't exist in IE
+				flags |= GA_NO_ENEMY;
+				break;
+			case PAF_TARGET:
+				flags |= GA_NO_NEUTRAL | GA_NO_ENEMY;
+				break;
+			default:
+				return flags;
 		}
 		if (Extension->AFlags & PAF_TARGET) {
 			checkingEA = true;
 		}
 
 		//this is the only way to affect neutrals and enemies
-		if (Extension->APFlags&APF_INVERT_TARGET) {
-			flags^=(GA_NO_ALLY|GA_NO_ENEMY);
+		if (Extension->APFlags & APF_INVERT_TARGET) {
+			flags ^= (GA_NO_ALLY | GA_NO_ENEMY);
 		}
 	}
 
-	const Scriptable *caster = area->GetScriptableByGlobalID(Caster);
+	const Scriptable* caster = area->GetScriptableByGlobalID(Caster);
 	const Actor* act = Scriptable::As<Actor>(caster);
 	if (caster && (!checkingEA || (act && act->GetStat(IE_EA) < EA_GOODCUTOFF))) {
 		return flags;
 	}
 	// iwd2 ar6050 has doors casting chain lightning :)
-	if (caster && caster->Type != ST_ACTOR && checkingEA) {
+	// at the same time that's not correct for the rack in ar6101
+	// let's say doors have no enemies, while infopoints do
+	if (caster && caster->Type == ST_DOOR && checkingEA) {
 		return flags;
 	}
 	// make everyone an enemy of neutrals
@@ -988,52 +982,70 @@ int Projectile::CalculateTargetFlag() const
 		if ((Extension->AFlags & PAF_TARGET) == PAF_TARGET) return GA_NO_ALLY | GA_NO_ENEMY | (flags & GA_NO_LOS);
 	}
 
-	return flags^(GA_NO_ALLY|GA_NO_ENEMY);
+	return flags ^ (GA_NO_ALLY | GA_NO_ENEMY);
 }
 
 //get actors covered in area of trigger radius
-void Projectile::CheckTrigger(unsigned int radius)
+Projectile::ProjectileState Projectile::CheckTrigger(unsigned int radius)
 {
-	if (phase == P_TRIGGER) {
+	if (state == ProjectileState::AWAITING_TRIGGER) {
 		//special trigger flag, explode only if the trigger animation has
 		//passed a hardcoded sequence number
-		if (Extension->AFlags & PAF_TRIGGER_D && travel[Orientation]) {
-			int anim = travel[Orientation].GetCurrentFrameIndex();
+		if (Extension->AFlags & PAF_TRIGGER_D && travelAnim[Orientation]) {
+			int anim = travelAnim[Orientation].GetCurrentFrameIndex();
 			if (anim < 30) {
-				return;
+				return state;
 			}
 		}
 	}
 	if (area->GetActorInRadius(Pos, CalculateTargetFlag(), radius)) {
-		if (phase == P_TRIGGER) {
-			phase = P_EXPLODING1;
+		if (state == ProjectileState::AWAITING_TRIGGER) {
 			extensionDelay = Extension->Delay;
+			return ProjectileState::EXPLODING;
 		}
-	} else if (phase == P_EXPLODING1 && Extension->AFlags & PAF_DELAYED) {
+	} else if (state == ProjectileState::EXPLODING && Extension->AFlags & PAF_DELAYED) {
 		//the explosion is revoked
-		phase = P_TRIGGER;
+		return ProjectileState::AWAITING_TRIGGER;
 	}
+
+	return state;
 }
 
-void Projectile::SetEffectsCopy(const EffectQueue& eq, const Point &source)
+void Projectile::SetEffectsCopy(const EffectQueue& eq, const Point& source)
 {
 	effects = eq;
 	effects.ModifyAllEffectSources(source);
 }
 
-void Projectile::LineTarget() const
+// in-line hits are throttled
+bool Projectile::HasBeenHitRecently(ieDword targetID, uint32_t time) const
+{
+	// not relevant
+	if (!(ExtFlags & PEF_LINE)) return false;
+
+	auto targeted = lineTargets.find(targetID);
+	if (targeted == lineTargets.end()) {
+		// not hit
+		return false;
+	}
+	// hit recently?
+	return targeted->second + Extension->Delay / 2 > time;
+}
+
+void Projectile::LineTarget()
 {
 	LineTarget(path.begin(), path.end());
 }
 
-void Projectile::LineTarget(Path::const_iterator beg, Path::const_iterator end) const
+void Projectile::LineTarget(Path::const_iterator beg, Path::const_iterator end)
 {
 	if (!effects) {
 		return;
 	}
 
-	Actor *original = area->GetActorByGlobalID(Caster);
+	Actor* original = area->GetActorByGlobalID(Caster);
 	int targetFlags = CalculateTargetFlag();
+	uint32_t time = core->GetGame()->GameTime;
 	auto iter = beg;
 
 	do {
@@ -1047,16 +1059,19 @@ void Projectile::LineTarget(Path::const_iterator beg, Path::const_iterator end) 
 
 		const Point s = first->point;
 		const Point d = last->point;
-		const std::vector<Actor *> &actors = area->GetAllActors();
+		const std::vector<Actor*>& actors = area->GetAllActors();
 
-		for (Actor *target : actors) {
-			if (target->GetGlobalID() == Caster) {
+		for (Actor* target : actors) {
+			ieDword targetID = target->GetGlobalID();
+			if (targetID == Caster) {
 				continue;
 			}
 			if (!target->ValidTarget(targetFlags)) {
 				continue;
 			}
-			double t = 0.0;
+			if (HasBeenHitRecently(targetID, time)) continue;
+
+			float_t t = 0.0;
 			if (PersonalLineDistance(s, d, target, &t) > 1) {
 				continue;
 			}
@@ -1078,6 +1093,12 @@ void Projectile::LineTarget(Path::const_iterator beg, Path::const_iterator end) 
 				}
 
 				eff.AddAllEffects(target, target->Pos);
+				auto targeted = lineTargets.find(targetID);
+				if (targeted != lineTargets.end()) {
+					targeted->second = time;
+				} else {
+					lineTargets.emplace(targetID, time);
+				}
 			}
 		}
 	} while (iter != end);
@@ -1088,14 +1109,14 @@ void Projectile::SecondaryTarget()
 {
 	//fail will become true if the projectile utterly failed to find a target
 	//if the spell was already applied on explosion, ignore this
-	bool fail= !!(Extension->APFlags&APF_SPELLFAIL) && !(ExtFlags&PEF_DEFSPELL);
+	bool fail = !!(Extension->APFlags & APF_SPELLFAIL) && !(ExtFlags & PEF_DEFSPELL);
 	int mindeg = 0;
 	int maxdeg = 0;
 	int degOffset = 0;
 
 	//the AOE (area of effect) is cone shaped
-	if (Extension->AFlags&PAF_CONE) {
-		// see CharAnimations.cpp for a nice visualization of the orientation directions
+	if (Extension->AFlags & PAF_CONE) {
+		// see Orientation.h for a nice visualization of the orientation directions
 		// they start at 270° and go anticlockwise, so we have to rotate (reflect over y=-x) to match what math functions expect
 		// TODO: check if we can ignore this and use the angle between caster pos and target pos (are they still available here?)
 		orient_t saneOrientation = PrevOrientation(E, Orientation);
@@ -1114,7 +1135,7 @@ void Projectile::SecondaryTarget()
 	}
 
 	if (Extension->DiceCount) {
-		//precalculate the maximum affected target count in case of PAF_AFFECT_ONE 
+		//precalculate the maximum affected target count in case of PAF_AFFECT_ONE
 		extensionTargetCount = core->Roll(Extension->DiceCount, Extension->DiceSize, 0);
 	} else {
 		//this is the default case (for original engine)
@@ -1123,9 +1144,9 @@ void Projectile::SecondaryTarget()
 
 	Scriptable* owner = area->GetScriptableByGlobalID(Caster);
 	int radius = Extension->ExplosionRadius / 16;
-	std::vector<Actor *> actors = area->GetAllActorsInRadius(Pos, CalculateTargetFlag(), radius);
+	std::vector<Actor*> actors = area->GetAllActorsInRadius(Pos, CalculateTargetFlag(), radius);
 	bool first = true;
-	for (const Actor *actor : actors) {
+	for (const Actor* actor : actors) {
 		ieDword targetID = actor->GetGlobalID();
 
 		//this flag is actually about ignoring the caster (who is at the center)
@@ -1139,20 +1160,20 @@ void Projectile::SecondaryTarget()
 			continue;
 		}
 
-		if (Extension->AFlags&PAF_CONE) {
+		if (Extension->AFlags & PAF_CONE) {
 			//cone never affects the caster
 			if (Caster == targetID) {
 				continue;
 			}
-			double xdiff = actor->Pos.x - Pos.x;
-			double ydiff = Pos.y - actor->Pos.y;
+			float_t xdiff = actor->Pos.x - Pos.x;
+			float_t ydiff = Pos.y - actor->Pos.y;
 			int deg;
 
 			// a dragon will definitely be easier to hit than a mouse
 			// but nothing checks the personal space of possible targets in the original either #384
 			if (ydiff) {
 				// ensure [0,360] range: transform [-180,180] from atan2, but also take orientation correction factor into account
-				deg = (int) (std::atan2(ydiff, xdiff) * 180/M_PI);
+				deg = int(std::atan2(ydiff, xdiff) * 180 / M_PI);
 				deg = ((deg % 360) + 360 + degOffset) % 360;
 			} else if (xdiff < 0) {
 				deg = 180;
@@ -1161,12 +1182,14 @@ void Projectile::SecondaryTarget()
 			}
 
 			//not in the right sector of circle
-			if (mindeg>deg || maxdeg<deg) {
+			if (mindeg > deg || maxdeg < deg) {
 				continue;
 			}
 		}
 
-		Projectile *pro = server->GetProjectileByIndex(Extension->ExplProjIdx);
+		Projectile* pro = server->GetProjectileByIndex(Extension->ExplProjIdx);
+		// also copy speed, so visuals match the payload for slow moving projectiles like the bg2 cone of cold
+		pro->Speed = Speed;
 		// run special targeting modes on one child only, so target-all and similar don't run payload too often
 		EffectQueue projQueue;
 		ProcessEffects(projQueue, owner, nullptr, first);
@@ -1185,11 +1208,11 @@ void Projectile::SecondaryTarget()
 		//TODO:actually some of the splash projectiles are a good example of faketarget
 		//projectiles (that don't follow the target, but still hit)
 		area->AddProjectile(pro, Pos, targetID, false);
-		fail=false;
+		fail = false;
 
 		//we already got one target affected in the AOE, this flag says
 		//that was enough (the GemRB extension can repeat this a random time (x d y)
-		if(Extension->AFlags&PAF_AFFECT_ONE) {
+		if (Extension->AFlags & PAF_AFFECT_ONE) {
 			if (extensionTargetCount <= 0) {
 				break;
 			}
@@ -1205,48 +1228,76 @@ void Projectile::SecondaryTarget()
 
 	//In case of utter failure, apply a spell of the same name on the caster
 	//this feature is used by SCHARGE, PRTL_OP and PRTL_CL in the HoW pack
-	if(fail) {
+	if (fail) {
 		ApplyDefault();
 	}
 }
 
-int Projectile::Update()
+void Projectile::Update()
 {
-	//if reached target explode
-	//if target doesn't exist expire
-	if (phase == P_EXPIRED) {
-		return 0;
+	if (state == ProjectileState::EXPIRED) {
+		return;
 	}
-	if (phase == P_UNINITED) {
+
+	if (state == ProjectileState::NEW) {
 		Setup();
+		state = ProjectileState::TRAVELLING;
+		return;
 	}
 
 	int pause = core->IsFreezed();
 	if (pause) {
-		return 1;
+		return;
 	}
 
-	const Game *game = core->GetGame();
-	if (game && game->IsTimestopActive() && !(TFlags&PTF_TIMELESS)) {
-		return 1;
+	const Game* game = core->GetGame();
+	if (game && game->IsTimestopActive() && !(TFlags & PTF_TIMELESS)) {
+		return;
 	}
 
-	//recreate path if target has moved
-	if(Target) {
+	// recreate path if target has moved
+	if (Target) {
 		SetTarget(Target, false);
 	}
 
-	if (phase == P_TRAVEL || phase == P_TRAVEL2) {
-		DoStep();
+	switch (state) {
+		case ProjectileState::TRAVELLING:
+		case ProjectileState::HIT:
+			state = DoStep();
+			break;
+		case ProjectileState::AWAITING_TRIGGER:
+			state = CheckTrigger(Extension->TriggerRadius);
+			break;
+		case ProjectileState::EXPLODING:
+		case ProjectileState::EXPLODING_AGAIN:
+			state = CheckTrigger(Extension->TriggerRadius);
+
+			// may have been revoked
+			if (state == ProjectileState::EXPLODING || state == ProjectileState::EXPLODING_AGAIN) {
+				state = GetNextExplosionState();
+			}
+			break;
+		case ProjectileState::BURNING_DOWN:
+			UpdateChildren();
+			if (children.empty()) {
+				state = ProjectileState::EXPIRED;
+			}
+			break;
+		default:
+			break;
 	}
-	return 1;
+}
+
+bool Projectile::IsStillIntact() const
+{
+	return state != ProjectileState::EXPIRED;
 }
 
 Region Projectile::DrawingRegion(const Region& viewPort) const
 {
 	// adjust position for magic missile and the like
 	Point pos = Pos;
-	if (bend && phase == P_TRAVEL && Origin != Destination) {
+	if (bend && state == ProjectileState::TRAVELLING && Origin != Destination) {
 		pos -= viewPort.origin;
 		BendPosition(pos);
 		pos += viewPort.origin;
@@ -1259,18 +1310,18 @@ Region Projectile::DrawingRegion(const Region& viewPort) const
 	}
 
 	orient_t face = GetOrientation();
-	const Animation& travelAnim = travel[face];
-	if (travelAnim) {
-		Region r2 = travelAnim.animArea;
+	const Animation& travel = travelAnim[face];
+	if (travel) {
+		Region r2 = travel.animArea;
 		r2.origin += Pos;
 		r.ExpandToRegion(r2);
 		// NOTE: fireball: small part of the ball and spread can still be out of the final region
 		// perhaps we need to account for the BAM center coordinates again?
 		// we reuse `travel` for both animations and assuming they're at the same height
 	}
-	const Animation& shadowAnim = shadow[face];
-	if (shadowAnim) {
-		Region r2 = shadowAnim.animArea;
+	const Animation& shadow = shadowAnim[face];
+	if (shadow) {
+		Region r2 = shadow.animArea;
 		r2.origin += Pos;
 		r2.y += ZPos; // always on the ground
 		r.ExpandToRegion(r2);
@@ -1290,64 +1341,61 @@ Region Projectile::DrawingRegion(const Region& viewPort) const
 
 void Projectile::Draw(const Region& viewport, BlitFlags flags)
 {
-	switch (phase) {
-		case P_UNINITED:
-			return;
-		case P_TRIGGER: case P_EXPLODING1:case P_EXPLODING2:
+	switch (state) {
+		case ProjectileState::AWAITING_TRIGGER:
+		case ProjectileState::EXPLODING:
+		case ProjectileState::EXPLODING_AGAIN:
 			//This extension flag is to enable the travel projectile at
 			//trigger/explosion time
-			if (Extension->AFlags&PAF_VISIBLE) {
+			if (Extension->AFlags & PAF_VISIBLE) {
 				DrawTravel(viewport, flags);
 			}
 
-			CheckTrigger(Extension->TriggerRadius);
-			if (phase == P_EXPLODING1 || phase == P_EXPLODING2) {
+			if (state == ProjectileState::EXPLODING || state == ProjectileState::EXPLODING_AGAIN) {
 				DrawExplosion(viewport, flags);
 			}
-			break;
-		case P_TRAVEL: case P_TRAVEL2:
+			return;
+		case ProjectileState::TRAVELLING:
+		case ProjectileState::HIT:
 			//There is no Extension for simple traveling projectiles!
 			DrawTravel(viewport, flags);
 			return;
+		case ProjectileState::BURNING_DOWN:
+			DrawChildren(viewport, flags);
+			return;
 		default:
-			DrawExploded(viewport, flags);
 			return;
 	}
 }
 
-bool Projectile::DrawChildren(const Region& vp, BlitFlags flags)
+void Projectile::UpdateChildren()
 {
-	bool drawn = false;
-	for (auto it = children.begin(); it != children.end();){
-		if (it->Update()) {
-			it->DrawTravel(vp, flags);
-			drawn = true;
+	for (auto it = children.begin(); it != children.end();) {
+		it->Update();
+		if (it->IsStillIntact()) {
 			++it;
 		} else {
 			it = children.erase(it);
 		}
 	}
-
-	return drawn;
 }
 
-//draw until all children expire
-void Projectile::DrawExploded(const Region& viewport, BlitFlags flags)
+void Projectile::DrawChildren(const Region& vp, BlitFlags flags)
 {
-	if (DrawChildren(viewport, flags)) {
-		return;
+	for (auto& child : children) {
+		// regardless of the state, always use this draw method
+		child.DrawTravel(vp, flags);
 	}
-	phase = P_EXPIRED;
 }
 
 void Projectile::SpawnFragment(Point& dest) const
 {
-	Projectile *pro = server->GetProjectileByIndex(Extension->FragProjIdx);
+	Projectile* pro = server->GetProjectileByIndex(Extension->FragProjIdx);
 	if (pro) {
 		pro->SetCaster(Caster, Level);
-		if (pro->ExtFlags&PEF_RANDOM) {
-			dest.x += core->Roll(1,Extension->tileCoord.x, -Extension->tileCoord.x / 2);
-			dest.y += core->Roll(1,Extension->tileCoord.y, -Extension->tileCoord.y / 2);
+		if (pro->ExtFlags & PEF_RANDOM) {
+			dest.x += RAND(-Extension->tileCoord.x / 2, Extension->tileCoord.x / 2);
+			dest.y += RAND(-Extension->tileCoord.y / 2, Extension->tileCoord.y / 2);
 		}
 		area->AddProjectile(pro, dest, dest);
 	}
@@ -1367,9 +1415,9 @@ void Projectile::SpawnFragments(const Holder<ProjectileExtension>& extension) co
 	}
 }
 
-void Projectile::DrawExplodingPhase1() const
+void Projectile::InitExplodingPhase1() const
 {
-	core->GetAudioDrv()->Play(Extension->SoundRes, SFX_CHAN_MISSILE, Pos);
+	core->GetAudioDrv()->Play(Extension->SoundRes, SFXChannel::Missile, Pos, GEM_SND_SPATIAL);
 
 	// play VVC in center
 	if (!(Extension->AFlags & PAF_VVC)) {
@@ -1427,7 +1475,7 @@ void Projectile::DrawExplodingPhase1() const
 }
 
 constexpr Point ZeroPoint;
-void Projectile::DrawSpreadChild(size_t idx, bool firstExplosion, const Point& offset)
+void Projectile::SpawnChild(size_t idx, bool firstExplosion, const Point& offset)
 {
 	int apFlags = Extension->APFlags;
 	ResRef tmp = Extension->Spread;
@@ -1455,7 +1503,7 @@ void Projectile::DrawSpreadChild(size_t idx, bool firstExplosion, const Point& o
 		Point followerOffset;
 		for (int i = 1; i <= 4; ++i) {
 			followerOffset = OrientedOffset(face, 9 * i);
-			DrawSpreadChild(idx, false, followerOffset);
+			SpawnChild(idx, false, followerOffset);
 		}
 	}
 
@@ -1472,8 +1520,8 @@ void Projectile::DrawSpreadChild(size_t idx, bool firstExplosion, const Point& o
 		max = Extension->ConeWidth;
 		add = (Orientation * 45 - max) / 2;
 	}
-	max = RAND(1, max) + add;
-	double degree = max * M_PI / 180;
+	max = RAND(1, max ? max : 90) + add;
+	float_t degree = max * M_PI / 180;
 	newdest.x = (int) -(rad * std::sin(degree));
 	newdest.y = (int) (rad * std::cos(degree));
 	newdest += Destination;
@@ -1529,15 +1577,15 @@ void Projectile::DrawSpreadChild(size_t idx, bool firstExplosion, const Point& o
 		pro->ExtFlags |= PEF_RANDOM;
 	}
 
-	pro->Setup();
+	pro->Update();
 
 	// currently needed by bg2/how Web (less obvious in bg1)
 	// the original hardcoded a cycle switch to 1 or 2 at random when reaching the end, which results in the same frame
 	// TODO: original behaviour was to repeat individually (per-child) not as a whole
-	if (pro->travel[0] && Extension->APFlags & APF_PLAYONCE) {
+	if (pro->travelAnim[0] && Extension->APFlags & APF_PLAYONCE) {
 		// set on all orients while we don't force one for single-orientation animations (see CreateOrientedAnimations)
-		for (auto& anim : pro->travel) {
-			anim.Flags |= A_ANI_PLAYONCE;
+		for (auto& anim : pro->travelAnim) {
+			anim.flags |= Animation::Flags::Once;
 		}
 	}
 
@@ -1545,7 +1593,7 @@ void Projectile::DrawSpreadChild(size_t idx, bool firstExplosion, const Point& o
 	delete pro;
 }
 
-void Projectile::DrawSpread()
+void Projectile::SpawnChildren()
 {
 	// returns if the explosion animation is fake coloured
 
@@ -1575,7 +1623,7 @@ void Projectile::DrawSpread()
 	}
 
 	for (size_t i = 0; i < childCount; ++i) {
-		DrawSpreadChild(i, firstExplosion, ZeroPoint);
+		SpawnChild(i, firstExplosion, ZeroPoint);
 	}
 
 	// switch fill to scatter after the first time
@@ -1585,21 +1633,14 @@ void Projectile::DrawSpread()
 	}
 }
 
-void Projectile::DrawExplosion(const Region& vp, BlitFlags flags)
+Projectile::ProjectileState Projectile::GetNextExplosionState()
 {
-	//This seems to be a needless safeguard
 	if (!Extension) {
-		phase = P_EXPIRED;
-		return;
+		return ProjectileState::EXPIRED;
 	}
 
 	StopSound();
-	DrawChildren(vp, flags);
-
-	int pause = core->IsFreezed();
-	if (pause) {
-		return;
-	}
+	UpdateChildren();
 
 	//Delay explosion, it could even be revoked with PAF_SYNC (see skull trap)
 	if (extensionDelay) {
@@ -1617,7 +1658,15 @@ void Projectile::DrawExplosion(const Region& vp, BlitFlags flags)
 		else {
 			extensionDelay--;
 		}
-		return;
+
+		// proper scorchers hit at the start then have a delayed hit at the end
+		// but also anyone else that walks into them gets hit once or twice if unlucky
+		// this enables use in a fanning motion/AOE if the caster can move (bg2, not HoW)
+		// slightly throttle calls for efficiency
+		if (ExtFlags & PEF_LINE && core->GetGame()->GameTime % 5 == 0) {
+			LineTarget();
+		}
+		return state;
 	}
 
 	//0 and 1 have the same effect (1 explosion)
@@ -1626,7 +1675,7 @@ void Projectile::DrawExplosion(const Region& vp, BlitFlags flags)
 	}
 
 	//Line targets are actors between source and destination point
-	if(ExtFlags&PEF_LINE) {
+	if (ExtFlags & PEF_LINE) {
 		if (Target) {
 			SetTarget(Target, false);
 		}
@@ -1642,6 +1691,54 @@ void Projectile::DrawExplosion(const Region& vp, BlitFlags flags)
 	//the secondary projectile will target everyone in the area of effect
 	SecondaryTarget();
 
+	if (Shake) {
+		core->timer.SetScreenShake(Point(Shake, Shake), Shake);
+		Shake = 0;
+	}
+
+	//the center of the explosion could be another projectile played over the target
+	//warning: this projectile doesn't inherit any effects, so its payload function
+	//won't be doing anything (any effect of PAF_SECONDARY?)
+
+	//remove PAF_SECONDARY if it is buggy, but that will break the 'HOLD' projectile
+	if ((Extension->AFlags & PAF_SECONDARY) && Extension->FragProjIdx) {
+		if (Extension->APFlags & APF_TILED) {
+			SpawnFragments(Extension);
+		} else {
+			SpawnFragment(Pos);
+		}
+	}
+
+	//the center of the explosion is based on hardcoded explosion type (this is fireball.cpp in the original engine)
+	//these resources are listed in areapro.2da and served by ProjectileServer.cpp
+
+	//draw it only once, at the time of explosion
+	auto nextState = state;
+
+	if (state == ProjectileState::EXPLODING) {
+		InitExplodingPhase1();
+		nextState = ProjectileState::EXPLODING_AGAIN;
+	} else {
+		core->GetAudioDrv()->Play(Extension->AreaSound, SFXChannel::Missile, Pos, GEM_SND_SPATIAL);
+	}
+
+	if (Extension->Spread) {
+		SpawnChildren();
+	}
+
+	if (extensionExplosionCount) {
+		extensionDelay = Extension->Delay;
+	} else {
+		nextState = ProjectileState::BURNING_DOWN;
+	}
+
+	return nextState;
+}
+
+void Projectile::DrawExplosion(const Region& vp, BlitFlags flags)
+{
+	DrawChildren(vp, flags);
+
 	//draw fragment graphics animation at the explosion center
 	if (Extension->AFlags & PAF_FRAGMENT) {
 		//there is a character animation in the center of the explosion
@@ -1652,70 +1749,31 @@ void Projectile::DrawExplosion(const Region& vp, BlitFlags flags)
 		Point pos = Pos - vp.origin;
 		area->Sparkle(0, Extension->ExplColor, SPARKLE_EXPLOSION, pos, Extension->FragAnimID, ZPos);
 	}
-
-	if(Shake) {
-		core->timer.SetScreenShake(Point(Shake, Shake), Shake);
-		Shake = 0;
-	}
-
-	//the center of the explosion could be another projectile played over the target
-	//warning: this projectile doesn't inherit any effects, so its payload function
-	//won't be doing anything (any effect of PAF_SECONDARY?)
-
-  //remove PAF_SECONDARY if it is buggy, but that will break the 'HOLD' projectile
-	if ((Extension->AFlags&PAF_SECONDARY) && Extension->FragProjIdx) {
-		if (Extension->APFlags & APF_TILED) {
-			SpawnFragments(Extension);
-		} else {
-			SpawnFragment(Pos);
-		}
-	}
-
-	//the center of the explosion is based on hardcoded explosion type (this is fireball.cpp in the original engine)
-	//these resources are listed in areapro.2da and served by ProjectileServer.cpp
-	
-	//draw it only once, at the time of explosion
-	if (phase==P_EXPLODING1) {
-		DrawExplodingPhase1();
-		phase=P_EXPLODING2;
-	} else {
-		core->GetAudioDrv()->Play(Extension->AreaSound, SFX_CHAN_MISSILE, Pos);
-	}
-	
-	if (Extension->Spread) {
-		DrawSpread();
-	}
-
-	if (extensionExplosionCount) {
-		extensionDelay = Extension->Delay;
-	} else {
-		phase = P_EXPLODED;
-	}
 }
 
-int Projectile::GetTravelPos(int face) const
+int Projectile::GetTravelPos(orient_t face) const
 {
-	if (travel[face]) {
-		return travel[face].GetCurrentFrameIndex();
+	if (travelAnim[face]) {
+		return travelAnim[face].GetCurrentFrameIndex();
 	}
 	return 0;
 }
 
-int Projectile::GetShadowPos(int face) const
+int Projectile::GetShadowPos(orient_t face) const
 {
-	if (shadow[face]) {
-		return shadow[face].GetCurrentFrameIndex();
+	if (shadowAnim[face]) {
+		return shadowAnim[face].GetCurrentFrameIndex();
 	}
 	return 0;
 }
 
-void Projectile::SetFrames(int face, int frame1, int frame2)
+void Projectile::SetFrames(orient_t face, int frame1, int frame2)
 {
-	if (travel[face]) {
-		travel[face].SetFrame(frame1);
+	if (travelAnim[face]) {
+		travelAnim[face].SetFrame(frame1);
 	}
-	if (shadow[face]) {
-		shadow[face].SetFrame(frame2);
+	if (shadowAnim[face]) {
+		shadowAnim[face].SetFrame(frame2);
 	}
 }
 
@@ -1728,28 +1786,23 @@ void Projectile::SetupWall()
 	SetTarget(p2);
 }
 
-void Projectile::DrawLine(const Region& vp, int face, BlitFlags flag)
+void Projectile::DrawLine(const Region& vp, orient_t face, BlitFlags flag)
 {
-	const Game *game = core->GetGame();
+	const Game* game = core->GetGame();
 	auto iter = path.begin();
 	Holder<Sprite2D> frame;
-	if (game && game->IsTimestopActive() && !(TFlags&PTF_TIMELESS)) {
-		frame = travel[face].LastFrame();
+	if (game && game->IsTimestopActive() && !(TFlags & PTF_TIMELESS)) {
+		frame = travelAnim[face].LastFrame();
 		flag |= BlitFlags::GREY;
 	} else {
-		frame = travel[face].NextFrame();
+		frame = travelAnim[face].NextFrame();
 	}
 
-	Color tint2 = tint;
-	if (game) game->ApplyGlobalTint(tint2, flag);
-	while(iter != path.end()) {
-		Point pos = iter->point - vp.origin;
-
-		if (SFlags&PSF_FLYING) {
-			pos.y -= ProHeights::Flying;
-		}
-
-		Draw(frame, pos, flag, tint2);
+	// agannazar's scorcher and the bg1 wand of frost (only known line projectiles)
+	// should not have the global tint applied, which is easily tested at night
+	while (iter != path.end()) {
+		Point pos = iter->point - vp.origin - Point(0, ZPos);
+		Draw(frame, pos, flag, tint);
 		++iter;
 	}
 }
@@ -1757,57 +1810,57 @@ void Projectile::DrawLine(const Region& vp, int face, BlitFlags flag)
 // adjust position for arcing paths
 void Projectile::BendPosition(Point& pos) const
 {
-	double total_distance = Distance(Origin, Destination);
-	double travelled_distance = Distance(Origin, Pos);
+	float_t total_distance = Distance(Origin, Destination);
+	float_t travelled_distance = Distance(Origin, Pos);
 
 	// distance travelled along the line, from 0.0 to 1.0
-	double travelled = travelled_distance / total_distance;
+	float_t travelled = travelled_distance / total_distance;
 	if (travelled > 1.0) {
 		Log(WARNING, "Projectile", "Travelled over full distance ({} = {} / {})! Origin: {}, Destination: {}, Pos: {}", travelled, travelled_distance, total_distance, Origin, Destination, Pos);
 		travelled = 1.0;
 	}
 
 	// input to sin(): 0 to pi gives us an arc
-	double arc_angle = travelled * M_PI;
+	float_t arc_angle = travelled * M_PI;
 
 	// calculate the distance between the arc and the current pos
 	// (this could use travelled and a larger constant multiplier,
 	// to make the arc size fixed rather than relative to the total
 	// distance to travel)
-	double length_of_normal = travelled_distance * std::sin(arc_angle) * 0.3 * ((bend / 2) + 1);
+	float_t length_of_normal = travelled_distance * std::sin(arc_angle) * 0.3 * ((bend / 2) + 1);
 	if (bend % 2) length_of_normal = -length_of_normal;
 
 	// adjust the to-be-rendered point by that distance
-	double x_vector = (Destination.x - Origin.x) / total_distance;
-	double y_vector = (Destination.y - Origin.y) / total_distance;
+	float_t x_vector = (Destination.x - Origin.x) / total_distance;
+	float_t y_vector = (Destination.y - Origin.y) / total_distance;
 	pos.x += y_vector * length_of_normal;
 	pos.y -= x_vector * length_of_normal;
 }
 
 // draw pop in/hold/pop out animation sequences
-void Projectile::DrawPopping(unsigned int face, const Point& pos, BlitFlags flags, const Color& popTint)
+void Projectile::DrawPopping(orient_t face, const Point& pos, BlitFlags flags, const Color& popTint)
 {
 	const Game* game = core->GetGame();
 	Holder<Sprite2D> frame;
 	if (game && game->IsTimestopActive() && !(TFlags & PTF_TIMELESS)) {
-		frame = travel[face].LastFrame();
+		frame = travelAnim[face].LastFrame();
 		flags |= BlitFlags::GREY;
 		Draw(frame, pos, flags, popTint);
 		return;
 	}
 
 	if (ExtFlags & PEF_UNPOP) {
-		frame = shadow[0].NextFrame();
-		if (shadow[0].endReached) {
+		frame = shadowAnim[0].NextFrame();
+		if (shadowAnim[0].endReached) {
 			ExtFlags &= ~PEF_UNPOP;
 		}
 	} else {
-		frame = travel[0].NextFrame();
-		if (travel[0].endReached) {
-			travel[0].playReversed = true;
-			travel[0].SetFrame(0);
+		frame = travelAnim[0].NextFrame();
+		if (travelAnim[0].endReached) {
+			travelAnim[0].playReversed = true;
+			travelAnim[0].SetFrame(0);
 			ExtFlags |= PEF_UNPOP;
-			frame = shadow[0].NextFrame();
+			frame = shadowAnim[0].NextFrame();
 		}
 	}
 	Draw(frame, pos, flags, popTint);
@@ -1815,38 +1868,38 @@ void Projectile::DrawPopping(unsigned int face, const Point& pos, BlitFlags flag
 
 void Projectile::DrawTravel(const Region& viewport, BlitFlags flags)
 {
-	const Game *game = core->GetGame();
+	const Game* game = core->GetGame();
 
-	if(ExtFlags&PEF_HALFTRANS) {
+	if (ExtFlags & PEF_HALFTRANS) {
 		flags |= BlitFlags::HALFTRANS;
 	}
 
 	//static tint (use the tint field)
-	if(ExtFlags&PEF_TINT) {
+	if (ExtFlags & PEF_TINT) {
 		flags |= BlitFlags::COLOR_MOD;
 	}
 
 	//Area tint
-	if (TFlags&PTF_TINT) {
+	if (TFlags & PTF_TINT) {
 		tint = area->GetLighting(Pos);
 		tint.a = 255;
 		flags |= BlitFlags::COLOR_MOD;
 	}
 
-	unsigned int face = GetNextFace();
-	if (face!=Orientation) {
+	orient_t face = GetNextFace(Orientation, NewOrientation);
+	if (face != Orientation) {
 		SetFrames(face, GetTravelPos(face), GetShadowPos(face));
 	}
 
 	Point pos = Pos - viewport.origin;
-	if (bend && phase == P_TRAVEL && Origin != Destination) {
+	if (bend && state == ProjectileState::TRAVELLING && Origin != Destination) {
 		BendPosition(pos);
 	}
 
 	// set up the tint for the rest of the blits, but don't overwrite the saved one
 	Color tint2 = tint;
 
-	if (TFlags&PTF_TINT && game) {
+	if (TFlags & PTF_TINT && game) {
 		game->ApplyGlobalTint(tint2, flags);
 	}
 
@@ -1854,23 +1907,23 @@ void Projectile::DrawTravel(const Region& viewport, BlitFlags flags)
 		Draw(light, pos, BlitFlags::NONE, tint2);
 	}
 
-	if (ExtFlags&PEF_POP) {
+	if (ExtFlags & PEF_POP) {
 		DrawPopping(face, pos, flags, tint2);
 		return;
 	}
-	
-	if (ExtFlags&PEF_LINE) {
+
+	if (ExtFlags & PEF_LINE) {
 		DrawLine(viewport, face, flags);
 		return;
 	}
-	
-	if (shadow[face]) {
-		Holder<Sprite2D> frame = shadow[face].NextFrame();
+
+	if (shadowAnim[face]) {
+		Holder<Sprite2D> frame = shadowAnim[face].NextFrame();
 		Draw(frame, pos, flags, tint2);
 	}
 
 	pos.y -= ZPos;
-	
+
 	if (TFlags & PTF_TRANS) {
 		flags &= ~BlitFlags::STENCIL_MASK; // do not work with stencil mask
 	}
@@ -1883,33 +1936,30 @@ void Projectile::DrawTravel(const Region& viewport, BlitFlags flags)
 		flags |= BlitFlags::DST;
 	}
 
-	if (ExtFlags&PEF_PILLAR) {
+	if (ExtFlags & PEF_PILLAR) {
 		//draw all frames simultaneously on top of each other
-		for(int i=0;i<Aim;i++) {
-			if (travel[i]) {
-				Holder<Sprite2D> frame = travel[i].NextFrame();
+		for (int i = 0; i < Aim; i++) {
+			if (travelAnim[i]) {
+				Holder<Sprite2D> frame = travelAnim[i].NextFrame();
 				Draw(frame, pos, flags, tint2);
-				pos.y-=frame->Frame.y;
+				pos.y -= frame->Frame.y;
 			}
 		}
-	} else {
-		if (travel[face]) {
-			Holder<Sprite2D> frame;
-			if (game && game->IsTimestopActive() && !(TFlags&PTF_TIMELESS)) {
-				frame = travel[face].LastFrame();
-				flags |= BlitFlags::GREY; // move higher if it interferes with other tints badly
-			} else {
-				frame = travel[face].NextFrame();
-			}
-			Draw(frame, pos, flags, tint2);
+	} else if (travelAnim[face]) {
+		Holder<Sprite2D> frame;
+		if (game && game->IsTimestopActive() && !(TFlags & PTF_TIMELESS)) {
+			frame = travelAnim[face].LastFrame();
+			flags |= BlitFlags::GREY; // move higher if it interferes with other tints badly
+		} else {
+			frame = travelAnim[face].NextFrame();
 		}
+		Draw(frame, pos, flags, tint2);
 	}
 
 	if (drawSpark) {
 		area->Sparkle(0, SparkColor, SPARKLE_EXPLOSION, pos, 0, ZPos);
 		drawSpark = 0;
 	}
-
 }
 
 int Projectile::GetZPos() const
@@ -1917,19 +1967,35 @@ int Projectile::GetZPos() const
 	return ZPos;
 }
 
-void Projectile::SetIdentifiers(const ResRef &resref, size_t idx)
+void Projectile::SetupZPos()
+{
+	const Actor* act = area->GetActorByGlobalID(Caster);
+	if (act) {
+		ZPos = int(ProHeights::Normal);
+		if (act->ValidTarget(GA_BIGBAD)) {
+			ZPos = int(ProHeights::Dragon);
+		}
+	}
+
+	if (ZPos != int(ProHeights::Dragon) && SFlags & PSF_FLYING) {
+		ZPos = int(ProHeights::Flying);
+	}
+}
+
+void Projectile::SetIdentifiers(const ResRef& resref, size_t idx)
 {
 	projectileName = resref;
 	type = static_cast<ieWord>(idx);
 }
 
-bool Projectile::PointInRadius(const Point &p) const
+bool Projectile::PointInRadius(const Point& p) const
 {
-	switch(phase) {
+	switch (state) {
 		//better not trigger on projectiles unset/expired
-		case P_EXPIRED:
-		case P_UNINITED: return false;
-		case P_TRAVEL:
+		case ProjectileState::NEW:
+		case ProjectileState::EXPIRED:
+			return false;
+		case ProjectileState::TRAVELLING:
 			return p == Pos;
 		default:
 			if (p == Pos) return true;
@@ -1945,21 +2011,21 @@ void Projectile::SetGradient(int gradient, bool tinted)
 	//gradients are unsigned chars, so this works
 	memset(Gradients, gradient, 7);
 	if (tinted) {
-		ExtFlags|=PEF_TINT;
+		ExtFlags |= PEF_TINT;
 	} else {
 		TFlags |= PTF_COLOUR;
 	}
 }
 
-void Projectile::StaticTint(const Color &newtint)
+void Projectile::StaticTint(const Color& newtint)
 {
 	tint = newtint;
 	TFlags &= ~PTF_TINT; //turn off area tint
 }
 
-int Projectile::GetPhase() const
+bool Projectile::IsWaitingForTrigger() const
 {
-	return phase;
+	return state == ProjectileState::AWAITING_TRIGGER;
 }
 
 void Projectile::Cleanup()
@@ -1967,7 +2033,7 @@ void Projectile::Cleanup()
 	//neutralise the payload
 	effects = EffectQueue();
 	//diffuse the projectile
-	phase=P_EXPIRED;
+	state = ProjectileState::EXPIRED;
 }
 
 void Projectile::Draw(const Holder<Sprite2D>& spr, const Point& p, BlitFlags flags, Color overrideTint) const
@@ -2058,7 +2124,7 @@ static Size GetEllipseSize(int circleSize)
 	ellipse.w = 2 * std::max(1, (circleSize - 1) * 8);
 	ellipse.h = static_cast<int>(ellipse.w * 0.6F); // NOTE: not quite 12/16!
 
-	float multiplier = EventMgr::TouchInputEnabled ? 1.4F : 1.1F;
+	float_t multiplier = EventMgr::TouchInputEnabled ? 1.4F : 1.1F;
 	ellipse.w *= multiplier;
 	ellipse.h *= multiplier;
 	return ellipse;
@@ -2069,7 +2135,7 @@ Point Projectile::GetStartOffset(const Actor* actor)
 {
 	// the original also set start to Scriptable->Pos, since this was called on all projectiles
 	Point start;
-	if (!actor || core->HasFeature(GFFlags::PST_STATE_FLAGS)) return start; // unlikely, but does happen
+	if (!actor || !actor->GetAnims() || core->HasFeature(GFFlags::PST_STATE_FLAGS)) return start; // unlikely, but does happen
 
 	// check for the hardcoded offset of huge monsters
 	Point ptOffset = GetCastingOffset(actor);

@@ -21,6 +21,7 @@
 #include "CombatInfo.h"
 
 #include "Interface.h"
+
 #include "Scriptable/Actor.h"
 
 namespace GemRB {
@@ -30,14 +31,14 @@ static bool third = false;
 /*
  * Shared code between the classes
  */
-static void SetBonusInternal(int& current, int bonus, int mod)
+static void SetBonusInternal(int& current, int bonus, int mod, bool cumulative = false)
 {
 	int newBonus = current;
 	int tmp;
 
 	switch (mod) {
 		case 0: // cumulative modifier
-			if (!third) {
+			if (!third || cumulative) {
 				newBonus += bonus;
 				break;
 			}
@@ -54,7 +55,7 @@ static void SetBonusInternal(int& current, int bonus, int mod)
 					newBonus = tmp;
 				} // else leave it be at the current value
 			} else {
-				if (abs(tmp) > abs(current)) {
+				if (std::abs(tmp) > std::abs(current)) {
 					newBonus = tmp;
 				} // else leave it be at the current value
 			}
@@ -84,7 +85,7 @@ ArmorClass::ArmorClass()
 	third = core->HasFeature(GFFlags::RULES_3ED);
 }
 
-void ArmorClass::SetOwner( Actor* owner)
+void ArmorClass::SetOwner(Actor* owner)
 {
 	Owner = owner;
 	// rerun this, so both the stats get set correctly
@@ -106,7 +107,8 @@ void ArmorClass::RefreshTotal()
 }
 
 // resets all the boni (natural is skipped, since it holds the base value)
-void ArmorClass::ResetAll() {
+void ArmorClass::ResetAll()
+{
 	deflectionBonus = 0;
 	armorBonus = 0;
 	shieldBonus = 0;
@@ -152,12 +154,13 @@ void ArmorClass::SetWisdomBonus(int bonus, int mod)
 
 void ArmorClass::SetGenericBonus(int bonus, int mod)
 {
-	SetBonus(genericBonus, bonus, mod);
+	// iwd2 generic AC bonus is the only stacking one
+	SetBonus(genericBonus, bonus, mod, true);
 }
 
-void ArmorClass::SetBonus(int& current, int bonus, int mod)
+void ArmorClass::SetBonus(int& current, int bonus, int mod, bool cumulative)
 {
-	SetBonusInternal(current, bonus, mod);
+	SetBonusInternal(current, bonus, mod, cumulative);
 	RefreshTotal();
 }
 
@@ -165,9 +168,9 @@ void ArmorClass::HandleFxBonus(int mod, bool permanent)
 {
 	if (permanent) {
 		if (Actor::IsReverseToHit()) {
-			SetNatural(natural-mod);
+			SetNatural(natural - mod);
 		} else {
-			SetNatural(natural+mod);
+			SetNatural(natural + mod);
 		}
 		return;
 	}
@@ -182,7 +185,7 @@ void ArmorClass::HandleFxBonus(int mod, bool permanent)
 std::string ArmorClass::dump() const
 {
 	std::string buffer;
-	AppendFormat(buffer, "Debugdump of ArmorClass of {}:\n", fmt::WideToChar{Owner->GetName()});
+	AppendFormat(buffer, "Debugdump of ArmorClass of {}:\n", fmt::WideToChar { Owner->GetName() });
 	AppendFormat(buffer, "TOTAL: {}\n", total);
 	AppendFormat(buffer, "Natural: {}\tGeneric: {}\tDeflection: {}\n", natural, genericBonus, deflectionBonus);
 	AppendFormat(buffer, "Armor: {}\tShield: {}\n", armorBonus, shieldBonus);
@@ -223,7 +226,8 @@ void ToHitStats::RefreshTotal()
 }
 
 // resets all the boni
-void ToHitStats::ResetAll() {
+void ToHitStats::ResetAll()
+{
 	weaponBonus = 0;
 	armorBonus = 0;
 	shieldBonus = 0;
@@ -288,9 +292,9 @@ void ToHitStats::HandleFxBonus(int mod, bool permanent)
 {
 	if (permanent) {
 		if (Actor::IsReverseToHit()) {
-			SetBase(base-mod);
+			SetBase(base - mod);
 		} else {
-			SetBase(base+mod);
+			SetBase(base + mod);
 		}
 		return;
 	}
@@ -302,7 +306,8 @@ void ToHitStats::HandleFxBonus(int mod, bool permanent)
 	}
 }
 
-void ToHitStats::SetBABDecrement(int decrement) {
+void ToHitStats::SetBABDecrement(int decrement)
+{
 	babDecrement = decrement;
 }
 
@@ -313,14 +318,14 @@ int ToHitStats::GetTotalForAttackNum(unsigned int number) const
 	}
 	number--;
 	// compute the cascaded values
-	// at low levels with poor stats, even the total can be negatice
-	return total-number*babDecrement;
+	// at low levels with poor stats, even the total can be negative
+	return total - number * babDecrement;
 }
 
 std::string ToHitStats::dump() const
 {
 	std::string buffer;
-	AppendFormat(buffer, "Debugdump of ToHit of {}:\n", fmt::WideToChar{Owner->GetName()});
+	AppendFormat(buffer, "Debugdump of ToHit of {}:\n", fmt::WideToChar { Owner->GetName() });
 	AppendFormat(buffer, "TOTAL: {}\n", total);
 	AppendFormat(buffer, "Base: {:2d}\tGeneric: {}\tEffect: {}\n", base, genericBonus, fxBonus);
 	AppendFormat(buffer, "Armor: {}\tShield: {}\n", armorBonus, shieldBonus);

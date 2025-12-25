@@ -24,22 +24,22 @@
  * @author The GemRB Project
  */
 
-#include "globals.h"
 #include "exports.h"
+#include "globals.h"
 
 #include "Interface.h"
+
 #include "Scriptable/Actor.h"
 
-#include <cmath>
 #include <cctype>
-
+#include <cmath>
 #include <iostream>
 
 #ifdef WIN32
 
 BOOL WINAPI DllEntryPoint(HINSTANCE, DWORD, LPVOID);
 BOOL WINAPI DllEntryPoint(HINSTANCE /*hinstDLL*/, DWORD /*fdwReason*/,
-	LPVOID /*lpvReserved*/)
+			  LPVOID /*lpvReserved*/)
 {
 	return true;
 }
@@ -50,16 +50,8 @@ namespace GemRB {
 
 //// Globally used functions
 
-/** Calculates distance squared from a point to a scriptable */
-unsigned int SquaredMapDistance(const Point &p, const Scriptable *b)
-{
-	long x = p.x / 16 - b->Pos.x / 16;
-	long y = p.y / 12 - b->Pos.y / 12;
-	return (unsigned int)(x*x + y*y);
-}
-
 /** Calculates distance between 2 points */
-unsigned int Distance(const Point &p, const Scriptable *b)
+unsigned int Distance(const Point& p, const Scriptable* b)
 {
 	long x = p.x - b->Pos.x;
 	long y = p.y - b->Pos.y;
@@ -67,41 +59,33 @@ unsigned int Distance(const Point &p, const Scriptable *b)
 }
 
 constexpr int DistanceFactor = 4; // ignore angle, go for the bigger size between [3, 4]
-unsigned int PersonalDistance(const Point &p, const Scriptable *b)
+unsigned int PersonalDistance(const Point& p, const Scriptable* b)
 {
 	long x = p.x - b->Pos.x;
 	long y = p.y - b->Pos.y;
-	int ret = (int) std::hypot(x, y);
-	if (b->Type==ST_ACTOR) {
+	auto ret = std::hypot(x, y);
+	if (b->Type == ST_ACTOR) {
 		ret -= static_cast<const Actor*>(b)->CircleSize2Radius() * DistanceFactor;
 	}
-	if (ret<0) return (unsigned int) 0;
+	if (ret < 0) return (unsigned int) 0;
 	return (unsigned int) ret;
 }
 
 constexpr int SquaredDistanceFactor = 14; // ignore angle, roughly middle of an elliptic [9, 16]
-unsigned int SquaredPersonalDistance(const Point &p, const Scriptable *b)
+unsigned int SquaredPersonalDistance(const Point& p, const Scriptable* b)
 {
 	long x = p.x - b->Pos.x;
 	long y = p.y - b->Pos.y;
 	int ret = static_cast<int>(x * x + y * y);
-	if (b->Type==ST_ACTOR) {
+	if (b->Type == ST_ACTOR) {
 		ret -= static_cast<const Actor*>(b)->CircleSize2Radius() * SquaredDistanceFactor;
 	}
-	if (ret<0) return (unsigned int) 0;
+	if (ret < 0) return (unsigned int) 0;
 	return (unsigned int) ret;
 }
 
-/** Calculates map distance between 2 scriptables */
-unsigned int SquaredMapDistance(const Scriptable *a, const Scriptable *b)
-{
-	long x = a->Pos.x / 16 - b->Pos.x / 16;
-	long y = a->Pos.y / 12 - b->Pos.y / 12;
-	return (unsigned int)(x*x + y*y);
-}
-
 /** Calculates distance between 2 scriptables */
-unsigned int Distance(const Scriptable *a, const Scriptable *b)
+unsigned int Distance(const Scriptable* a, const Scriptable* b)
 {
 	long x = a->Pos.x - b->Pos.x;
 	long y = a->Pos.y - b->Pos.y;
@@ -109,44 +93,45 @@ unsigned int Distance(const Scriptable *a, const Scriptable *b)
 }
 
 /** Calculates distance squared between 2 scriptables */
-unsigned int SquaredDistance(const Scriptable *a, const Scriptable *b)
+unsigned int SquaredDistance(const Scriptable* a, const Scriptable* b)
 {
 	return SquaredDistance(a->Pos, b->Pos);
 }
 
 /** Calculates distance between 2 scriptables, including feet circle if applicable */
-unsigned int PersonalDistance(const Scriptable *a, const Scriptable *b)
+unsigned int PersonalDistance(const Scriptable* a, const Scriptable* b)
 {
 	long x = a->Pos.x - b->Pos.x;
 	long y = a->Pos.y - b->Pos.y;
-	int ret = (int) std::hypot(x, y);
-	if (a->Type==ST_ACTOR) {
+	auto ret = std::hypot(x, y);
+	if (a->Type == ST_ACTOR) {
 		ret -= static_cast<const Actor*>(a)->CircleSize2Radius() * DistanceFactor;
 	}
-	if (b->Type==ST_ACTOR) {
+	if (b->Type == ST_ACTOR) {
 		ret -= static_cast<const Actor*>(b)->CircleSize2Radius() * DistanceFactor;
 	}
-	if (ret<0) return (unsigned int) 0;
+	if (ret < 0) return (unsigned int) 0;
 	return (unsigned int) ret;
 }
 
-unsigned int SquaredPersonalDistance(const Scriptable *a, const Scriptable *b)
+unsigned int SquaredPersonalDistance(const Scriptable* a, const Scriptable* b)
 {
 	long x = a->Pos.x - b->Pos.x;
 	long y = a->Pos.y - b->Pos.y;
 	int ret = static_cast<int>(x * x + y * y);
-	if (a->Type==ST_ACTOR) {
+	if (a->Type == ST_ACTOR) {
 		ret -= static_cast<const Actor*>(a)->CircleSize2Radius() * SquaredDistanceFactor;
 	}
-	if (b->Type==ST_ACTOR) {
+	if (b->Type == ST_ACTOR) {
 		ret -= static_cast<const Actor*>(b)->CircleSize2Radius() * SquaredDistanceFactor;
 	}
-	if (ret<0) return (unsigned int) 0;
+	if (ret < 0) return (unsigned int) 0;
 	return (unsigned int) ret;
 }
 
-unsigned int PersonalLineDistance(const Point &v, const Point &w, const Scriptable *s, double *proj) {
-	double t;
+unsigned int PersonalLineDistance(const Point& v, const Point& w, const Scriptable* s, float_t* proj)
+{
+	float_t t;
 	Point p;
 
 	int len = SquaredDistance(w, v);
@@ -156,7 +141,7 @@ unsigned int PersonalLineDistance(const Point &v, const Point &w, const Scriptab
 		p = v;
 	} else {
 		// find the projection of Pos onto the line
-		t = ((s->Pos.x - v.x) * (w.x - v.x) + (s->Pos.y - v.y) * (w.y - v.y)) / (double) len;
+		t = ((s->Pos.x - v.x) * (w.x - v.x) + (s->Pos.y - v.y) * (w.y - v.y)) / (float_t) len;
 		if (t < 0.0) {
 			// projection beyond the v end of the line
 			p = v;
@@ -205,41 +190,42 @@ unsigned int PersonalLineDistance(const Point &v, const Point &w, const Scriptab
 // Potential optimisation through precomputing:
 // rounding the angle into 5° intervals [0-90] gives these values per foot:
 // 16 16 16 16 15 15 15 14 14 14 13 13 13 12 12 12 12 12 12
-double Feet2Pixels(int feet, double angle)
+float_t Feet2Pixels(int feet, float_t angle)
 {
-	double sin2 = pow(sin(angle) / 12, 2);
-	double cos2 = pow(cos(angle) / 16, 2);
-	double r = sqrt(1 / (cos2 + sin2));
+	float_t sin2 = std::pow(std::sin(angle) / 12, 2);
+	float_t cos2 = std::pow(std::cos(angle) / 16, 2);
+	float_t r = std::sqrt(1 / (cos2 + sin2));
 	return r * feet;
 }
 
 /* Audible range was confirmed to be 3x visual range in EEs, accounting for isometric scaling
- a nd more than 1x visual range in others;
+ and more than 1x visual range in others;
  in EE, the '48' (3*16) default can be set by the 'Audible Range' option in baldur.lua
+ It can also be seen in iwd2 RE.
 
  This is a bit tricky, it has been show to not be very consistent. The game used a double value of visual
  range in several places, so we will use '3 * visual_range / 2' */
-bool WithinAudibleRange(const Actor *actor, const Point &dest)
+bool WithinAudibleRange(const Actor* actor, const Point& dest)
 {
 	int distance = (3 * actor->GetStat(IE_VISUALRANGE)) / 2;
 	return WithinRange(actor, dest, distance);
 }
 
-bool WithinRange(const Scriptable *actor, const Point &dest, int distance)
+bool WithinRange(const Scriptable* actor, const Point& dest, int distance)
 {
-	double angle = AngleFromPoints(actor->Pos, dest);
+	float_t angle = AngleFromPoints(actor->Pos, dest);
 	return Distance(dest, actor) <= Feet2Pixels(distance, angle);
 }
 
-bool WithinPersonalRange(const Scriptable *actor, const Point &dest, int distance)
+bool WithinPersonalRange(const Scriptable* actor, const Point& dest, int distance)
 {
-	double angle = AngleFromPoints(actor->Pos, dest);
+	float_t angle = AngleFromPoints(actor->Pos, dest);
 	return PersonalDistance(dest, actor) <= Feet2Pixels(distance, angle);
 }
 
 bool WithinPersonalRange(const Scriptable* scr1, const Scriptable* scr2, int distance)
 {
-	double angle = AngleFromPoints(scr1->Pos, scr2->Pos);
+	float_t angle = AngleFromPoints(scr1->Pos, scr2->Pos);
 	return PersonalDistance(scr2, scr1) <= Feet2Pixels(distance, angle);
 }
 
@@ -255,24 +241,22 @@ int EARelation(const Scriptable* Owner, const Actor* target)
 
 	ieDword eat = target->GetStat(IE_EA);
 
-	if (eao<=EA_GOODCUTOFF) {
-		
-		if (eat<=EA_GOODCUTOFF) {
+	if (eao <= EA_GOODCUTOFF) {
+		if (eat <= EA_GOODCUTOFF) {
 			return EAR_FRIEND;
 		}
-		if (eat>=EA_EVILCUTOFF) {
+		if (eat >= EA_EVILCUTOFF) {
 			return EAR_HOSTILE;
 		}
 
 		return EAR_NEUTRAL;
 	}
 
-	if (eao>=EA_EVILCUTOFF) {
-
-		if (eat<=EA_GOODCUTOFF) {
+	if (eao >= EA_EVILCUTOFF) {
+		if (eat <= EA_GOODCUTOFF) {
 			return EAR_HOSTILE;
 		}
-		if (eat>=EA_EVILCUTOFF) {
+		if (eat >= EA_EVILCUTOFF) {
 			return EAR_FRIEND;
 		}
 

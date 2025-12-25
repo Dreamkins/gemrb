@@ -19,10 +19,11 @@
  */
 
 #include "GUI/EventMgr.h"
-#include "Logging/Logging.h"
-#include "Video/Video.h"
 
 #include "globals.h"
+
+#include "Logging/Logging.h"
+#include "Video/Video.h"
 
 namespace GemRB {
 
@@ -91,7 +92,7 @@ MouseEvent MouseEventFromController(const ControllerEvent& ce, bool down)
 
 KeyboardEvent KeyEventFromController(const ControllerEvent& ce)
 {
-	KeyboardEvent ke{};
+	KeyboardEvent ke {};
 
 	// TODO: probably want more than the DPad
 	switch (ce.button) {
@@ -174,12 +175,9 @@ void EventMgr::DispatchEvent(Event&& e) const
 		flags |= e.keyboard.keycode;
 		modKeys = e.mod;
 
-		KeyMap::const_iterator hit = HotKeys.find(flags);
-		if (hit != HotKeys.end()) {
-			assert(!hit->second.empty());
-			KeyMap::value_type::second_type list = hit->second;
-			EventCallback cb = hit->second.front();
-			if (cb(e)) {
+		const auto& range = HotKeys.equal_range(flags);
+		for (auto it = range.first; it != range.second; ++it) {
+			if (it->second(e)) {
 				return;
 			}
 		}
@@ -209,10 +207,7 @@ void EventMgr::DispatchEvent(Event&& e) const
 				if (VideoDriver->InTextInput())
 					VideoDriver->StopTextInput();
 
-				if (btn == repeatButton
-					&& e.time <= lastMouseDown + DCDelay
-					&& repeatPos.isWithinRadius(mouseClickRadius, se.Pos())
-				) {
+				if (btn == repeatButton && e.time <= lastMouseDown + DCDelay && repeatPos.IsWithinRadius(mouseClickRadius, se.Pos())) {
 					repeatCount++;
 				} else {
 					repeatCount = 1;
@@ -286,13 +281,7 @@ bool EventMgr::RegisterHotKeyCallback(const EventCallback& cb, KeyboardKey key, 
 	int flags = mod << 16;
 	flags |= key;
 
-	KeyMap::iterator it = HotKeys.find(flags);
-	if (it != HotKeys.end()) {
-		it->second.push_front(cb);
-	} else {
-		HotKeys.emplace(flags, std::list<EventCallback>(1, cb));
-	}
-
+	HotKeys.emplace(flags, cb);
 	return true;
 }
 
@@ -301,17 +290,12 @@ void EventMgr::UnRegisterHotKeyCallback(const EventCallback& cb, KeyboardKey key
 	int flags = mod << 16;
 	flags |= key;
 
-	KeyMap::iterator it = HotKeys.find(flags);
-	if (it != HotKeys.end()) {
-		KeyMap::value_type::second_type::iterator cbit;
-		cbit = std::find_if(it->second.begin(), it->second.end(), [&cb](decltype(cb)& item) {
-			return FunctionTargetsEqual(cb, item);
-		});
-		if (cbit != it->second.end()) {
-			it->second.erase(cbit);
-			if (it->second.empty()) {
-				HotKeys.erase(it);
-			}
+	const auto& range = HotKeys.equal_range(flags);
+	for (auto item = range.first; item != range.second;) {
+		if (FunctionTargetsEqual(cb, item->second)) {
+			item = HotKeys.erase(item);
+		} else {
+			++item;
 		}
 	}
 }
@@ -412,10 +396,10 @@ Event EventMgr::CreateTouchEvent(const TouchEvent::Finger fingers[], int numFing
 		for (int i = 0; i < numFingers; ++i) {
 			e.touch.x += fingers[i].x;
 			e.touch.y += fingers[i].y;
-			if (abs(fingers[i].deltaX) > abs(e.touch.deltaX)) {
+			if (std::abs(fingers[i].deltaX) > std::abs(e.touch.deltaX)) {
 				e.touch.deltaX = fingers[i].deltaX;
 			}
-			if (abs(fingers[i].deltaY) > abs(e.touch.deltaY)) {
+			if (std::abs(fingers[i].deltaY) > std::abs(e.touch.deltaY)) {
 				e.touch.deltaY = fingers[i].deltaY;
 			}
 			e.touch.fingers[i] = fingers[i];
@@ -486,7 +470,8 @@ Event EventMgr::CreateControllerButtonEvent(EventButton btn, bool down)
 	return e;
 }
 
-Event EventMgr::CreateRedrawRequestEvent() {
+Event EventMgr::CreateRedrawRequestEvent()
+{
 	Event e = {};
 	e.type = Event::RedrawRequest;
 

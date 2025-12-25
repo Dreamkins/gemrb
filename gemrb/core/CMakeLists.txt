@@ -36,6 +36,7 @@ FILE(GLOB gemrb_core_LIB_SRCS
 	Map.cpp
 	MapReverb.cpp
 	MoviePlayer.cpp
+	MurmurHash.cpp
 	Palette.cpp
 	PalettedImageMgr.cpp
 	Particles.cpp
@@ -67,6 +68,9 @@ FILE(GLOB gemrb_core_LIB_SRCS
 	GameScript/GameScript.cpp
 	GameScript/Matching.cpp
 	GameScript/Objects.cpp
+	GameScript/ParseBCS.cpp
+	GameScript/ParseText.cpp
+	GameScript/Targets.cpp
 	GameScript/Triggers.cpp
 	GUI/GUIScriptInterface.cpp
 	GUI/Button.cpp
@@ -97,9 +101,12 @@ FILE(GLOB gemrb_core_LIB_SRCS
 	Scriptable/CombatInfo.cpp
 	Scriptable/Container.cpp
 	Scriptable/Door.cpp
+	Scriptable/Highlightable.cpp
 	Scriptable/InfoPoint.cpp
+	Scriptable/Movable.cpp
 	Scriptable/OverHeadText.cpp
 	Scriptable/Scriptable.cpp
+	Scriptable/Selectable.cpp
 	Scriptable/PCStatStruct.cpp
 	Scriptable/TileObject.cpp
 	Streams/DataStream.cpp
@@ -139,16 +146,16 @@ IF(WIN32)
 		../../platforms/windows/CodepageToIconvMap.cpp
 		../../platforms/windows/WindowsFile.cpp
 	)
-	INCLUDE_DIRECTORIES(${Iconv_INCLUDE_DIR})
 ENDIF()
 
+INCLUDE_DIRECTORIES(${Iconv_INCLUDE_DIR})
 ADD_DEFINITIONS("-DGEM_BUILDING_CORE")
 
 if (STATIC_LINK)
 	ADD_LIBRARY(gemrb_core STATIC ${gemrb_core_LIB_SRCS})
 else (STATIC_LINK)
 	ADD_LIBRARY(gemrb_core SHARED ${gemrb_core_LIB_SRCS})
-	TARGET_LINK_LIBRARIES(gemrb_core ${CMAKE_DL_LIBS} ${COREFOUNDATION_LIBRARY} ${Iconv_LIBRARY})
+	TARGET_LINK_LIBRARIES(gemrb_core ${CMAKE_DL_LIBS} ${COREFOUNDATION_LIBRARY} ${Iconv_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
 	IF(WIN32)
 	  SET_TARGET_PROPERTIES(gemrb_core PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/gemrb )
 	  INSTALL(TARGETS gemrb_core RUNTIME DESTINATION ${LIB_DIR})
@@ -159,6 +166,10 @@ endif (STATIC_LINK)
 
 IF(WIN32)
 	TARGET_LINK_LIBRARIES(gemrb_core shlwapi)
+ENDIF()
+
+IF(USE_TRACY)
+  TARGET_LINK_LIBRARIES(gemrb_core Tracy)
 ENDIF()
 
 target_compile_definitions(gemrb_core PRIVATE _USE_MATH_DEFINES)

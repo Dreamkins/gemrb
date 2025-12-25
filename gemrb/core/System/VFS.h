@@ -27,26 +27,27 @@
 #ifndef VFS_H
 #define VFS_H
 
-#include "config.h"
-#include "exports.h"
-#include "ie_types.h"
 #include "Platform.h"
 #include "Predicates.h"
+#include "exports.h"
+#include "ie_types.h"
+
+#include "config.h"
 
 #include <memory>
 #include <string>
-
 #include <sys/stat.h>
 
 #ifdef WIN32
-#include "win32def.h"
-#include <direct.h>
-#include <io.h>
+	#include "win32def.h"
+
+	#include <direct.h>
+	#include <io.h>
 #endif
 
 #ifndef R_OK
-#define R_OK 04
-#define F_OK 0
+	#define R_OK 04
+	#define F_OK 0
 #endif
 
 namespace GemRB {
@@ -104,11 +105,10 @@ path_t PathJoin(Args const&... args)
 	// this voodoo relies on expanding args which requires a valid context
 	// the only way I know how to do this with c++14 is to build an unbounded array
 	// the type doesnt matter, nor do the element values
-	int IGNORE_UNUSED unpack[] {0, // we need at least one value to form a valid array, so start with one
-		// append to 'result'...
-		(PathAppend(result, fmt::to_string(args))
-	,0)...}; // the other half of the voodoo is the comma operator to allow us to execute
-			 // an expression then return an unrelated value which is another 0
+	int IGNORE_UNUSED unpack[] { 0, // we need at least one value to form a valid array, so start with one
+				     // append to 'result'...
+				     (PathAppend(result, fmt::to_string(args)), 0)... }; // the other half of the voodoo is the comma operator to allow us to execute
+		// an expression then return an unrelated value which is another 0
 	if (FixCase) {
 		ResolveCase(result);
 	}
@@ -137,6 +137,8 @@ GEM_EXPORT path_t ExtractFileFromPath(const path_t&);
 
 GEM_EXPORT bool MakeDirectories(const path_t& path) WARN_UNUSED;
 GEM_EXPORT bool MakeDirectory(const path_t& path) WARN_UNUSED;
+// removes all files from directory
+GEM_EXPORT void DelTree(const path_t& path, bool onlySave);
 
 GEM_EXPORT path_t HomePath();
 
@@ -144,11 +146,14 @@ GEM_EXPORT path_t HomePath();
 GEM_EXPORT path_t GemDataPath();
 
 #ifdef SUPPORTS_MEMSTREAM
-void* readonly_mmap(void *fd);
+void* readonly_mmap(void* fd);
 #endif
 #ifdef WIN32
-void munmap(void *start, size_t);
+void munmap(void* start, size_t);
 #endif
+
+GEM_EXPORT bool RemoveDirectory(const path_t& path);
+GEM_EXPORT bool UnlinkFile(const path_t& path);
 
 class GEM_EXPORT DirectoryIterator {
 public:
@@ -168,7 +173,10 @@ public:
 	 */
 	explicit DirectoryIterator(path_t path);
 	DirectoryIterator(const DirectoryIterator&) = delete;
-	DirectoryIterator(DirectoryIterator&&) noexcept = default;
+	// Manual move constructor needed to properly take ownership of DirectoryIterator::Directory.
+	// Without a manual implementation DirectoryIterator::Directory is improperly closed when the
+	// moving instance is destructed.
+	DirectoryIterator(DirectoryIterator&&) noexcept;
 	~DirectoryIterator();
 	DirectoryIterator& operator=(const DirectoryIterator&) = delete;
 
@@ -183,11 +191,12 @@ public:
 	path_t GetName();
 	path_t GetFullPath();
 	DirectoryIterator& operator++();
-	explicit operator bool () const noexcept { return Entry != nullptr; }
+	explicit operator bool() const noexcept { return Entry != nullptr; }
 	void Rewind();
+
 private:
 	FileFilterPredicate predicate;
-	std::vector<void*> Directory;
+	void* Directory = nullptr;
 	void* Entry = nullptr;
 	path_t Path;
 	Flags entrySkipFlags;
@@ -195,4 +204,4 @@ private:
 
 }
 
-#endif  // !VFS_H
+#endif // !VFS_H

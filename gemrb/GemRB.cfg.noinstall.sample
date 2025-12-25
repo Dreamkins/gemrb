@@ -54,8 +54,8 @@ Height=480
 # Bits per pixel [Integer:16,32]
 Bpp=32
 
-# Fullscreen [Boolean]
-Fullscreen=0
+# Choices: best (default), linear, nearest
+#ScaleQuality = best
 
 # Cap FPS, 0 = request VSync (SDL2 only, default), -1 = no limit, 30+ = cap value
 #CapFPS=0
@@ -82,7 +82,7 @@ Fullscreen=0
 ###############################################################################
 
 # Enable all gui enhancements ? [Integer]
-GUIEnhancements = 7
+GUIEnhancements = 23
 
 # Enable bigger parties (up to 10) or force smaller ones [Integer]
 # NOTE: You need to choose a big enough resolution, so
@@ -201,6 +201,15 @@ CachePath=./gemrb/Cache2/
 # The path where GemRB looks for non-BAM fonts (eg. TTF)
 #CustomFontPath=
 
+###############################################################################
+#  GemRB Save Path [String]                                                   #
+#                                                                             #
+#  The path where GemRB looks for saved games. Enter the full path to the     #
+#  directory containing eg. the 'save' subdirectory if it's not in GamePath.  #
+###############################################################################
+
+#SavePath=/mnt/windows/Programmi/Black Isle/BGII - SoA/
+
 ###### HERE BE DRAGONS ########################################################
 # You shouldn't need to change anything below this point.
 
@@ -226,15 +235,6 @@ CachePath=./gemrb/Cache2/
 ###############################################################################
 
 #GameDataPath=data
-
-###############################################################################
-#  GemRB Save Path [String]                                                   #
-#                                                                             #
-#  The path where GemRB looks for saved games. Enter the full path to the     #
-#  directory containing eg. the 'save' subdirectory if it's not in GamePath.  #
-###############################################################################
-
-#SavePath=/mnt/windows/Programmi/Black Isle/BGII - SoA/
 
 ###############################################################################
 #  Game Data Override Path [String]                                           #

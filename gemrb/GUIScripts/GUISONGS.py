@@ -40,12 +40,11 @@ def OnLoad():
 		MoviesTableName = "MUSIC"
 		ColOffset = 1
 		CreditsRef = "credits"
-	elif GameCheck.IsBG2():
+	elif GameCheck.IsBG2OrEE ():
 		MoviesTableName = "SONGLIST"
 		ColOffset = 0
 		CreditsRef = "endcrdit"
 	MoviesTable = GemRB.LoadTable (MoviesTableName)
-	TextAreaControl.SetColor (ColorWhitish, TA_COLOR_OPTIONS)
 	TextAreaControl.SetOptions ([MoviesTable.GetValue (i, 0) for i in range(ColOffset, MoviesTable.GetRowCount())], "MovieIndex", 0)
 	PlayButton.SetText(17318)
 	CreditsButton.SetText(15591)

@@ -38,11 +38,11 @@ If applicable, add screenshots to help explain your problem.
 
 GemRB version (check as many as you know apply)
 - [ ] master as of this issue
+- [ ] 0.9.4
+- [ ] 0.9.3
 - [ ] 0.9.2
-- [ ] 0.9.1
-- [ ] 0.9.0
 
 Video Driver (check as many as you know apply)
 - [ ] SDL1.2
-- [ ] SDL2 built with `USE_OPENGL_BACKEND`
-- [ ] SDL2 without `USE_OPENGL_BACKEND`
+- [ ] SDL2 built with `OPENGL_BACKEND` enabled
+- [ ] SDL2 without `OPENGL_BACKEND` enabled

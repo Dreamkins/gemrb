@@ -39,7 +39,6 @@ def OnLoad():
 	DoneButton = MovieWindow.GetControl (4)
 	MoviesTable = GemRB.LoadTable ("MOVIDESC")
 	opts = [MoviesTable.GetValue (i, 0) for i in range(MoviesTable.GetRowCount ()) if GemRB.GetVar(MoviesTable.GetRowName (i)) == 1]
-	TextAreaControl.SetColor (ColorWhitish, TA_COLOR_OPTIONS)
 	TextAreaControl.SetOptions (opts, "MovieIndex", 0)
 	PlayButton.SetText (17318)
 	CreditsButton.SetText (15591)
@@ -65,7 +64,7 @@ def PlayPress():
 
 def CreditsPress():
 	# arbitrary choice between custom jukebox and actual credits
-	if GameCheck.IsBG1() or GameCheck.IsBG2():
+	if GameCheck.IsBG1() or GameCheck.IsBG2OrEE ():
 		if MovieWindow:
 			MovieWindow.Close ()
 		GemRB.SetNextScript ("GUISONGS")

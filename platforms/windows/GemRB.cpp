@@ -21,11 +21,14 @@
 // GemRB.cpp : Defines the entry point for the application.
 
 #include "win32def.h"
-#include <clocale> //language encoding
 
 #include "Interface.h"
-#include "Logging/Logging.h"
+#include "PluginMgr.h"
+
 #include "Logging/Loggers/Stdio.h"
+#include "Logging/Logging.h"
+
+#include <clocale> //language encoding
 
 using namespace GemRB;
 
@@ -64,6 +67,9 @@ int main(int argc, char* argv[])
 		Log(FATAL, "Main", "Aborting due to fatal error... {}", cie);
 		ret = GEM_ERROR;
 	}
+
+	VideoDriver.reset();
+	PluginMgr::Get()->RunCleanup();
 
 	ToggleLogging(false); // Windows build will hang if we leave the logging thread running
 	SetConsoleMode(hConsole, dwMode);

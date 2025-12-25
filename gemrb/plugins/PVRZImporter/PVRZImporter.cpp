@@ -27,7 +27,8 @@
 
 using namespace GemRB;
 
-bool PVRZImporter::Import(DataStream* str) {
+bool PVRZImporter::Import(DataStream* str)
+{
 	ieDword signature;
 	bool decompressed = false;
 
@@ -88,7 +89,7 @@ bool PVRZImporter::Import(DataStream* str) {
 	str->ReadScalar<int, ieDword>(size.h);
 	str->ReadScalar<int, ieDword>(size.w);
 	if (size.h < 0 || size.w < 0) {
-			Log(ERROR, "PVRZImporter", "Negative or overflown rectangular dimension");
+		Log(ERROR, "PVRZImporter", "Negative or overflown rectangular dimension");
 	}
 
 	ieDword tmp = 0;
@@ -114,14 +115,14 @@ bool PVRZImporter::Import(DataStream* str) {
 	return true;
 }
 
-Holder<Sprite2D> PVRZImporter::GetSprite2D() {
+Holder<Sprite2D> PVRZImporter::GetSprite2D()
+{
 	return GetSprite2D(Region(0, 0, size.w, size.h));
 }
 
-Holder<Sprite2D> PVRZImporter::GetSprite2D(Region&& region) {
-	if (region.x < 0 || (region.x + region.w) > size.w
-		|| region.y < 0 || (region.y + region.h) > size.h) {
-
+Holder<Sprite2D> PVRZImporter::GetSprite2D(Region&& region)
+{
+	if (region.x < 0 || (region.x + region.w) > size.w || region.y < 0 || (region.y + region.h) > size.h) {
 		Log(ERROR, "PVRZImporter", "Out-of-bounds access");
 		return {};
 	}
@@ -140,23 +141,25 @@ Holder<Sprite2D> PVRZImporter::GetSprite2D(Region&& region) {
 	}
 }
 
-std::tuple<uint16_t, uint16_t> PVRZImporter::extractPalette(size_t offset, std::array<uint8_t, 6>& colors) const {
+std::tuple<uint16_t, uint16_t> PVRZImporter::extractPalette(size_t offset, std::array<uint8_t, 6>& colors) const
+{
 	uint16_t color1 = *reinterpret_cast<const uint16_t*>(&data[offset]);
-	uint16_t color2 = *reinterpret_cast<const uint16_t*>(&data[offset+2]);
+	uint16_t color2 = *reinterpret_cast<const uint16_t*>(&data[offset + 2]);
 
 	auto convert = [&](uint16_t color, uint8_t outOffset) {
-		colors[outOffset] = ((color << 3) & 0xF8) | ((color >> 2) & 0x7);
-		colors[outOffset+1] = ((color >> 3) & 0xFC) | ((color >> 9) & 0x3);
-		colors[outOffset+2] = ((color >> 8) & 0xF8) | ((color >> 13) & 0x7);
+		colors[outOffset] = (color & 0x1F) * 8; // B
+		colors[outOffset + 1] = ((color >> 5) & 0x3F) * 4; // G
+		colors[outOffset + 2] = ((color >> 11) & 0x1F) * 8; // R
 	};
 
 	convert(color1, 0);
 	convert(color2, 3);
 
-	return {color1, color2};
+	return { color1, color2 };
 }
 
-uint16_t PVRZImporter::getBlockPixelMask(const Region& region, const Region& grid, int x, int y) {
+uint16_t PVRZImporter::GetBlockPixelMask(const Region& region, const Region& grid, int x, int y)
+{
 	// 16bit to represent 4 rows x 4 cols as bitmap,
 	// unset pixels will be skipped, so if 1-3 pixels lap into a block,
 	// there is something like:
@@ -166,10 +169,10 @@ uint16_t PVRZImporter::getBlockPixelMask(const Region& region, const Region& gri
 	// 0 0 0 0
 	// 0 0 0 0
 	//
-	// The value in the top-left is (0, 0) -- as in the DXT blocks.
+	// The LSB is (0, 0) -- as in the DXT blocks.
 	uint16_t pixelMask = 0xFFFF;
 
-	// Left edge: unaligned offset?
+	// Top margin
 	if (y == grid.y) {
 		int yOverlap = region.y % 4;
 		if (yOverlap != 0) {
@@ -177,8 +180,10 @@ uint16_t PVRZImporter::getBlockPixelMask(const Region& region, const Region& gri
 				pixelMask &= ~(0xF << (4 * by));
 			}
 		}
-	// Right edge: partially?
-	} else if (y == grid.h - 1) {
+	}
+
+	// Bottom margin
+	if (y == grid.h - 1) {
 		int yOverlap = (region.y + region.h) % 4;
 		if (yOverlap != 0) {
 			for (int by = 4; by > yOverlap; --by) {
@@ -187,7 +192,7 @@ uint16_t PVRZImporter::getBlockPixelMask(const Region& region, const Region& gri
 		}
 	}
 
-	// Top edge: unaligned offset?
+	// Left margin
 	if (x == grid.x) {
 		int xOverlap = region.x % 4;
 		if (xOverlap != 0) {
@@ -200,8 +205,10 @@ uint16_t PVRZImporter::getBlockPixelMask(const Region& region, const Region& gri
 				pixelMask &= ~(rowMask << (4 * by));
 			}
 		}
-	// Lower edge: partially?
-	} else if (x == grid.w - 1) {
+	}
+
+	// Right margin
+	if (x == grid.w - 1) {
 		int xOverlap = (region.x + region.w) % 4;
 		if (xOverlap != 0) {
 			uint8_t rowMask = 0;
@@ -224,15 +231,16 @@ uint16_t PVRZImporter::getBlockPixelMask(const Region& region, const Region& gri
 	return pixelMask;
 }
 
-Holder<Sprite2D> PVRZImporter::getSprite2DDXT1(Region&& region) const {
+Holder<Sprite2D> PVRZImporter::getSprite2DDXT1(Region&& region) const
+{
 	PixelFormat fmt = PixelFormat::ARGB32Bit();
-	uint32_t *uncompressedData = reinterpret_cast<uint32_t*>(malloc(region.size.Area() * 4));
+	uint32_t* uncompressedData = reinterpret_cast<uint32_t*>(malloc(region.size.Area() * 4));
 	std::fill(uncompressedData, uncompressedData + region.size.Area(), 0);
 
 	std::array<uint8_t, 6> colors;
-	Point blockOrigin{region.x % 4, region.y % 4};
+	Point blockOrigin { region.x % 4, region.y % 4 };
 
-	Region grid{region.x / 4, region.y / 4, (region.x + region.w) / 4, (region.y + region.h) / 4};
+	Region grid { region.x / 4, region.y / 4, (region.x + region.w) / 4, (region.y + region.h) / 4 };
 	if ((region.x + region.w) % 4 != 0) {
 		grid.w += 1;
 	}
@@ -247,7 +255,7 @@ Holder<Sprite2D> PVRZImporter::getSprite2DDXT1(Region&& region) const {
 			auto color1n2 = extractPalette(srcDataOffset, colors);
 			bool col1IsGreater = std::get<0>(color1n2) > std::get<1>(color1n2);
 
-			auto pixelMask = getBlockPixelMask(region, grid, x, y);
+			auto pixelMask = GetBlockPixelMask(region, grid, x, y);
 			uint32_t blockValue = *(reinterpret_cast<const uint32_t*>(&data[srcDataOffset + 4])); // 4x4x2 bit
 			for (uint8_t i = 0; i < 16; ++i) {
 				if ((pixelMask & (1 << i)) == 0) {
@@ -292,18 +300,19 @@ Holder<Sprite2D> PVRZImporter::getSprite2DDXT1(Region&& region) const {
 		}
 	}
 
-	auto spr = VideoDriver->CreateSprite(Region{0, 0, region.w, region.h}, uncompressedData, fmt);
-	return {spr};
+	auto spr = VideoDriver->CreateSprite(Region { 0, 0, region.w, region.h }, uncompressedData, fmt);
+	return { spr };
 }
 
-Holder<Sprite2D> PVRZImporter::getSprite2DDXT5(Region&& region) const {
+Holder<Sprite2D> PVRZImporter::getSprite2DDXT5(Region&& region) const
+{
 	PixelFormat fmt = PixelFormat::ARGB32Bit();
-	uint32_t *uncompressedData = reinterpret_cast<uint32_t*>(malloc(region.size.Area() * 4));
+	uint32_t* uncompressedData = reinterpret_cast<uint32_t*>(malloc(region.size.Area() * 4));
 	std::fill(uncompressedData, uncompressedData + region.size.Area(), 0);
 
 	std::array<uint8_t, 6> colors;
-	Point blockOrigin{region.x % 4, region.y % 4};
-	Region grid{region.x / 4, region.y / 4, (region.x + region.w) / 4, (region.y + region.h) / 4};
+	Point blockOrigin { region.x % 4, region.y % 4 };
+	Region grid { region.x / 4, region.y / 4, (region.x + region.w) / 4, (region.y + region.h) / 4 };
 
 	if ((region.x + region.w) % 4 != 0) {
 		grid.w += 1;
@@ -338,7 +347,7 @@ Holder<Sprite2D> PVRZImporter::getSprite2DDXT5(Region&& region) const {
 
 			extractPalette(srcDataOffset + 8, colors);
 
-			auto pixelMask = getBlockPixelMask(region, grid, x, y);
+			auto pixelMask = GetBlockPixelMask(region, grid, x, y);
 			uint32_t blockValue = *(reinterpret_cast<const uint32_t*>(&data[srcDataOffset + 12])); // 4x4x2 bit
 			uint64_t alphaBlock = *reinterpret_cast<const uint64_t*>(&data[srcDataOffset + 2]); // 6 bytes (ignoring the top 2)
 
@@ -378,16 +387,17 @@ Holder<Sprite2D> PVRZImporter::getSprite2DDXT5(Region&& region) const {
 		}
 	}
 
-	auto spr = VideoDriver->CreateSprite(Region{0, 0, region.w, region.h}, uncompressedData, fmt);
-	return {spr};
+	auto spr = VideoDriver->CreateSprite(Region { 0, 0, region.w, region.h }, uncompressedData, fmt);
+	return { spr };
 }
 
-int PVRZImporter::GetPalette(int, Color*) {
+int PVRZImporter::GetPalette(int, Palette&)
+{
 	return -1;
 }
 
 #include "plugindef.h"
 
 GEMRB_PLUGIN(0x813EC7, "PVRZ File Reader")
-PLUGIN_IE_RESOURCE(PVRZImporter, "pvrz", (ieWord)IE_PVRZ_CLASS_ID)
+PLUGIN_IE_RESOURCE(PVRZImporter, "pvrz", (ieWord) IE_PVRZ_CLASS_ID)
 END_PLUGIN()

@@ -22,9 +22,10 @@
 
 #include "Audio.h"
 #include "GameData.h" // For ResourceHolder
-#include "Logging/Logging.h"
 #include "Interface.h"
 #include "SoundMgr.h"
+
+#include "Logging/Logging.h"
 
 using namespace GemRB;
 
@@ -49,13 +50,14 @@ bool MUSImporter::Init()
 	return true;
 }
 
-#define SKIP_BLANKS while (i < len) {\
-	if (isblank(line[i])) {\
-		i++;\
-	} else {\
-		break;\
-	}\
-}
+#define SKIP_BLANKS \
+	while (i < len) { \
+		if (isblank(line[i])) { \
+			i++; \
+		} else { \
+			break; \
+		} \
+	}
 
 /** Loads a PlayList for playing */
 bool MUSImporter::OpenPlaylist(const ieVariable& name)
@@ -143,7 +145,7 @@ bool MUSImporter::OpenPlaylist(const ieVariable& name)
 			}
 		}
 		fillVar(pls.PLEnd);
-		playlist.push_back( pls );
+		playlist.push_back(pls);
 		count--;
 	}
 	return true;
@@ -182,6 +184,8 @@ void MUSImporter::End()
 
 	if (playlist[PLpos].PLEnd && playlist[PLpos].PLEnd != "end") {
 		PlayMusic(playlist[PLpos].PLEnd);
+	} else {
+		HardEnd();
 	}
 	PLnext = -1;
 }
@@ -214,7 +218,7 @@ int MUSImporter::SwitchPlayList(const ieVariable& name, bool Hard)
 		}
 	}
 
-	if (OpenPlaylist( name )) {
+	if (OpenPlaylist(name)) {
 		Start();
 		return 0;
 	}
@@ -228,7 +232,7 @@ void MUSImporter::PlayNext()
 		return;
 	}
 	if (PLnext != -1) {
-		PlayMusic( PLnext );
+		PlayMusic(PLnext);
 		PLpos = PLnext;
 		if (playlist[PLpos].PLLoop) {
 			for (unsigned int i = 0; i < playlist.size(); i++) {
@@ -242,7 +246,7 @@ void MUSImporter::PlayNext()
 				PLnext = -1;
 			else
 				PLnext = PLpos + 1;
-			if ((unsigned int) PLnext >= playlist.size() ) {
+			if ((unsigned int) PLnext >= playlist.size()) {
 				PLnext = 0;
 			}
 		}
@@ -254,14 +258,14 @@ void MUSImporter::PlayNext()
 			if (OpenPlaylist(PLNameNew)) {
 				Start();
 			}
-			PLNameNew[0]='\0';
+			PLNameNew[0] = '\0';
 		}
 	}
 }
 
 void MUSImporter::PlayMusic(int pos)
 {
-	PlayMusic( playlist[pos].PLFile );
+	PlayMusic(playlist[pos].PLFile);
 }
 
 void MUSImporter::PlayMusic(const ieVariable& name)
@@ -280,7 +284,7 @@ void MUSImporter::PlayMusic(const ieVariable& name)
 
 	ResourceHolder<SoundMgr> sound = manager.GetResourceHolder<SoundMgr>(FName, true);
 	if (sound) {
-		int soundID = core->GetAudioDrv()->CreateStream( sound );
+		int soundID = core->GetAudioDrv()->CreateStream(std::move(sound));
 		if (soundID == -1) {
 			core->GetAudioDrv()->Stop();
 		}
@@ -290,7 +294,8 @@ void MUSImporter::PlayMusic(const ieVariable& name)
 	Log(MESSAGE, "MUSImporter", "Playing {}...", FName);
 }
 
-bool MUSImporter::IsCurrentPlayList(const ieVariable& name) {
+bool MUSImporter::IsCurrentPlayList(const ieVariable& name)
+{
 	return name == PLName;
 }
 

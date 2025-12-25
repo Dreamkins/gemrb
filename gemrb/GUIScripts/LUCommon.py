@@ -93,6 +93,9 @@ def GetLevelDiff (actor, Level):
 
 def CanLevelUp(actor):
 	"""Returns true if the actor can level up."""
+	
+	if GameCheck.IsGemRBDemo ():
+		return False
 
 	# get our class and placements for Multi'd and Dual'd characters
 	Class = GUICommon.GetClassRowName (actor)
@@ -108,7 +111,7 @@ def CanLevelUp(actor):
 		GemRB.GetPlayerStat (actor, IE_LEVEL3)]
 
 	if GemRB.GetPlayerStat(actor, IE_LEVELDRAIN)>0:
-		return 0
+		return False
 
 	if GameCheck.IsIWD2():
 		import GUIREC
@@ -126,10 +129,10 @@ def CanLevelUp(actor):
 
 		tmpNext = GetNextLevelExp (lvls[SwitcherClass], SwitcherClass)
 		if (tmpNext != 0 or lvls[SwitcherClass] == 0) and tmpNext <= xp[SwitcherClass]:
-			return 1
+			return True
 		#ignore the rest of this function, to avoid false positives
 		#other classes can only be achieved by hacking the game somehow
-		return 0
+		return False
 
 	if Multi[0] > 1: # multiclassed
 		xp = xp // Multi[0] # divide the xp evenly between the classes
@@ -138,14 +141,14 @@ def CanLevelUp(actor):
 			TmpClassName = GUICommon.GetClassRowName (Multi[i+1], "class")
 			tmpNext = GetNextLevelExp (Levels[i], TmpClassName)
 			if (tmpNext != 0 or Levels[i] == 0) and tmpNext <= xp:
-				return 1
+				return True
 
 		# didn't find a class that could level
-		return 0
+		return False
 	elif Dual[0] > 0: # dual classed
 		# get the class we can level
 		if Dual[0] == 3:
-			ClassID = CommonTables.KitList.GetValue (Dual[2], 7)
+			ClassID = CommonTables.KitList.GetValue (Dual[2], 7, GTV_INT)
 			Class = GUICommon.GetClassRowName (ClassID, "class")
 		else:
 			Class = GUICommon.GetClassRowName(Dual[2], "index")
@@ -193,10 +196,10 @@ def _SetupLevels (pc, Level, offset=0, noclass=0):
 		Class = [Multi[1], Multi[2], Multi[3]]
 	elif Dual[0]: #only worry about the newer class
 		if Dual[0] == 3:
-			Class = [CommonTables.KitList.GetValue (Dual[2], 7)]
+			Class = [CommonTables.KitList.GetValue (Dual[2], 7, GTV_INT)]
 		else:
 			ClassRow = GUICommon.GetClassRowName(Dual[2], "index")
-			Class = [CommonTables.Classes.GetValue (ClassRow, "ID")]
+			Class = [CommonTables.Classes.GetValue (ClassRow, "ID", GTV_INT)]
 		#assume Level is correct if passed
 		if GUICommon.IsDualSwap(pc) and not Level:
 			Levels = [Levels[1], Levels[0], Levels[2]]
@@ -253,13 +256,13 @@ def SetupSavingThrows (pc, Level=None):
 		for i in range (NumClasses):
 			#loop through each class and update the save value if we have
 			#a better save
-			TmpSave = SaveTables[i].GetValue (row, Levels[i])
+			TmpSave = SaveTables[i].GetValue (row, Levels[i], GTV_INT)
 			if TmpSave and (TmpSave < CurrentSave or i == 0):
 				CurrentSave = TmpSave
 
 		#add racial bonuses if applicable (small pc's)
 		if RaceSaveTable:
-			CurrentSave -= RaceSaveTable.GetValue (row, Con)
+			CurrentSave -= RaceSaveTable.GetValue (row, Con, GTV_INT)
 
 		#add class bonuses if applicable (paladin)
 		CurrentSave -= ClassBonus
@@ -303,7 +306,7 @@ def SetupThaco (pc, Level=None):
 		#loop through each class and update the save value if we have
 		#a better thac0
 		ClassName = GUICommon.GetClassRowName (Class[i], "class")
-		TmpThaco = ThacoTable.GetValue (ClassName, str(Levels[i]+1))
+		TmpThaco = ThacoTable.GetValue (ClassName, str(Levels[i] + 1), GTV_INT)
 		if TmpThaco < CurrentThaco:
 			NewThaco = 1
 			CurrentThaco = TmpThaco
@@ -373,10 +376,10 @@ def SetupHP (pc, Level=None, LevelDiff=None):
 		if (Levels[0]<=Levels[1]):
 			return
 		if Dual[0] == 3:
-			Class = [CommonTables.KitList.GetValue (Dual[2], 7)]
+			Class = [CommonTables.KitList.GetValue (Dual[2], 7, GTV_INT)]
 		else:
 			ClassRow = GUICommon.GetClassRowName(Dual[2], "index")
-			Class = [CommonTables.Classes.GetValue (ClassRow, "ID")]
+			Class = [CommonTables.Classes.GetValue (ClassRow, "ID", GTV_INT)]
 		#if Level and LevelDiff are passed, we assume it is correct
 		if GUICommon.IsDualSwap(pc) and not Level and not LevelDiff:
 			LevelDiffs = [LevelDiffs[1], LevelDiffs[0], LevelDiffs[2]]
@@ -467,83 +470,9 @@ def SetupHP (pc, Level=None, LevelDiff=None):
 	return
 
 def ApplyFeats(MyChar):
-
 	#don't mess with feats outside of IWD2
 	if not GameCheck.IsIWD2():
 		return
 
-	#feats giving a single innate ability
-	SetSpell(MyChar, "SPIN111", FEAT_WILDSHAPE_BOAR)
-	SetSpell(MyChar, "SPIN197", FEAT_MAXIMIZED_ATTACKS)
-	SetSpell(MyChar, "SPIN231", FEAT_ENVENOM_WEAPON)
-	SetSpell(MyChar, "SPIN245", FEAT_WILDSHAPE_PANTHER)
-	SetSpell(MyChar, "SPIN246", FEAT_WILDSHAPE_SHAMBLER)
-	SetSpell(MyChar, "SPIN275", FEAT_POWER_ATTACK)
-	SetSpell(MyChar, "SPIN276", FEAT_EXPERTISE)
-	SetSpell(MyChar, "SPIN277", FEAT_ARTERIAL_STRIKE)
-	SetSpell(MyChar, "SPIN278", FEAT_HAMSTRING)
-	SetSpell(MyChar, "SPIN279", FEAT_RAPID_SHOT)
-
-	#extra rage
-	level = GemRB.GetPlayerStat(MyChar, IE_LEVELBARBARIAN)
-	if level>0:
-		if level>=15:
-			GemRB.RemoveSpell(MyChar, "SPIN236")
-			Spell = "SPIN260"
-		else:
-			GemRB.RemoveSpell(MyChar, "SPIN260")
-			Spell = "SPIN236"
-		cnt = GemRB.GetPlayerStat (MyChar, IE_FEAT_EXTRA_RAGE) + (level + 3) // 4
-		GUICommon.MakeSpellCount(MyChar, Spell, cnt)
-	else:
-		GemRB.RemoveSpell(MyChar, "SPIN236")
-		GemRB.RemoveSpell(MyChar, "SPIN260")
-
-	#extra smiting
-	level = GemRB.GetPlayerStat(MyChar, IE_LEVELPALADIN)
-	if level>1:
-		cnt = GemRB.GetPlayerStat (MyChar, IE_FEAT_EXTRA_SMITING) + 1
-		GUICommon.MakeSpellCount(MyChar, "SPIN152", cnt)
-	else:
-		GemRB.RemoveSpell(MyChar, "SPIN152")
-
-	#extra turning
-	level = GemRB.GetPlayerStat(MyChar, IE_TURNUNDEADLEVEL)
-	if level>0:
-		cnt = GUICommon.GetAbilityBonus(MyChar, IE_CHR) + 3
-		if cnt<1: cnt = 1
-		cnt += GemRB.GetPlayerStat (MyChar, IE_FEAT_EXTRA_TURNING)
-		GUICommon.MakeSpellCount(MyChar, "SPIN970", cnt)
-	else:
-		GemRB.RemoveSpell(MyChar, "SPIN970")
-
-	#stunning fist
-	if GemRB.HasFeat (MyChar, FEAT_STUNNING_FIST):
-		cnt = GemRB.GetPlayerStat(MyChar, IE_CLASSLEVELSUM) // 4
-		GUICommon.MakeSpellCount(MyChar, "SPIN232", cnt)
-	else:
-		GemRB.RemoveSpell(MyChar, "SPIN232")
-
-	#remove any previous SPLFOCUS
-	#GemRB.ApplyEffect(MyChar, "RemoveEffects",0,0,"SPLFOCUS")
-	#spell focus stats
-	SPLFocusTable = GemRB.LoadTable ("splfocus")
-	for i in range(SPLFocusTable.GetRowCount()):
-		Row = SPLFocusTable.GetRowName(i)
-		Stat = SPLFocusTable.GetValue(Row, "STAT", GTV_STAT)
-		if Stat:
-			Column = GemRB.GetPlayerStat(MyChar, Stat)
-			if Column:
-				Value = SPLFocusTable.GetValue(i, Column)
-				if Value:
-					#add the effect, value could be 2 or 4, timing mode is 8 - so it is not saved
-					GemRB.ApplyEffect(MyChar, "SpellFocus", Value, i,"","","","SPLFOCUS", 8)
-	return
-
-def SetSpell(pc, SpellName, Feat):
-	if GemRB.HasFeat (pc, Feat):
-		GUICommon.MakeSpellCount(pc, SpellName, 1)
-	else:
-		GemRB.RemoveSpell(pc, SpellName)
-	return
-
+	import IDLUCommon
+	IDLUCommon.LearnFeatInnates (MyChar, MyChar < 1000, False) # did we get passed a global id?

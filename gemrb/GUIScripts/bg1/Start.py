@@ -52,46 +52,21 @@ def OnLoad():
 def SinglePlayerPress():
 	
 	SinglePlayerButton.SetText(13728)
+	MultiPlayerButton.SetStatus(IE_GUI_BUTTON_ENABLED)
 	MultiPlayerButton.SetText(13729)
-	MoviesButton.SetText(24110)
 	ExitButton.SetText(15416)
 	MultiPlayerButton.OnPress (LoadSingle)
 	SinglePlayerButton.OnPress (NewSingle)
 	ExitButton.OnPress (BackToMain)
 	ExitButton.MakeEscape()
+	MoviesButton.SetText("")
 	if HasTOTSC():
 		MoviesButton.OnPress (MissionPack)
+		MoviesButton.SetText(24110)
 	else:
-		MoviesButton.SetFlags(IE_GUI_BUTTON_NO_IMAGE, OP_OR)
+		MoviesButton.SetFlags(IE_GUI_BUTTON_NO_IMAGE, OP_SET)
 		MoviesButton.SetStatus(IE_GUI_BUTTON_DISABLED)
 
-	return
-
-def MultiPlayerPress():
-	
-	SinglePlayerButton.SetText(11825)
-	MultiPlayerButton.SetText(20642)
-	MoviesButton.SetText(15416)
-	ExitButton.SetText("")
-	SinglePlayerButton.OnPress (PregenPress)
-	MultiPlayerButton.OnPress (ConnectPress)
-	MoviesButton.OnPress (BackToMain)
-	MoviesButton.MakeEscape()
-	ExitButton.OnPress (None)
-	ExitButton.SetStatus(IE_GUI_BUTTON_DISABLED)
-	ExitButton.SetFlags(IE_GUI_BUTTON_NO_IMAGE, OP_SET)
-	return
-
-def ConnectPress():
-#well...
-	return
-
-def PregenPress():
-	GemRB.SetVar("PlayMode",0) #loadgame needs this hack
-	GemRB.SetVar("Slot",1)
-	GemRB.LoadGame(None)
-	GemRB.SetVar("PlayMode",-1)
-	GemRB.SetNextScript("CharGen")
 	return
 
 def LoadSingle():
@@ -142,7 +117,6 @@ def MoviesPress():
 	
 def BackToMain():
 	SinglePlayerButton.SetStatus(IE_GUI_BUTTON_ENABLED)
-	MultiPlayerButton.SetStatus(IE_GUI_BUTTON_ENABLED)
 	MoviesButton.SetStatus(IE_GUI_BUTTON_ENABLED)
 	ExitButton.SetStatus(IE_GUI_BUTTON_ENABLED)
 	SinglePlayerButton.SetText(15413)
@@ -150,11 +124,11 @@ def BackToMain():
 	MoviesButton.SetText(15415)
 	ExitButton.SetText(15417)
 	SinglePlayerButton.OnPress (SinglePlayerPress)
-	MultiPlayerButton.OnPress (MultiPlayerPress)
+	MultiPlayerButton.SetState (IE_GUI_BUTTON_DISABLED)
 	MoviesButton.OnPress (MoviesPress)
 	ExitButton.OnPress (ExitPress)
-	MoviesButton.SetFlags(IE_GUI_BUTTON_NO_IMAGE, OP_NAND)
-	ExitButton.SetFlags(IE_GUI_BUTTON_NO_IMAGE, OP_NAND)
+	MoviesButton.SetFlags(IE_GUI_BUTTON_NORMAL, OP_SET)
+	ExitButton.SetFlags(IE_GUI_BUTTON_NORMAL, OP_SET)
 	ExitButton.MakeEscape()
 
 	return

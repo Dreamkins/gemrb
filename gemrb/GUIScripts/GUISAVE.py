@@ -103,7 +103,7 @@ def ScrollBarPress ():
 	Window = SaveWindow
 
 	# draw load game portraits
-	Pos = GemRB.GetVar ("TopIndex")
+	Pos = GemRB.GetVar ("TopIndex") or 0
 	for i in range(num_rows):
 		ActPos = Pos + i
 
@@ -198,14 +198,14 @@ def OpenConfirmWindow (btn):
 	global ConfirmWindow, SaveButton
 
 	Pos = GemRB.GetVar ("TopIndex") + btn.Value
-	ConfirmWindow = GemRB.LoadWindow (1)
+	ConfirmWindow = GemRB.LoadWindow (1, "GUISAVE")
 
 	AreaPreview = ConfirmWindow.GetControl (0)
 	if Pos < len(Games):
 		Slotname = Games[Pos].GetName()
 		save_strref = strs['overwrite']
 
-		if GameCheck.IsBG2 ():
+		if GameCheck.IsBG2OrEE ():
 			Chapter = GemRB.GetGameVar ("CHAPTER") & 0x7fffffff
 			GameDate = GemRB.GetString (str_chapter[Chapter-1]) + " " + Games[Pos].GetGameDate()
 		else:
@@ -285,7 +285,7 @@ def DeleteGameConfirm (delIndex):
 def DeleteGamePress (btn):
 	global ConfirmWindow
 
-	ConfirmWindow = GemRB.LoadWindow (ctrl_offset[12])
+	ConfirmWindow = GemRB.LoadWindow (ctrl_offset[12], "GUISAVE")
 	ConfirmWindow.SetFlags (WF_ALPHA_CHANNEL, OP_OR)
 	ConfirmWindow.ShowModal (MODAL_SHADOW_GRAY)
 

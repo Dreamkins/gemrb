@@ -20,13 +20,13 @@
 #define CODEPAGE_TO_ICONV_H
 
 #include <array>
-#include <utility>
 #include <cstdint>
+#include <utility>
 
 namespace GemRB {
 
 using CodepageIconvMapEntry = std::pair<uint32_t, const char*>;
-using CodepageIconvMap = std::array<CodepageIconvMapEntry, 56>;
+using CodepageIconvMap = std::array<CodepageIconvMapEntry, 57>;
 
 extern const CodepageIconvMap codepageIconvMap;
 

@@ -35,6 +35,7 @@ import GUICommonWindows
 import GUISAVE
 import GUIOPTControls
 from GUIDefines import *
+from ie_sounds import GEM_SND_VOL_MUSIC, GEM_SND_VOL_AMBIENTS
 
 ###################################################
 
@@ -99,12 +100,26 @@ def InitOptionsWindow (Window):
 
 	return
 
-ToggleOptionsWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIOPT", GUICommonWindows.ToggleWindow, InitOptionsWindow, None, GUICommonWindows.DefaultWinPos, True)
-OpenOptionsWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIOPT", GUICommonWindows.OpenWindowOnce, InitOptionsWindow, None, GUICommonWindows.DefaultWinPos, True)
+ToggleOptionsWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIOPT", GUICommonWindows.ToggleWindow, InitOptionsWindow, None, True)
+OpenOptionsWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIOPT", GUICommonWindows.OpenWindowOnce, InitOptionsWindow, None, True)
 
 def TrySavingConfiguration():
 	if not GemRB.SaveConfig():
 		print("ARGH, could not write config to disk!!")
+
+###################################################
+
+# work around radiobutton preselection issues
+# after the generation of the controls we have to re-adjust the visible and
+# internal state, i.e. adjust button state and dictionary entry
+def PreselectRadioGroup (variable, value, buttonIds, window):
+	for i in buttonIds:
+		Button = window.GetControl (i)
+		if (Button.Value == value):
+			Button.SetState (IE_GUI_BUTTON_SELECTED)
+		else:
+			Button.SetState (IE_GUI_BUTTON_ENABLED)
+	GemRB.SetVar(variable, value)
 
 ###################################################
 
@@ -127,9 +142,15 @@ def OpenVideoOptionsWindow ():
 	GUIOPTControls.OptSlider (17203, 3, 35, 17129, 'Brightness Correction', DisplayHelpBrightness, 4)
 	GUIOPTControls.OptSlider (17204, 22, 36, 17128, 'Gamma Correction', DisplayHelpContrast)
 
-	GUIOPTControls.OptRadio (DisplayHelpBPP, 5, 37, 'BitsPerPixel', 16, None, 17205, 18038)
-	GUIOPTControls.OptRadio (DisplayHelpBPP, 6, 37, 'BitsPerPixel', 24, None, 17205, 18038)
-	GUIOPTControls.OptRadio (DisplayHelpBPP, 7, 37, 'BitsPerPixel', 32, None, 17205, 18038)
+	# Radiobuttons need special care...
+	Variable = 'BitsPerPixel'
+	Value = GemRB.GetVar(Variable)
+	ButtonIds = [5, 6, 7]
+
+	GUIOPTControls.OptRadio (DisplayHelpBPP, ButtonIds[0], 37, Variable, 16, None, 17205, 18038)
+	GUIOPTControls.OptRadio (DisplayHelpBPP, ButtonIds[1], 37, Variable, 24, None, 17205, 18038)
+	GUIOPTControls.OptRadio (DisplayHelpBPP, ButtonIds[2], 37, Variable, 32, None, 17205, 18038)
+	PreselectRadioGroup (Variable, Value, ButtonIds, Window)
 
 	GUIOPTControls.OptCheckbox (18000, 9, 38, 17131, 'Full Screen', DisplayHelpFullScreen)
 
@@ -203,11 +224,11 @@ def OpenAudioOptionsWindow ():
 
 def DisplayHelpAmbientVolume ():
 	GemRB.GetView ("OPTHELP").SetText (18008)
-	GemRB.UpdateAmbientsVolume ()
+	GemRB.UpdateVolume (GEM_SND_VOL_AMBIENTS)
 
 def DisplayHelpMusicVolume ():
 	GemRB.GetView ("OPTHELP").SetText (18011)
-	GemRB.UpdateMusicVolume ()
+	GemRB.UpdateVolume (GEM_SND_VOL_MUSIC)
 
 ###################################################
 
@@ -226,21 +247,24 @@ def OpenCharacterSoundsWindow ():
 	GUIOPTControls.OptCheckbox (18013, 6, 18, 17139, 'Attack Sounds')
 	GUIOPTControls.OptCheckbox (18014, 7, 19, 17140, 'Footsteps')
 
-	frequency = GemRB.GetVar ('Command Sounds Frequency')
-	frequency2 = GemRB.GetVar ('Selection Sounds Frequency')
-	GUIOPTControls.OptRadio (DisplayHelpCommandSounds, 8, 21, 'Command Sounds Frequency', 3)
-	GUIOPTControls.OptRadio (DisplayHelpCommandSounds, 9, 21, 'Command Sounds Frequency', 2)
-	GUIOPTControls.OptRadio (DisplayHelpCommandSounds, 10, 21, 'Command Sounds Frequency', 1)
-	GUIOPTControls.OptRadio (DisplayHelpSelectionSounds, 58, 57, 'Selection Sounds Frequency', 3)
-	GUIOPTControls.OptRadio (DisplayHelpSelectionSounds, 59, 57, 'Selection Sounds Frequency', 2)
-	GUIOPTControls.OptRadio (DisplayHelpSelectionSounds, 60, 57, 'Selection Sounds Frequency', 1)
-	# work around radiobutton preselection issues
-	for i in [8, 9, 10, 58, 59, 60]:
-		Button = Window.GetControl (i)
-		if (i <= 10 and (10 - i + 1) == frequency) or (i > 10 and (60 - i + 1) == frequency2):
-			Button.SetState (IE_GUI_BUTTON_SELECTED)
-		else:
-			Button.SetState (IE_GUI_BUTTON_ENABLED)
+	# Radiobuttons need special care...
+	Variable = 'Command Sounds Frequency'
+	Value = GemRB.GetVar(Variable)
+	ButtonIds = [8, 9, 10]
+
+	GUIOPTControls.OptRadio (DisplayHelpCommandSounds, ButtonIds[0], 21, Variable, 3)
+	GUIOPTControls.OptRadio (DisplayHelpCommandSounds, ButtonIds[1], 21, Variable, 2)
+	GUIOPTControls.OptRadio (DisplayHelpCommandSounds, ButtonIds[2], 21, Variable, 1)
+	PreselectRadioGroup (Variable, Value, ButtonIds, Window)
+
+	Variable = 'Selection Sounds Frequency'
+	Value = GemRB.GetVar(Variable)
+	ButtonIds = [58, 59, 60]
+
+	GUIOPTControls.OptRadio (DisplayHelpSelectionSounds, ButtonIds[0], 57, Variable, 3)
+	GUIOPTControls.OptRadio (DisplayHelpSelectionSounds, ButtonIds[1], 57, Variable, 2)
+	GUIOPTControls.OptRadio (DisplayHelpSelectionSounds, ButtonIds[2], 57, Variable, 1)
+	PreselectRadioGroup (Variable, Value, ButtonIds, Window)
 
 	Window.ShowModal (MODAL_SHADOW_GRAY)
 
@@ -285,14 +309,14 @@ def OpenGameplayOptionsWindow ():
 	GUIOPTControls.OptCheckbox (18023, 19, 27, 17182, 'Gore')
 	GUIOPTControls.OptCheckbox (11797, 42, 44, 11795, 'Infravision')
 	GUIOPTControls.OptCheckbox (20619, 47, 46, 20618, 'Weather')
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		GUIOPTControls.OptCheckbox (2242, 50, 48, 2241, 'Heal Party on Rest')
 	elif GameCheck.IsIWD2() or GameCheck.IsIWD1():
 		GUIOPTControls.OptCheckbox (15136, 50, 49, 17378, 'Maximum HP')
 
 	GUIOPTControls.OptButton (OpenFeedbackOptionsWindow, 5, 17163)
 	GUIOPTControls.OptButton (OpenAutopauseOptionsWindow, 6, 17166)
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		GUIOPTControls.OptButton (OpenHotkeyOptionsWindow, 51, 816)
 
 	Window.ShowModal (MODAL_SHADOW_GRAY)
@@ -300,11 +324,7 @@ def OpenGameplayOptionsWindow ():
 
 def DisplayHelpTooltipDelay ():
 	GemRB.GetView ("OPTHELP").SetText (18017)
-	delay_var = GemRB.GetVar ("Tooltips")
-	# BG2 disables tooltips on max setting, we just set it to an extremely high value for simplicity
-	if delay_var == 100:
-		delay_var = 10000000
-	GemRB.SetTooltipDelay (delay_var * TOOLTIP_DELAY_FACTOR//10)
+	GemRB.SetTooltipDelay (GemRB.GetVar ("Tooltips") * TOOLTIP_DELAY_FACTOR//10)
 
 def DisplayHelpMouseScrollingSpeed ():
 	GemRB.GetView ("OPTHELP").SetText (18018)
@@ -376,7 +396,7 @@ def OpenAutopauseOptionsWindow ():
 		GUIOPTControls.OptCheckbox (24888, 33, 34, 10574, 'Auto Pause Center', None, 1)
 	elif Window.GetControl (26):
 		GUIOPTControls.OptCheckbox (23514, 26, 27, 23516, 'Auto Pause State', None, 128) # enemy sighted
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		GUIOPTControls.OptCheckbox (31872, 31, 33, 31875, 'Auto Pause State', None, 512) # spell cast
 		GUIOPTControls.OptCheckbox (58171, 34, 30, 57354, 'Auto Pause State', None, 256) # trap found
 		GUIOPTControls.OptCheckbox (10571, 37, 36, 10574, 'Auto Pause Center', None, 1)
@@ -404,7 +424,6 @@ def OpenMovieWindow ():
 	DoneButton = Window.GetControl(4)
 	MoviesTable = GemRB.LoadTable("MOVIDESC")
 	opts = [MoviesTable.GetValue (i, 0) for i in range(MoviesTable.GetRowCount ()) if GemRB.GetVar(MoviesTable.GetRowName (i)) == 1]
-	TextAreaControl.SetColor (ColorWhitish, TA_COLOR_OPTIONS)
 	TextAreaControl.SetOptions (opts, "MovieIndex", 0)
 	PlayButton.SetText(17318)
 	CreditsButton.SetText(15591)

@@ -364,7 +364,7 @@ IE_LEVELMONK                    = 244
 IE_LEVELPALADIN                 = 245
 IE_LEVELRANGER                  = 246
 IE_LEVELSORCERER                = 247
-#248 IE_LEVELCLASS12
+IE_LEVELSHAMAN                  = 248
 #249 IE_LEVELCLASS13
 #the remaining stats are for our internal use now
 IE_DIALOGRANGE                  = 250 # distance for dialogue
@@ -379,5 +379,21 @@ IE_POWERATTACK                  = 0x1004
 IE_ARTERIAL_STRIKE              = 0x1005
 IE_HAMSTRING                    = 0x1006
 IE_RAPID_SHOT                   = 0x1007
+
+# internal class indices
+# Keep these synchronized with Actor.h
+ISFIGHTER = 0
+ISMAGE = 1
+ISTHIEF = 2
+ISBARBARIAN = 3
+ISBARD = 4
+ISCLERIC = 5
+ISDRUID = 6
+ISMONK = 7
+ISPALADIN = 8
+ISRANGER = 9
+ISSORCERER = 10
+ISSHAMAN = 11
+ISCLASS13 = 12
 
 # End of file ie_stats.py

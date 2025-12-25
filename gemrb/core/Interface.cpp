@@ -20,10 +20,11 @@
 
 #include "Interface.h"
 
+#include "Predicates.h"
 #include "exports.h"
 #include "globals.h"
-#include "strrefs.h"
 #include "ie_cursors.h"
+#include "strrefs.h"
 
 #include "ActorMgr.h"
 #include "AmbientMgr.h"
@@ -40,7 +41,6 @@
 #include "Factory.h"
 #include "FontManager.h"
 #include "Game.h"
-#include "GameScript/GameScript.h"
 #include "ItemMgr.h"
 #include "KeyMap.h"
 #include "MapMgr.h"
@@ -49,8 +49,8 @@
 #include "Palette.h"
 #include "PluginLoader.h"
 #include "PluginMgr.h"
-#include "Predicates.h"
 #include "ProjectileServer.h"
+#include "RNG.h"
 #include "SaveGameIterator.h"
 #include "SaveGameMgr.h"
 #include "ScriptedAnimation.h"
@@ -60,41 +60,49 @@
 #include "SymbolMgr.h"
 #include "TileMap.h"
 #include "VEFObject.h"
-#include "Video/Video.h"
 #include "WorldMapMgr.h"
+
 #include "GUI/Button.h"
 #include "GUI/Console.h"
 #include "GUI/EventMgr.h"
-#include "GUI/GameControl.h"
 #include "GUI/GUIFactory.h"
 #include "GUI/GUIScriptInterface.h"
+#include "GUI/GameControl.h"
 #include "GUI/Label.h"
 #include "GUI/MapControl.h"
 #include "GUI/TextArea.h"
 #include "GUI/WindowManager.h"
 #include "GUI/WorldMapControl.h"
-#include "RNG.h"
+#include "GameScript/GameScript.h"
 #include "Scriptable/Container.h"
 #include "Streams/FileStream.h"
 #include "System/FileFilters.h"
+#include "Video/Video.h"
 
 #include <utility>
 #include <vector>
 
 #ifdef WIN32
-#include "CodepageToIconv.h"
+	#include "CodepageToIconv.h"
 #elif defined(HAVE_LANGINFO_H)
-#include <langinfo.h>
+	#include <langinfo.h>
 #endif
 
 namespace GemRB {
 
 GEM_EXPORT PluginHolder<Video> VideoDriver;
-GEM_EXPORT Interface* core = NULL;
+GEM_EXPORT Interface* core = nullptr;
+
+[[noreturn]]
+static void ThrowException(const std::string& msg)
+{
+	FlushLogs();
+	throw CIE(msg);
+}
 
 struct AbilityTables {
 	using AbilityTable = std::vector<ieWordSigned>;
-	
+
 	const int tableSize = 0;
 	AbilityTable strmod;
 	AbilityTable strmodex;
@@ -104,41 +112,41 @@ struct AbilityTables {
 	AbilityTable chrmod;
 	AbilityTable lorebon;
 	AbilityTable wisbon;
-	
+
 	explicit AbilityTables(int MaximumAbility) noexcept
-	: tableSize(MaximumAbility + 1),
-	strmod(tableSize * 4),
-	strmodex(101 * 4),
-	intmod(tableSize * 5),
-	dexmod(tableSize * 3),
-	conmod(tableSize * 5),
-	chrmod(tableSize),
-	lorebon(tableSize),
-	wisbon(tableSize)
+		: tableSize(MaximumAbility + 1),
+		  strmod(tableSize * 4),
+		  strmodex(101 * 4),
+		  intmod(tableSize * 5),
+		  dexmod(tableSize * 3),
+		  conmod(tableSize * 5),
+		  chrmod(tableSize),
+		  lorebon(tableSize),
+		  wisbon(tableSize)
 	{
 		if (!ReadAbilityTable("strmod", strmod, 4, tableSize)) {
 			Log(ERROR, "Interface", "unable to read 'strmod' ability table!");
 		}
-		
+
 		//3rd ed doesn't have strmodex, but has a maximum of 40
 		if (!ReadAbilityTable("strmodex", strmodex, 4, 101) && MaximumAbility <= 25) {
 			Log(ERROR, "Interface", "unable to read 'strmodex' ability table!");
 		}
-		
+
 		if (!ReadAbilityTable("intmod", intmod, 5, tableSize)) {
 			Log(ERROR, "Interface", "unable to read 'intmod' ability table!");
 		}
-		
+
 		if (!ReadAbilityTable("hpconbon", conmod, 5, tableSize)) {
 			Log(ERROR, "Interface", "unable to read 'hpconbon' ability table!");
 		}
-		
+
 		if (!core->HasFeature(GFFlags::RULES_3ED)) {
 			//no lorebon in iwd2???
 			if (!ReadAbilityTable("lorebon", lorebon, 1, tableSize)) {
 				Log(ERROR, "Interface", "unable to read 'lorebon' ability table!");
 			}
-			
+
 			//no dexmod in iwd2???
 			if (!ReadAbilityTable("dexmod", dexmod, 3, tableSize)) {
 				Log(ERROR, "Interface", "unable to read 'dexmod' ability table!");
@@ -155,7 +163,7 @@ struct AbilityTables {
 			}
 		}
 	}
-	
+
 private:
 	bool ReadAbilityTable(const ResRef& tablename, AbilityTable& table, int columns, int rows) const
 	{
@@ -165,18 +173,18 @@ private:
 		}
 		//this is a hack for rows not starting at 0 in some cases
 		int fix = 0;
-		const char * tmp = tab->GetRowName(0).c_str();
-		if (tmp && (tmp[0]!='0')) {
+		const char* tmp = tab->GetRowName(0).c_str();
+		if (tmp && (tmp[0] != '0')) {
 			fix = atoi(tmp);
-			for (int i=0;i<fix;i++) {
-				for (int j=0;j<columns;j++) {
-					table[rows*j+i] = tab->QueryFieldSigned<ieWordSigned>(0,j);
+			for (int i = 0; i < fix; i++) {
+				for (int j = 0; j < columns; j++) {
+					table[rows * j + i] = tab->QueryFieldSigned<ieWordSigned>(0, j);
 				}
 			}
 		}
-		for (int j=0;j<columns;j++) {
-			for( int i=0;i<rows-fix;i++) {
-				table[rows*j+i+fix] = tab->QueryFieldSigned<ieWordSigned>(i,j);
+		for (int j = 0; j < columns; j++) {
+			for (int i = 0; i < rows - fix; i++) {
+				table[rows * j + i + fix] = tab->QueryFieldSigned<ieWordSigned>(i, j);
 			}
 		}
 		return true;
@@ -198,7 +206,8 @@ static const ieWord IDT_SKILLPENALTY = 3;
 Control ItemDragOp::dragDummy = Control(Region());
 
 ItemDragOp::ItemDragOp(CREItem* item)
-: ControlDragOp(&dragDummy), item(item) {
+	: ControlDragOp(&dragDummy), item(item)
+{
 	Item* i = gamedata->GetItem(item->ItemResRef);
 	assert(i);
 	Holder<Sprite2D> pic = gamedata->GetAnySprite(i->ItemIcon, -1, 1);
@@ -207,27 +216,35 @@ ItemDragOp::ItemDragOp(CREItem* item)
 		pic = gamedata->GetBAMSprite(i->ItemIcon, -1, 0);
 	}
 
-	cursor = pic;
+	cursor = std::move(pic);
 
 	// FIXME: this VarName is not consistent
 	dragDummy.BindDictVariable("itembutton", Control::INVALID_VALUE);
 }
 
+ItemDragOp::~ItemDragOp()
+{
+	Window* win = GetWindow(0, "WIN_INV");
+	if (win) {
+		win->Focus();
+	}
+}
+
 Interface::Interface(CoreSettings&& cfg)
-: config(std::move(cfg))
+	: config(std::move(cfg))
 {
 	Log(MESSAGE, "Core", "GemRB core version v" VERSION_GEMRB " loading ...");
 
 	core = this;
-	
+
 	SetDebugMode(DebugMode(config.debugMode));
-	
+
 #if defined(WIN32)
 	const uint32_t codepage = GetACP();
 	const char* iconvCode = GetIconvNameForCodepage(codepage);
 
 	if (nullptr == iconvCode) {
-		throw CIE(fmt::format("Mapping of codepage {} unknown to iconv.", codepage));
+		ThrowException(fmt::format("Mapping of codepage {} unknown to iconv.", codepage));
 	}
 	config.SystemEncoding = iconvCode;
 #elif defined(HAVE_LANGINFO_H)
@@ -238,16 +255,18 @@ Interface::Interface(CoreSettings&& cfg)
 	sgiterator = new SaveGameIterator();
 
 	if (!MakeDirectories(config.CachePath)) {
-		throw CIE(fmt::format("Unable to create cache directory '{}'", config.CachePath));
+		ThrowException(fmt::format("Unable to create cache directory '{}'", config.CachePath));
 	}
 
 	if (StupidityDetector(config.CachePath)) {
-		throw CIE(fmt::format("Cache path {} doesn't exist, not a folder or contains alien files!", config.CachePath));
+		ThrowException(fmt::format("Cache path {} doesn't exist, not a folder or contains alien files!", config.CachePath));
 	}
 	if (!config.KeepCache) DelTree(config.CachePath, false);
-	
+
 	vars = std::move(config.vars);
-	vars.Set("MaxPartySize", config.MaxPartySize); // for simple GUIScript access
+	// for simple GUIScript access
+	vars.Set("MaxPartySize", config.MaxPartySize);
+	vars.Set("GUIEnhancements", config.GUIEnhancements);
 
 	LoadPlugins();
 	InitVideo();
@@ -258,17 +277,14 @@ Interface::Interface(CoreSettings&& cfg)
 	Control::ActionRepeatDelay = config.ActionRepeatDelay;
 	GameControl::DebugFlags = config.DebugFlags;
 
-	ieDword brightness = vars.Get("Brightness Correction", 10);
-	ieDword contrast = vars.Get("Gamma Correction", 5);
-
 	Log(MESSAGE, "Core", "Initializing search path...");
 	if (!IsAvailable(PLUGIN_RESOURCE_DIRECTORY)) {
-		throw CIE("no DirectoryImporter!");
+		ThrowException("no DirectoryImporter!");
 	}
 
 	path_t path = config.CachePath;
 	if (!gamedata->AddSource(path, "Cache", PLUGIN_RESOURCE_DIRECTORY)) {
-		throw CIE("The cache path couldn't be registered, please check!");
+		ThrowException("The cache path couldn't be registered, please check!");
 	}
 
 	for (const auto& modPath : config.ModPath) {
@@ -322,6 +338,17 @@ Interface::Interface(CoreSettings&& cfg)
 		}
 	}
 
+	Log(MESSAGE, "Core", "Initializing KEY Importer...");
+	path_t ChitinPath = PathJoin(config.GamePath, "chitin.key");
+	if (!gamedata->AddSource(ChitinPath, "chitin.key", PLUGIN_RESOURCE_KEY)) {
+		Log(FATAL, "Core", "Failed to load \"chitin.key\"");
+		Log(ERROR, "Core", "This means:\n- you set the GamePath config variable incorrectly,\n\
+- you passed a bad game path to GemRB on the command line,\n\
+- you are not running GemRB from within a game dir,\n\
+- or the game is running (Windows only).");
+		ThrowException("The path must point to a game directory with a readable chitin.key file.");
+	}
+
 	// most of the old gemrb override files can be found here,
 	// so they have a lower priority than the game files and can more easily be modded
 	path = PathJoin(config.GemRBUnhardcodedPath, "unhardcoded", config.GameType);
@@ -333,27 +360,18 @@ Interface::Interface(CoreSettings&& cfg)
 	path = PathJoin(config.GemRBUnhardcodedPath, "unhardcoded", "shared");
 	gamedata->AddSource(path, "shared GemRB Unhardcoded data", PLUGIN_RESOURCE_CACHEDDIRECTORY);
 
-	Log(MESSAGE, "Core", "Initializing KEY Importer...");
-	path_t ChitinPath = PathJoin(config.GamePath, "chitin.key");
-	if (!gamedata->AddSource(ChitinPath, "chitin.key", PLUGIN_RESOURCE_KEY)) {
-		Log(FATAL, "Core", "Failed to load \"chitin.key\"");
-		Log(ERROR, "Core", "This means:\n- you set the GamePath config variable incorrectly,\n\
-- you passed a bad game path to GemRB on the command line,\n\
-- you are not running GemRB from within a game dir,\n\
-- or the game is running (Windows only).");
-		throw CIE("The path must point to a game directory with a readable chitin.key file.");
-	}
+	if (!config.UseAsLibrary) {
+		fogRenderer = std::make_unique<FogRenderer>(config.SpriteFoW);
 
-	fogRenderer = std::make_unique<FogRenderer>(config.SpriteFoW);
-
-	Log(MESSAGE, "Core", "Initializing GUI Script Engine...");
-	SetNextScript("Start"); // Start is the first script executed
-	guiscript = MakePluginHolder<ScriptEngine>(IE_GUI_SCRIPT_CLASS_ID);
-	if (guiscript == nullptr) {
-		throw CIE("Missing GUI Script Engine.");
-	}
-	if (!guiscript->Init()) {
-		throw CIE("Failed to initialize GUI Script.");
+		Log(MESSAGE, "Core", "Initializing GUI Script Engine...");
+		SetNextScript("Start"); // Start is the first script executed
+		guiscript = MakePluginHolder<ScriptEngine>(IE_GUI_SCRIPT_CLASS_ID);
+		if (guiscript == nullptr) {
+			ThrowException("Missing GUI Script Engine.");
+		}
+		if (!guiscript->Init()) {
+			ThrowException("Failed to initialize GUI Script.");
+		}
 	}
 
 	// re-set the gemrb override path, since we now have the correct GameType if 'auto' was used
@@ -368,24 +386,6 @@ Interface::Interface(CoreSettings&& cfg)
 	Log(MESSAGE, "Core", "Reading Game Options...");
 	LoadGemRBINI();
 
-	// SDL2 driver requires the display to be created prior to sprite creation (opengl context)
-	// we also need the display to exist to create sprites using the display format
-	ieDword fullscreen = vars.Get("Full Screen", 0);
-
-	int createDisplayResult =
-	VideoDriver->CreateDisplay(
-				Size(config.Width, config.Height),
-				config.Bpp,
-				fullscreen,
-				config.GameName.c_str(),
-				config.CapFPS == 0
-		);
-
-	if (createDisplayResult == GEM_ERROR) {
-		throw CIE("Cannot initialize shaders.");
-	}
-	VideoDriver->SetGamma(brightness, contrast);
-
 	// load the game ini (baldur.ini, torment.ini, icewind.ini ...)
 	// read from our version of the config if it is present
 	path_t gemrbINI = "gem-" + INIConfig;
@@ -396,13 +396,39 @@ Interface::Interface(CoreSettings&& cfg)
 	}
 	if (FileExists(ini_path)) {
 		tmp = INIConfig;
-		INIConfig = gemrbINI;
+		INIConfig = std::move(gemrbINI);
 	} else {
 		ini_path = PathJoin(config.GamePath, INIConfig);
-		Log(MESSAGE,"Core", "Loading original game options from {}", ini_path);
+		Log(MESSAGE, "Core", "Loading original game options from {}", ini_path);
 	}
 	if (!InitializeVarsWithINI(ini_path)) {
 		Log(WARNING, "Core", "Unable to set dictionary default values!");
+	}
+
+	// SDL2 driver requires the display to be created prior to sprite creation (opengl context)
+	// we also need the display to exist to create sprites using the display format
+	ieDword fullscreen = vars.Get("Full Screen", 0);
+	// Brightness and contrast are specified in gem-INICONFIG, so display must be initialized after reading it.
+	ieDword brightness = vars.Get("Brightness Correction", 0);
+	ieDword contrast = vars.Get("Gamma Correction", 0);
+
+	if (!config.UseAsLibrary) {
+		int createDisplayResult =
+			VideoDriver->CreateDisplay(
+				Size(config.Width, config.Height),
+				config.Bpp,
+				fullscreen,
+				config.GameName.c_str(),
+				config.CapFPS == 0);
+
+		if (createDisplayResult == GEM_ERROR) {
+			ThrowException("Cannot initialize shaders.");
+		}
+		VideoDriver->SetGamma(brightness, contrast);
+
+		if (config.FullScreen) {
+			VideoDriver->SetFullscreenMode(true);
+		}
 	}
 
 	// We use this for the game's state exclusively
@@ -444,7 +470,7 @@ Interface::Interface(CoreSettings&& cfg)
 		fs = FileStream::OpenFile(strpath);
 
 		if (!fs) {
-			throw CIE("Cannot find Dialog.tlk.");
+			ThrowException("Cannot find Dialog.tlk.");
 		}
 	}
 	strings->Open(fs);
@@ -477,37 +503,41 @@ Interface::Interface(CoreSettings&& cfg)
 
 	Log(MESSAGE, "Core", "Initializing stock sounds...");
 	if (!gamedata->ReadResRefTable(ResRef("defsound"), gamedata->defaultSounds)) {
-		throw CIE("Cannot find defsound.2da.");
+		ThrowException("Cannot find defsound.2da.");
 	}
 
-	LoadSprites();
-	LoadFonts();
-	gamedata->PreloadColors();
+	if (!config.UseAsLibrary) {
+		LoadSprites();
+		LoadFonts();
+		gamedata->PreloadColors();
+	}
 
 	Log(MESSAGE, "Core", "Initializing string constants...");
 	displaymsg = new DisplayMessage();
 
 	auto guifact = GetImporter<GUIFactory>(IE_CHU_CLASS_ID);
 	if (!guifact) {
-		throw CIE("Failed to load Window Manager.");
+		ThrowException("Failed to load Window Manager.");
 	}
 
-	Log(MESSAGE, "Core", "Initializing Window Manager...");
-	winmgr = new WindowManager(VideoDriver, guifact);
-	RegisterScriptableWindow(winmgr->GetGameWindow(), "GAMEWIN", 0);
-	winmgr->SetCursorFeedback(WindowManager::CursorFeedback(config.MouseFeedback));
+	if (!config.UseAsLibrary) {
+		Log(MESSAGE, "Core", "Initializing Window Manager...");
+		winmgr = new WindowManager(VideoDriver, std::move(guifact));
+		RegisterScriptableWindow(winmgr->GetGameWindow(), "GAMEWIN", 0);
+		winmgr->SetCursorFeedback(WindowManager::CursorFeedback(config.MouseFeedback));
+	}
 
 	QuitFlag = QF_CHANGESCRIPT;
 
 	InitAudio();
-	
-	if (HasFeature( GFFlags::HAS_PARTY_INI )) {
+
+	if (HasFeature(GFFlags::HAS_PARTY_INI)) {
 		Log(MESSAGE, "Core", "Loading precreated teams setup...");
 		INIparty = MakePluginHolder<DataFileMgr>(IE_INI_CLASS_ID);
 		path_t tINIparty = PathJoin(config.GamePath, "Party.ini");
 		fs = FileStream::OpenFile(tINIparty);
 
-		if (!INIparty->Open(std::unique_ptr<DataStream>{fs})) {
+		if (!INIparty->Open(std::unique_ptr<DataStream> { fs })) {
 			Log(WARNING, "Core", "Failed to load precreated teams.");
 		}
 	}
@@ -516,13 +546,13 @@ Interface::Interface(CoreSettings&& cfg)
 		DeathVarFormat = IWD2DeathVarFormat;
 	}
 
-	if (HasFeature( GFFlags::HAS_BEASTS_INI )) {
+	if (HasFeature(GFFlags::HAS_BEASTS_INI)) {
 		Log(MESSAGE, "Core", "Loading beasts definition File...");
 		INIbeasts = MakePluginHolder<DataFileMgr>(IE_INI_CLASS_ID);
 		path_t tINIbeasts = PathJoin(config.GamePath, "beast.ini");
 		fs = FileStream::OpenFile(tINIbeasts);
 
-		if (!INIbeasts->Open(std::unique_ptr<DataStream>{fs})) {
+		if (!INIbeasts->Open(std::unique_ptr<DataStream> { fs })) {
 			Log(WARNING, "Core", "Failed to load beast definitions.");
 		}
 
@@ -531,7 +561,7 @@ Interface::Interface(CoreSettings&& cfg)
 		path_t tINIquests = PathJoin(config.GamePath, "quests.ini");
 		FileStream* fs2 = FileStream::OpenFile(tINIquests);
 
-		if (!INIquests->Open(std::unique_ptr<DataStream>{fs2})) {
+		if (!INIquests->Open(std::unique_ptr<DataStream> { fs2 })) {
 			Log(WARNING, "Core", "Failed to load quest definitions.");
 		}
 	}
@@ -544,13 +574,13 @@ Interface::Interface(CoreSettings&& cfg)
 	if (!ret) {
 		Log(WARNING, "Core", "Failed to initialize random treasure.");
 	}
-	
+
 	abilityTables = std::make_unique<AbilityTables>(MaximumAbility);
 
 	Log(MESSAGE, "Core", "Reading game time table...");
 	ret = ReadGameTimeTable();
 	if (!ret) {
-		throw CIE("Failed to read game time table...");
+		ThrowException("Failed to read game time table...");
 	}
 
 	ret = ReadDamageTypeTable();
@@ -562,11 +592,13 @@ Interface::Interface(CoreSettings&& cfg)
 	Log(MESSAGE, "Core", "Reading game script tables...");
 	InitializeIEScript();
 
-	Log(MESSAGE, "Core", "Initializing keymap tables...");
-	keymap = new KeyMap();
-	ret = keymap->InitializeKeyMap("keymap.ini", "keymap");
-	if (!ret) {
-		Log(WARNING, "Core", "Failed to initialize keymaps.");
+	if (!config.UseAsLibrary) {
+		Log(MESSAGE, "Core", "Initializing keymap tables...");
+		keymap = new KeyMap();
+		ret = keymap->InitializeKeyMap("keymap.ini", "keymap");
+		if (!ret) {
+			Log(WARNING, "Core", "Failed to initialize keymaps.");
+		}
 	}
 
 	Log(MESSAGE, "Core", "Core Initialization Complete!");
@@ -574,7 +606,7 @@ Interface::Interface(CoreSettings&& cfg)
 #ifdef HAVE_REALPATH
 	if (unhardcodedTypePath[0] == '.') {
 		// canonicalize the relative path; usually from running from the build dir
-		char *absolutePath = realpath(unhardcodedTypePath.c_str(), NULL);
+		char* absolutePath = realpath(unhardcodedTypePath.c_str(), nullptr);
 		if (absolutePath) {
 			unhardcodedTypePath = absolutePath;
 			free(absolutePath);
@@ -584,7 +616,7 @@ Interface::Interface(CoreSettings&& cfg)
 	// dump the potentially changed unhardcoded path to a file that weidu looks at automatically to get our search paths
 	path_t pathString = fmt::format("GemRB_Data_Path = {}", unhardcodedTypePath);
 	strpath = PathJoin(config.GamePath, "gemrb_path.txt");
-	FileStream *pathFile = new FileStream();
+	FileStream* pathFile = new FileStream();
 	// don't abort if something goes wrong, since it should never happen and it's not critical
 	if (pathFile->Create(strpath)) {
 		pathFile->Write(pathString.c_str(), pathString.length());
@@ -603,8 +635,8 @@ Interface::Interface(CoreSettings&& cfg)
 
 Interface::~Interface() noexcept
 {
-	WindowManager::CursorMouseUp = NULL;
-	WindowManager::CursorMouseDown = NULL;
+	WindowManager::CursorMouseUp = nullptr;
+	WindowManager::CursorMouseDown = nullptr;
 
 	delete winmgr;
 
@@ -614,24 +646,14 @@ Interface::~Interface() noexcept
 	delete calendar;
 	delete worldmap;
 	delete keymap;
-
-	// fonts need to be destroyed before TTF plugin
-	PluginMgr::Get()->RunCleanup();
-
-	slotTypes.clear();
-	itemtypedata.clear();
-
 	delete sgiterator;
-
-	DamageInfoMap.clear();
-
 	delete projserv;
-
 	delete displaymsg;
 	delete TooltipBG;
 
+	// delete and nullify this global data as well
 	delete gamedata;
-	gamedata = NULL;
+	gamedata = nullptr;
 
 	// Removing all stuff from Cache, except bifs
 	if (!config.KeepCache) DelTree(config.CachePath, true);
@@ -654,97 +676,97 @@ these events are pending until conditions are right
 */
 void Interface::HandleEvents()
 {
-	if (EventFlag&EF_SELECTION) {
-		EventFlag&=~EF_SELECTION;
-		guiscript->RunFunction( "GUICommonWindows", "SelectionChanged", false);
+	if (EventFlag & EF_SELECTION) {
+		EventFlag &= ~EF_SELECTION;
+		guiscript->RunFunction("GUICommonWindows", "SelectionChanged", false);
 	}
 
-	if (EventFlag&EF_UPDATEANIM) {
-		EventFlag&=~EF_UPDATEANIM;
-		guiscript->RunFunction( "GUICommonWindows", "UpdateAnimation", false);
+	if (EventFlag & EF_UPDATEANIM) {
+		EventFlag &= ~EF_UPDATEANIM;
+		guiscript->RunFunction("GUICommonWindows", "UpdateAnimation", false);
 	}
 
-	if (EventFlag&EF_PORTRAIT) {
-		EventFlag&=~EF_PORTRAIT;
+	if (EventFlag & EF_PORTRAIT) {
+		EventFlag &= ~EF_PORTRAIT;
 
 		const Window* win = GetWindow(0, "PORTWIN");
 		if (win) {
-			guiscript->RunFunction( "GUICommonWindows", "UpdatePortraitWindow" );
+			guiscript->RunFunction("PortraitWindow", "UpdatePortraitWindow", true);
 		}
 	}
 
-	if (EventFlag&EF_ACTION) {
-		EventFlag&=~EF_ACTION;
+	if (EventFlag & EF_ACTION) {
+		EventFlag &= ~EF_ACTION;
 
 		const Window* win = GetWindow(0, "ACTWIN");
 		if (win) {
-			guiscript->RunFunction( "GUICommonWindows", "UpdateActionsWindow" );
+			guiscript->RunFunction("ActionsWindow", "UpdateActionsWindow");
 		}
 	}
 
-	if (EventFlag&EF_CONTROL) {
+	if (EventFlag & EF_CONTROL) {
 		// handle this before clearing EF_CONTROL
 		// otherwise we do this every frame
 		ToggleViewsVisible(!(game->ControlStatus & CS_HIDEGUI), "HIDE_CUT");
 
-		EventFlag&=~EF_CONTROL;
-		guiscript->RunFunction( "MessageWindow", "UpdateControlStatus" );
+		EventFlag &= ~EF_CONTROL;
+		guiscript->RunFunction("MessageWindow", "UpdateControlStatus");
 
 		return;
 	}
-	if (EventFlag&EF_SHOWMAP) {
+	if (EventFlag & EF_SHOWMAP) {
 		EventFlag &= ~EF_SHOWMAP;
 		guiscript->RunFunction("GUIMA", "ShowMap");
 		return;
 	}
 
-	if (EventFlag&EF_SEQUENCER) {
-		EventFlag&=~EF_SEQUENCER;
-		guiscript->RunFunction( "GUIMG", "OpenSequencerWindow" );
+	if (EventFlag & EF_SEQUENCER) {
+		EventFlag &= ~EF_SEQUENCER;
+		guiscript->RunFunction("GUIMG", "OpenSequencerWindow");
 		return;
 	}
 
-	if (EventFlag&EF_IDENTIFY) {
-		EventFlag&=~EF_IDENTIFY;
+	if (EventFlag & EF_IDENTIFY) {
+		EventFlag &= ~EF_IDENTIFY;
 		// FIXME: Implement this.
-		guiscript->RunFunction( "GUICommonWindows", "OpenIdentifyWindow" );
+		guiscript->RunFunction("GUICommonWindows", "OpenIdentifyWindow");
 		return;
 	}
-	if (EventFlag&EF_OPENSTORE) {
-		EventFlag&=~EF_OPENSTORE;
-		guiscript->RunFunction( "GUISTORE", "OpenStoreWindow" );
-		return;
-	}
-
-	if (EventFlag&EF_EXPANSION) {
-		EventFlag&=~EF_EXPANSION;
-		guiscript->RunFunction( "Game", "GameExpansion", false );
+	if (EventFlag & EF_OPENSTORE) {
+		EventFlag &= ~EF_OPENSTORE;
+		guiscript->RunFunction("GUISTORE", "OpenStoreWindow");
 		return;
 	}
 
-	if (EventFlag&EF_CREATEMAZE) {
-		EventFlag&=~EF_CREATEMAZE;
-		guiscript->RunFunction( "Maze", "CreateMaze", false );
+	if (EventFlag & EF_EXPANSION) {
+		EventFlag &= ~EF_EXPANSION;
+		guiscript->RunFunction("Game", "GameExpansion", false);
 		return;
 	}
 
-	if ((EventFlag&EF_RESETTARGET) && gamectrl) {
-		EventFlag&=~EF_RESETTARGET;
-		EventFlag|=EF_TARGETMODE;
+	if (EventFlag & EF_CREATEMAZE) {
+		EventFlag &= ~EF_CREATEMAZE;
+		guiscript->RunFunction("Maze", "CreateMaze", false);
+		return;
+	}
+
+	if ((EventFlag & EF_RESETTARGET) && gamectrl) {
+		EventFlag &= ~EF_RESETTARGET;
+		EventFlag |= EF_TARGETMODE;
 		gamectrl->ResetTargetMode();
 		return;
 	}
 
-	if ((EventFlag&EF_TARGETMODE) && gamectrl) {
-		EventFlag&=~EF_TARGETMODE;
+	if ((EventFlag & EF_TARGETMODE) && gamectrl) {
+		EventFlag &= ~EF_TARGETMODE;
 		gamectrl->UpdateTargetMode();
 		return;
 	}
 
-	if (EventFlag&EF_TEXTSCREEN) {
-		EventFlag&=~EF_TEXTSCREEN;
+	if (EventFlag & EF_TEXTSCREEN) {
+		EventFlag &= ~EF_TEXTSCREEN;
 		winmgr->SetCursorFeedback(WindowManager::CursorFeedback(core->config.MouseFeedback));
-		guiscript->RunFunction( "TextScreen", "StartTextScreen" );
+		guiscript->RunFunction("TextScreen", "StartTextScreen");
 		return;
 	}
 }
@@ -757,14 +779,14 @@ void Interface::HandleFlags() noexcept
 	//clear events because the context changed
 	EventFlag = EF_CONTROL;
 
-	if (QuitFlag&(QF_QUITGAME|QF_EXITGAME) ) {
+	if (QuitFlag & (QF_QUITGAME | QF_EXITGAME)) {
 		// closing windows must come before tearing anything else down
 		// some window close handlers expect game/gamecontrol to be valid
 		// let them run, then start tearing things down
 		winmgr->CloseAllWindows();
 		// when reaching this, quitflag should be 1 or 2
 		// if Exitgame was set, we'll set Start.py too
-		QuitGame (QuitFlag&QF_EXITGAME);
+		QuitGame(QuitFlag & QF_EXITGAME);
 	}
 
 	if (QuitFlag & (QF_QUITGAME | QF_EXITGAME | QF_LOADGAME | QF_ENTERGAME)) {
@@ -775,43 +797,43 @@ void Interface::HandleFlags() noexcept
 		timer = GlobalTimer();
 		QuitFlag &= ~QF_QUITGAME;
 	}
-	
+
 	if (QuitFlag & QF_EXITGAME) {
 		QuitFlag = QF_KILL;
 		return;
 	}
 
-	if (QuitFlag&QF_LOADGAME) {
+	if (QuitFlag & QF_LOADGAME) {
 		QuitFlag &= ~QF_LOADGAME;
 
-		LoadGame(LoadGameIndex, VersionOverride );
+		LoadGame(LoadGameIndex, VersionOverride);
 		LoadGameIndex.reset();
 		//after loading a game, always check if the game needs to be upgraded
 	}
 
-	if (QuitFlag&QF_ENTERGAME) {
+	if (QuitFlag & QF_ENTERGAME) {
 		winmgr->CloseAllWindows();
 		QuitFlag &= ~QF_ENTERGAME;
 		if (game) {
-			EventFlag|=EF_EXPANSION;
+			EventFlag |= EF_EXPANSION;
 
 			Log(MESSAGE, "Core", "Setting up the Console...");
 			guiscript->RunFunction("Console", "OnLoad");
 
 			winmgr->FadeColor = Color();
 
+			// rearrange party slots
+			game->ConsolidateParty();
+
 			GameControl* gc = StartGameControl();
-			guiscript->LoadScript( "Game" );
-			guiscript->RunFunction( "Game", "EnterGame" );
+			guiscript->LoadScript("Game");
+			guiscript->RunFunction("Game", "EnterGame");
 
 			//switch map to protagonist
 			const Actor* actor = GetFirstSelectedPC(true);
 			if (actor) {
 				gc->ChangeMap(actor, true);
 			}
-
-			//rearrange party slots
-			game->ConsolidateParty();
 
 			Window* gamewin = winmgr->GetGameWindow();
 			gamewin->AddSubviewInFrontOfView(gc);
@@ -824,7 +846,7 @@ void Interface::HandleFlags() noexcept
 		}
 	}
 
-	if (QuitFlag&QF_CHANGESCRIPT) {
+	if (QuitFlag & QF_CHANGESCRIPT) {
 		QuitFlag &= ~QF_CHANGESCRIPT;
 		guiscript->LoadScript(nextScript);
 		guiscript->RunFunction(nextScript.c_str(), "OnLoad");
@@ -848,17 +870,19 @@ bool Interface::ReadGameTimeTable()
 	Time.day_sec = Time.hour_sec * 24; // move to table if pst turns out to be different
 	Time.day_size = Time.day_sec * Time.defaultTicksPerSec;
 	Time.fade_reset = table->QueryFieldUnsigned<unsigned int>("FADE_RESET", "DURATION");
+	Time.fade_default = table->QueryFieldUnsigned<unsigned int>("FADE_DEFAULT", "DURATION");
 
 	return true;
 }
 
 //Static
-const char *Interface::GetDeathVarFormat()
+const char* Interface::GetDeathVarFormat()
 {
 	return DeathVarFormat;
 }
 
-bool Interface::ReadMusicTable(const ResRef& tablename, int col) {
+bool Interface::ReadMusicTable(const ResRef& tablename, int col)
+{
 	AutoTable tm = gamedata->LoadTable(tablename);
 	if (!tm)
 		return false;
@@ -870,7 +894,8 @@ bool Interface::ReadMusicTable(const ResRef& tablename, int col) {
 	return true;
 }
 
-bool Interface::ReadDamageTypeTable() {
+bool Interface::ReadDamageTypeTable()
+{
 	AutoTable tm = gamedata->LoadTable("dmginfo");
 	if (!tm)
 		return false;
@@ -900,18 +925,24 @@ bool Interface::ReadSoundChannelsTable() const
 	for (TableMgr::index_t i = 0; i < tm->GetRowCount(); i++) {
 		auto rowname = tm->GetRowName(i);
 		// translate some alternative names for the IWDs
-		if (rowname == "ACTION") rowname = "ACTIONS";
-		else if (rowname == "SWING") rowname = "SWINGS";
-		AudioDriver->SetChannelVolume(rowname, tm->QueryFieldSigned<int>(i, ivol));
+		if (rowname == "ACTION")
+			rowname = "ACTIONS";
+		else if (rowname == "SWING")
+			rowname = "SWINGS";
+
+		int volume = tm->QueryFieldSigned<int>(i, ivol);
+		float reverb = 0.0f;
 		if (irev != TableMgr::npos) {
-			AudioDriver->SetChannelReverb(rowname, atof(tm->QueryField(i, irev).c_str()));
+			reverb = atof(tm->QueryField(i, irev).c_str());
 		}
+		AudioDriver->UpdateChannel(rowname, volume, reverb);
 	}
 	return true;
 }
 
 const static ieVariable star("*");
-const ieVariable& Interface::GetMusicPlaylist(size_t SongType) const {
+const ieVariable& Interface::GetMusicPlaylist(size_t SongType) const
+{
 	if (SongType >= musiclist.size()) return star;
 	return musiclist[SongType];
 }
@@ -973,7 +1004,7 @@ void Interface::Main()
 		while (QuitFlag && QuitFlag != QF_KILL) {
 			HandleFlags();
 		}
-		
+
 		if (gamectrl) {
 			//eventflags are processed only when there is a game
 			if (EventFlag) {
@@ -998,16 +1029,17 @@ void Interface::Main()
 		if (config.DrawFPS) {
 			frame++;
 			if (time - timebase > 1000) {
-				frames = ( frame * 1000.0 / ( time - timebase ) );
+				frames = (frame * 1000.0 / (time - timebase));
 				timebase = time;
 				frame = 0;
 				fpsstring = fmt::format(u"{:.3f} fps", frames);
 			}
 			auto lock = winmgr->DrawHUD();
-			VideoDriver->DrawRect( fpsRgn, ColorBlack );
-			fps->Print(fpsRgn, String(fpsstring), IE_FONT_ALIGN_MIDDLE | IE_FONT_SINGLE_LINE, {ColorWhite, ColorBlack});
+			VideoDriver->DrawRect(fpsRgn, ColorBlack);
+			fps->Print(fpsRgn, String(fpsstring), IE_FONT_ALIGN_MIDDLE | IE_FONT_SINGLE_LINE, { ColorWhite, ColorBlack });
 		}
-	} while (VideoDriver->SwapBuffers(config.CapFPS) == GEM_OK && !(QuitFlag&QF_KILL));
+
+	} while (VideoDriver->SwapBuffers(config.CapFPS) == GEM_OK && !(QuitFlag & QF_KILL));
 	QuitGame(0);
 }
 
@@ -1016,10 +1048,10 @@ void Interface::InitVideo() const
 	Log(MESSAGE, "Core", "Initializing Video Driver...");
 	VideoDriver = std::static_pointer_cast<Video>(PluginMgr::Get()->GetDriver(&Video::ID, config.VideoDriverName));
 	if (!VideoDriver) {
-		throw CIE("No Video Driver Available.");
+		ThrowException("No Video Driver Available.");
 	}
 	if (VideoDriver->Init() == GEM_ERROR) {
-		throw CIE("Cannot Initialize Video Driver.");
+		ThrowException("Cannot Initialize Video Driver.");
 	}
 }
 
@@ -1028,21 +1060,21 @@ void Interface::InitAudio()
 	Log(MESSAGE, "Core", "Starting up the Sound Driver...");
 	AudioDriver = std::static_pointer_cast<Audio>(PluginMgr::Get()->GetDriver(&Audio::ID, config.AudioDriverName));
 	if (AudioDriver == nullptr) {
-		throw CIE("Failed to load sound driver.");
+		ThrowException("Failed to load sound driver.");
 	}
 	if (!AudioDriver->Init()) {
-		throw CIE("Failed to initialize sound driver.");
+		ThrowException("Failed to initialize sound driver.");
 	}
 
 	Log(MESSAGE, "Core", "Initializing Music Manager...");
 	music = MakePluginHolder<MusicMgr>(IE_MUS_CLASS_ID);
 	if (!music) {
-		throw CIE("Failed to load Music Manager.");
+		ThrowException("Failed to load Music Manager.");
 	}
 
 	Log(MESSAGE, "Core", "Loading music list...");
 	bool ret = true;
-	if (HasFeature( GFFlags::HAS_SONGLIST )) {
+	if (HasFeature(GFFlags::HAS_SONGLIST)) {
 		ret = ReadMusicTable("songlist", 1);
 	} else {
 		/*since bg1 and pst has no .2da for songlist,
@@ -1054,14 +1086,14 @@ void Interface::InitAudio()
 		Log(WARNING, "Core", "Didn't find music list.");
 	}
 
-	int resdata = HasFeature( GFFlags::RESDATA_INI );
-	if (resdata || HasFeature(GFFlags::SOUNDS_INI) ) {
+	int resdata = HasFeature(GFFlags::RESDATA_INI);
+	if (resdata || HasFeature(GFFlags::SOUNDS_INI)) {
 		Log(MESSAGE, "Core", "Loading resource data File...");
 		INIresdata = MakePluginHolder<DataFileMgr>(IE_INI_CLASS_ID);
 		StringView sv(resdata ? "resdata" : "sounds");
 		DataStream* ds = gamedata->GetResourceStream(sv, IE_INI_CLASS_ID);
 
-		if (!INIresdata->Open(std::unique_ptr<DataStream>{ds})) {
+		if (!INIresdata->Open(std::unique_ptr<DataStream> { ds })) {
 			Log(WARNING, "Core", "Failed to load resource data.");
 		}
 	}
@@ -1071,6 +1103,8 @@ void Interface::InitAudio()
 	if (!ret) {
 		Log(WARNING, "Core", "Failed to read channel table.");
 	}
+
+	AudioDriver->SetScreenSize(Size(config.Width, config.Height));
 }
 
 void Interface::LoadPlugins() const
@@ -1085,16 +1119,16 @@ void Interface::LoadPlugins() const
 	}
 
 	Log(MESSAGE, "Core", "Starting Plugin Manager...");
-	const PluginMgr *plugin = PluginMgr::Get();
+	const PluginMgr* plugin = PluginMgr::Get();
 #if TARGET_OS_MAC
 	// search the bundle plugins first
 	// since bundle plugins are loaded first dyld will give them precedence
 	// if duplicates are found in the PluginsPath
 	path_t bundlePluginsPath = BundlePath(PLUGINS);
 	ResolveFilePath(bundlePluginsPath);
-#ifndef STATIC_LINK
+	#ifndef STATIC_LINK
 	GemRB::LoadPlugins(bundlePluginsPath, pluginFlags);
-#endif
+	#endif
 #endif
 #ifndef STATIC_LINK
 	GemRB::LoadPlugins(config.PluginsPath, pluginFlags);
@@ -1102,13 +1136,13 @@ void Interface::LoadPlugins() const
 	if (plugin && plugin->GetPluginCount()) {
 		Log(MESSAGE, "Core", "Plugin Loading Complete...");
 	} else {
-		throw CIE("Plugin Loading Failed, check path...");
+		ThrowException("Plugin Loading Failed, check path...");
 	}
 	plugin->RunInitializers(config);
 
-	for (const auto& type : {IE_2DA_CLASS_ID, IE_INI_CLASS_ID, IE_TLK_CLASS_ID, IE_BAM_CLASS_ID}) {
+	for (const auto& type : { IE_2DA_CLASS_ID, IE_INI_CLASS_ID, IE_TLK_CLASS_ID, IE_BAM_CLASS_ID }) {
 		if (!IsAvailable(type)) {
-			throw CIE("Missing required plugin for " + TypeExt(type));
+			ThrowException("Missing required plugin for " + TypeExt(type));
 		}
 	}
 }
@@ -1116,7 +1150,7 @@ void Interface::LoadPlugins() const
 void Interface::LoadSprites()
 {
 	Log(MESSAGE, "Core", "Loading Cursors...");
-	auto anim = gamedata->GetFactoryResourceAs<const AnimationFactory>(MainCursorsImage, IE_BAM_CLASS_ID);
+	auto anim = gamedata->GetFactoryResourceAs<const AnimationFactory>(MainCursorsImage, IE_BAM_CLASS_ID, true);
 	size_t CursorCount = 0;
 	if (anim) {
 		CursorCount = anim->GetCycleCount();
@@ -1139,8 +1173,8 @@ void Interface::LoadSprites()
 	}
 
 	// this is the last existing cursor type
-	if (CursorCount<IE_CURSOR_WAY) {
-		throw CIE(fmt::format("Failed to load enough cursors ({} < {}).", CursorCount, IE_CURSOR_WAY));
+	if (CursorCount < IE_CURSOR_WAY) {
+		ThrowException(fmt::format("Failed to load enough cursors ({} < {}).", CursorCount, IE_CURSOR_WAY));
 	}
 	WindowManager::CursorMouseUp = Cursors[0];
 	WindowManager::CursorMouseDown = Cursors[1];
@@ -1152,7 +1186,7 @@ void Interface::LoadSprites()
 			anim = gamedata->GetFactoryResourceAs<const AnimationFactory>(GroundCircleBam[size], IE_BAM_CLASS_ID);
 			if (!anim || anim->GetCycleCount() != 6) {
 				// unknown type of circle anim
-				throw CIE("Failed Loading Ground circle bitmaps...");
+				ThrowException("Failed Loading Ground circle bitmaps...");
 			}
 
 			for (int i = 0; i < 6; i++) {
@@ -1160,7 +1194,7 @@ void Interface::LoadSprites()
 				if (GroundCircleScale[size]) {
 					sprite = VideoDriver->SpriteScaleDown(sprite, GroundCircleScale[size]);
 				}
-				GroundCircles[size][i] = sprite;
+				GroundCircles[size][i] = std::move(sprite);
 			}
 		}
 	}
@@ -1171,7 +1205,7 @@ void Interface::LoadFonts()
 	Log(MESSAGE, "Core", "Loading Fonts...");
 	AutoTable tab = gamedata->LoadTable("fonts");
 	if (!tab) {
-		throw CIE("Cannot find fonts.2da.");
+		ThrowException("Cannot find fonts.2da.");
 	}
 
 	// FIXME: we used to try and share like fonts
@@ -1185,18 +1219,20 @@ void Interface::LoadFonts()
 
 		ResRef resref = tab->QueryField(rowName, "RESREF");
 		const auto& font_name = tab->QueryField(rowName, "FONT_NAME");
-		ieWord font_size = tab->QueryFieldUnsigned<ieWord>( rowName, "PX_SIZE" ); // not available in BAM fonts.
-		FontStyle font_style = (FontStyle)tab->QueryFieldSigned<int>(rowName, "STYLE"); // not available in BAM fonts.
+		ieWord font_size = tab->QueryFieldUnsigned<ieWord>(rowName, "PX_SIZE"); // not available in BAM fonts.
+		FontStyle font_style = (FontStyle) tab->QueryFieldSigned<int>(rowName, "STYLE"); // not available in BAM fonts.
 		bool background = tab->QueryFieldSigned<int>(rowName, "BACKGRND") != 0;
+		bool preferBAM = tab->QueryFieldSigned<int>(rowName, "FLAGS") & 1;
 
 		Holder<Font> fnt;
-		ResourceHolder<FontManager> fntMgr = gamedata->GetResourceHolder<FontManager>(font_name);
+		ResourceHolder<FontManager> fntMgr;
+		fntMgr = gamedata->GetResourceHolder<FontManager>(font_name, false, preferBAM ? IE_BAM_CLASS_ID : 0);
 		if (fntMgr) fnt = fntMgr->GetFont(font_size, font_style, background);
 
 		if (!fnt) {
 			error("Core", "Unable to load font resource: {} for ResRef {} (check fonts.2da)", font_name, resref);
 		} else {
-			fonts[resref] = fnt;
+			fonts[resref] = std::move(fnt);
 
 			Log(MESSAGE, "Core", "Loaded Font: {} for ResRef {}", font_name, resref);
 		}
@@ -1207,16 +1243,16 @@ void Interface::LoadFonts()
 
 bool Interface::IsAvailable(SClass_ID filetype) const
 {
-	return PluginMgr::Get()->IsAvailable( filetype );
+	return PluginMgr::Get()->IsAvailable(filetype);
 }
 
-WorldMap *Interface::GetWorldMap() const
+WorldMap* Interface::GetWorldMap() const
 {
 	size_t index = worldmap->FindAndSetCurrentMap(game->CurrentArea);
 	return worldmap->GetWorldMap(index);
 }
 
-WorldMap *Interface::GetWorldMap(const ResRef& area) const
+WorldMap* Interface::GetWorldMap(const ResRef& area) const
 {
 	size_t index = worldmap->FindAndSetCurrentMap(area);
 	return worldmap->GetWorldMap(index);
@@ -1241,7 +1277,7 @@ ieStrRef Interface::UpdateString(ieStrRef strref, const String& text) const
 {
 	String current = GetString(strref, STRING_FLAGS::NONE);
 	if (current != text) {
-		return strings->UpdateString( strref, text );
+		return strings->UpdateString(strref, text);
 	} else {
 		return strref;
 	}
@@ -1254,10 +1290,9 @@ String Interface::GetString(ieStrRef strref, STRING_FLAGS options) const
 	if (!(options & STRING_FLAGS::STRREFOFF)) {
 		flags =
 			static_cast<STRING_FLAGS>(
-				vars.Get("Strref On", UnderType(STRING_FLAGS::NONE))
-			);
+				vars.Get("Strref On", UnderType(STRING_FLAGS::NONE)));
 	}
-	
+
 	if (core->HasFeature(GFFlags::ALL_STRINGS_TAGGED)) {
 		//tagged text, bg1 and iwd don't mark them specifically, all entries are tagged
 		options |= STRING_FLAGS::RESOLVE_TAGS;
@@ -1374,7 +1409,11 @@ static const EnumArray<GFFlags, StringView> game_flags {
 	"LayeredWaterTiles", // GFFlags::LAYERED_WATER_TILES
 	"ClearingActionOverride", // GFFlags::CLEARING_ACTIONOVERRIDE
 	"DamageInnocentRep", // GFFlags::DAMAGE_INNOCENT_REP
-	"HasWeaponSets" // GFFlags::GF_HAS_WEAPON_SETS
+	"HasWeaponSets", // GFFlags::GF_HAS_WEAPON_SETS
+	"HighlightOutlineOnly", // GFFlags::HIGHLIGHT_OUTLINE_ONLY
+	"IWDRestSpawns", // GFFlags::IWD_REST_SPAWNS
+	"HasContinuation", // GFFlags::HAS_CONTINUATION
+	"SellableCritsNoConv", // GFFlags::SELLABLE_CRITS_NO_CONV
 };
 
 /** Loads gemrb.ini */
@@ -1382,14 +1421,14 @@ void Interface::LoadGemRBINI()
 {
 	DataStream* inifile = gamedata->GetResourceStream("gemrb", IE_INI_CLASS_ID);
 	if (!inifile) {
-		throw CIE("could not open gemrb.ini");
+		ThrowException("could not open gemrb.ini");
 	}
 
 	Log(MESSAGE, "Core", "Loading game type-specific GemRB setup '{}'",
-		inifile->originalfile);
+	    inifile->originalfile);
 
 	PluginHolder<DataFileMgr> ini = MakePluginHolder<DataFileMgr>(IE_INI_CLASS_ID);
-	ini->Open(std::unique_ptr<DataStream>{inifile});
+	ini->Open(std::unique_ptr<DataStream> { inifile });
 
 	ResRef tooltipBG;
 	// Resrefs are already initialized in Interface::Interface()
@@ -1411,15 +1450,15 @@ void Interface::LoadGemRBINI()
 #undef ASSIGN_RESREF
 
 	//which stat determines the fist weapon (defaults to class)
-	Actor::SetFistStat(ini->GetKeyAsInt( "resources", "FistStat", IE_CLASS));
+	Actor::SetFistStat(ini->GetKeyAsInt("resources", "FistStat", IE_CLASS));
 
-	int ttMargin = ini->GetKeyAsInt( "resources", "TooltipMargin", 10 );
+	int ttMargin = ini->GetKeyAsInt("resources", "TooltipMargin", 10);
 
-	if (!tooltipBG.IsEmpty()) {
+	if (!tooltipBG.IsEmpty() && !config.UseAsLibrary) {
 		auto anim = gamedata->GetFactoryResourceAs<const AnimationFactory>(tooltipBG, IE_BAM_CLASS_ID);
 		Log(MESSAGE, "Core", "Initializing Tooltips...");
 		if (anim) {
-			TooltipBG = new TooltipBackground(anim->GetFrame(0, 0), anim->GetFrame(0, 1), anim->GetFrame(0, 2) );
+			TooltipBG = new TooltipBackground(anim->GetFrame(0, 0), anim->GetFrame(0, 1), anim->GetFrame(0, 2));
 			// FIXME: this is an arbitrary heuristic and speed
 			TooltipBG->SetAnimationSpeed((ttMargin == 5) ? 10 : 0);
 			TooltipBG->SetMargin(ttMargin);
@@ -1445,7 +1484,7 @@ void Interface::LoadGemRBINI()
 	// GroundCircleBAM1 = wmpickl/3
 	// to denote that the bitmap should be scaled down 3x
 	for (int size = 0; size < MAX_CIRCLE_SIZE; size++) {
-		const std::string& name =  fmt::format("GroundCircleBAM{}", size + 1);
+		const std::string& name = fmt::format("GroundCircleBAM{}", size + 1);
 		auto sv = ini->GetKeyAsString("resources", name);
 		if (sv) {
 			size_t pos = FindFirstOf(sv, "/");
@@ -1462,7 +1501,7 @@ void Interface::LoadGemRBINI()
 	if (sv)
 		INIConfig = StringFromView<std::string>(sv);
 
-	MaximumAbility = ini->GetKeyAsInt ("resources", "MaximumAbility", 25 );
+	MaximumAbility = ini->GetKeyAsInt("resources", "MaximumAbility", 25);
 	gamedata->SetTextSpeed(ini->GetKeyAsInt("resources", "TextScreenSpeed", 100));
 
 	for (const GFFlags flag : EnumIterator<GFFlags>()) {
@@ -1483,15 +1522,15 @@ void Interface::LoadGemRBINI()
 bool Interface::LoadEncoding()
 {
 	DataStream* inifile = gamedata->GetResourceStream(config.Encoding, IE_INI_CLASS_ID, true);
-	if (! inifile) {
+	if (!inifile) {
 		return false;
 	}
 
 	Log(MESSAGE, "Core", "Loading encoding definition for {}: '{}'", config.Encoding,
-		inifile->originalfile);
+	    inifile->originalfile);
 
 	PluginHolder<DataFileMgr> ini = MakePluginHolder<DataFileMgr>(IE_INI_CLASS_ID);
-	ini->Open(std::unique_ptr<DataStream>{inifile});
+	ini->Open(std::unique_ptr<DataStream> { inifile });
 
 	TLKEncoding.encoding = StringFromView<std::string>(ini->GetKeyAsString("encoding", "TLKEncoding", TLKEncoding.encoding));
 	TLKEncoding.zerospace = ini->GetKeyAsBool("encoding", "NoSpaces", false);
@@ -1501,7 +1540,8 @@ bool Interface::LoadEncoding()
 	// list compiled form wiki: https://gemrb.org/Text-encodings.html
 	std::vector<std::string> wideEncodings = {
 		// Chinese
-		"GBK", "BIG5",
+		"GBK",
+		"BIG5",
 		// Korean
 		"EUCKR",
 		// Japanese
@@ -1541,12 +1581,12 @@ Holder<Font> Interface::GetFont(const ResRef& ResRef) const
 
 Holder<Font> Interface::GetTextFont() const
 {
-	return GetFont( TextFontResRef );
+	return GetFont(TextFontResRef);
 }
 
 Holder<Font> Interface::GetButtonFont() const
 {
-	return GetFont( ButtonFontResRef );
+	return GetFont(ButtonFontResRef);
 }
 
 /** Get GUI Script Manager */
@@ -1556,15 +1596,15 @@ PluginHolder<ScriptEngine> Interface::GetGUIScriptEngine() const
 }
 
 //NOTE: if there were more summoned creatures, it will return only the last
-Actor *Interface::SummonCreature(const ResRef& resource, const ResRef& animRes, Scriptable *Owner, const Actor *target, const Point &position, int eamod, int level, Effect *fx, bool sexmod)
+Actor* Interface::SummonCreature(const ResRef& resource, const ResRef& animRes, Scriptable* Owner, const Actor* target, const Point& position, int eamod, int level, Effect* fx, bool sexmod)
 {
 	static EffectRef fx_summon_disable_ref = { "AvatarRemovalModifier", -1 };
 	//maximum number of monsters summoned
-	int cnt=10;
-	Actor * ab = NULL;
-	const Actor *summoner = nullptr;
+	int cnt = 10;
+	Actor* ab = nullptr;
+	const Actor* summoner = nullptr;
 
-	Map *map;
+	Map* map;
 	if (target) {
 		map = target->GetCurrentArea();
 	} else if (Owner) {
@@ -1580,7 +1620,7 @@ Actor *Interface::SummonCreature(const ResRef& resource, const ResRef& animRes, 
 	summoner = Scriptable::As<Actor>(Owner);
 
 	while (cnt--) {
-		Actor *tmp = gamedata->GetCreature(resource);
+		Actor* tmp = gamedata->GetCreature(resource);
 		if (!tmp) {
 			ab = nullptr;
 			break;
@@ -1589,14 +1629,14 @@ Actor *Interface::SummonCreature(const ResRef& resource, const ResRef& animRes, 
 		//if summoner is an actor, filter out opponent summons
 		//this is done by clearing the filter when appropriate
 		//non actors and neutrals can summon as much as they want
-		ieDword flag = GA_NO_DEAD|GA_NO_ALLY|GA_NO_ENEMY;
+		ieDword flag = GA_NO_DEAD | GA_NO_ALLY | GA_NO_ENEMY;
 
 		if (summoner) {
 			tmp->objects.LastSummoner = Owner->GetGlobalID();
 			ieDword ea = summoner->GetStat(IE_EA);
-			if (ea<=EA_GOODCUTOFF) {
+			if (ea <= EA_GOODCUTOFF) {
 				flag &= ~GA_NO_ALLY;
-			} else if (ea>=EA_EVILCUTOFF) {
+			} else if (ea >= EA_EVILCUTOFF) {
 				flag &= ~GA_NO_ENEMY;
 			}
 		}
@@ -1629,27 +1669,27 @@ Actor *Interface::SummonCreature(const ResRef& resource, const ResRef& animRes, 
 		}
 
 		switch (eamod) {
-		case EAM_SOURCEALLY:
-		case EAM_ALLY:
-			if (enemyally) {
-				ab->SetBase(IE_EA, EA_ENEMY); //is this the summoned EA?
-			} else {
-				ab->SetBase(IE_EA, EA_CONTROLLED); //is this the summoned EA?
-			}
-			break;
-		case EAM_SOURCEENEMY:
-		case EAM_ENEMY:
-			if (enemyally) {
-				ab->SetBase(IE_EA, EA_CONTROLLED); //is this the summoned EA?
-			} else {
-				ab->SetBase(IE_EA, EA_ENEMY); //is this the summoned EA?
-			}
-			break;
-		case EAM_NEUTRAL:
-			ab->SetBase(IE_EA, EA_NEUTRAL);
-			break;
-		default:
-			break;
+			case EAM_SOURCEALLY:
+			case EAM_ALLY:
+				if (enemyally) {
+					ab->SetBase(IE_EA, EA_ENEMY); //is this the summoned EA?
+				} else {
+					ab->SetBase(IE_EA, EA_CONTROLLED); //is this the summoned EA?
+				}
+				break;
+			case EAM_SOURCEENEMY:
+			case EAM_ENEMY:
+				if (enemyally) {
+					ab->SetBase(IE_EA, EA_CONTROLLED); //is this the summoned EA?
+				} else {
+					ab->SetBase(IE_EA, EA_ENEMY); //is this the summoned EA?
+				}
+				break;
+			case EAM_NEUTRAL:
+				ab->SetBase(IE_EA, EA_NEUTRAL);
+				break;
+			default:
+				break;
 		}
 
 		map->AddActor(ab, true);
@@ -1661,30 +1701,25 @@ Actor *Interface::SummonCreature(const ResRef& resource, const ResRef& animRes, 
 			Owner->AddTrigger(TriggerEntry(trigger_summoned, ab->GetGlobalID()));
 		}
 
-		if (!animRes.IsEmpty()) {
-			ScriptedAnimation* vvc = gamedata->GetScriptedAnimation(animRes, false);
-			if (vvc) {
-				//This is the final position of the summoned creature
-				//not the original target point
-				vvc->Pos = ab->Pos;
-				if (vvc->YOffset == 0 && vvc->ZOffset == 0) {
-					vvc->Pos.y -= 90;
-				}
-				//force vvc to play only once
-				vvc->PlayOnce();
-				map->AddVVCell(vvc);
+		ScriptedAnimation* vvc = gamedata->GetScriptedAnimation(animRes, false);
+		if (vvc) {
+			// This is the final position of the summoned creature
+			// not the original target point
+			vvc->Pos = ab->Pos;
+			// force vvc to play only once
+			vvc->PlayOnce();
+			map->AddVVCell(vvc);
 
-				//set up the summon disable effect
-				Effect *newfx = EffectQueue::CreateEffect(fx_summon_disable_ref, 0, 1, FX_DURATION_ABSOLUTE);
-				if (newfx) {
-					newfx->Duration = vvc->GetSequenceDuration(Time.defaultTicksPerSec) * 9 / 10 + core->GetGame()->GetGameTimeReal();
-					ApplyEffect(newfx, ab, ab);
-				}
+			// set up the summon disable effect
+			Effect* newfx = EffectQueue::CreateEffect(fx_summon_disable_ref, 0, 1, FX_DURATION_ABSOLUTE);
+			if (newfx) {
+				newfx->Duration = vvc->GetSequenceDuration(Time.defaultTicksPerSec) * 9 / 10 + core->GetGame()->GetGameTimeReal();
+				ApplyEffect(newfx, ab, ab);
 			}
 		}
 
 		//remove the xp value of friendly summons
-		if (ab->BaseStats[IE_EA]<EA_GOODCUTOFF) {
+		if (ab->BaseStats[IE_EA] < EA_GOODCUTOFF) {
 			ab->SetBase(IE_XPVALUE, 0);
 		}
 		if (fx) {
@@ -1694,12 +1729,11 @@ Actor *Interface::SummonCreature(const ResRef& resource, const ResRef& animRes, 
 		//this check should happen after the fact
 		// FIXME: shouldn't this be IE_XPVALUE, the CR? IE_XP holds the actual xp gained, only useful for pcs
 		level -= ab->GetBase(IE_XP);
-		if(level<0 || ab->GetBase(IE_XP) == 0) {
+		if (level < 0 || ab->GetBase(IE_XP) == 0) {
 			break;
 		}
-
 	}
-	
+
 	delete fx;
 	return ab;
 }
@@ -1768,8 +1802,9 @@ bool Interface::IsFreezed() const
 
 void Interface::GameLoop(void)
 {
+	TRACY(ZoneScoped);
 	update_scripts = false;
-	GameControl *gc = GetGameControl();
+	GameControl* gc = GetGameControl();
 	if (gc) {
 		update_scripts = !(gc->GetDialogueFlags() & DF_FREEZE_SCRIPTS);
 	}
@@ -1807,13 +1842,13 @@ void Interface::HandleGUIBehaviour(GameControl* gc)
 		if ((int) var == -2) {
 			// TODO: this seems to never be called? (EndDialog is called from elsewhere instead)
 			gc->dialoghandler->EndDialog();
-		} else if ( (int)var !=-3) {
-			if ( (int) var == -1) {
-				guiscript->RunFunction( "GUIWORLD", "DialogStarted" );
+		} else if ((int) var != -3) {
+			if ((int) var == -1) {
+				guiscript->RunFunction("GUIWORLD", "DialogStarted");
 			}
 			gc->dialoghandler->DialogChoose(var);
 			if (!(gc->GetDialogueFlags() & (DF_OPENCONTINUEWINDOW | DF_OPENENDWINDOW)))
-				guiscript->RunFunction( "GUIWORLD", "NextDialogState" );
+				guiscript->RunFunction("GUIWORLD", "NextDialogState");
 
 			// the last node of a dialog can have a new-dialog action! don't interfere in that case
 			ieDword newvar = vars.Get("DialogChoose", 0);
@@ -1823,24 +1858,24 @@ void Interface::HandleGUIBehaviour(GameControl* gc)
 			}
 		}
 		if (flg & DF_OPENCONTINUEWINDOW) {
-			guiscript->RunFunction( "GUIWORLD", "OpenContinueMessageWindow" );
-			gc->SetDialogueFlags(DF_OPENCONTINUEWINDOW|DF_OPENENDWINDOW, BitOp::NAND);
+			guiscript->RunFunction("GUIWORLD", "OpenContinueMessageWindow");
+			gc->SetDialogueFlags(DF_OPENCONTINUEWINDOW | DF_OPENENDWINDOW, BitOp::NAND);
 		} else if (flg & DF_OPENENDWINDOW) {
-			guiscript->RunFunction( "GUIWORLD", "OpenEndMessageWindow" );
-			gc->SetDialogueFlags(DF_OPENCONTINUEWINDOW|DF_OPENENDWINDOW, BitOp::NAND);
+			guiscript->RunFunction("GUIWORLD", "OpenEndMessageWindow");
+			gc->SetDialogueFlags(DF_OPENCONTINUEWINDOW | DF_OPENENDWINDOW, BitOp::NAND);
 		}
 	}
 
 	//handling container
 	if (CurrentContainer && UseContainer) {
-		if (!(flg & DF_IN_CONTAINER) ) {
+		if (!(flg & DF_IN_CONTAINER)) {
 			gc->SetDialogueFlags(DF_IN_CONTAINER, BitOp::OR);
-			guiscript->RunFunction( "Container", "OpenContainerWindow" );
+			guiscript->RunFunction("Container", "OpenContainerWindow");
 		}
 	} else {
 		if (flg & DF_IN_CONTAINER) {
 			gc->SetDialogueFlags(DF_IN_CONTAINER, BitOp::NAND);
-			guiscript->RunFunction( "Container", "CloseContainerWindow" );
+			guiscript->RunFunction("Container", "CloseContainerWindow");
 		}
 	}
 	//end of gui hacks
@@ -1852,7 +1887,7 @@ Tooltip Interface::CreateTooltip() const
 	colors.fg = displaymsg->GetColor(GUIColors::TOOLTIP);
 	colors.bg = displaymsg->GetColor(GUIColors::TOOLTIPBG);
 
-	TooltipBackground* bg = NULL;
+	TooltipBackground* bg = nullptr;
 	if (TooltipBG) {
 		bg = new TooltipBackground(*TooltipBG);
 	}
@@ -1882,16 +1917,19 @@ void Interface::AskAndExit()
 }
 
 /** Returns the variables dictionary */
-variables_t& Interface::GetDictionary() {
+variables_t& Interface::GetDictionary()
+{
 	return vars;
 }
 
 /** Returns the token dictionary */
-Interface::tokens_t& Interface::GetTokenDictionary() {
+Interface::tokens_t& Interface::GetTokenDictionary()
+{
 	return tokens;
 }
 
-const String& Interface::GetToken(const ieVariable& key, const String& fallback) const {
+const String& Interface::GetToken(const ieVariable& key, const String& fallback) const
+{
 	auto lookup = tokens.find(key);
 	if (lookup != tokens.cend()) {
 		return lookup->second;
@@ -1922,15 +1960,15 @@ int Interface::LoadSymbol(const ResRef& ref)
 		return -1;
 	}
 
-	if (!sm->Open(std::unique_ptr<DataStream>{str})) {
+	if (!sm->Open(std::unique_ptr<DataStream> { str })) {
 		return -1;
 	}
 
-	Symbol s = { sm, ref };
+	Symbol s = { std::move(sm), ref };
 	ind = -1;
 	for (size_t i = 0; i < symbols.size(); i++) {
 		if (!symbols[i].sm) {
-			ind = ( int ) i;
+			ind = (int) i;
 			break;
 		}
 	}
@@ -1938,8 +1976,8 @@ int Interface::LoadSymbol(const ResRef& ref)
 		symbols[ind] = s;
 		return ind;
 	}
-	symbols.push_back( s );
-	return ( int ) symbols.size() - 1;
+	symbols.push_back(s);
+	return (int) symbols.size() - 1;
 }
 /** Gets the index of a loaded Symbol Table, returns -1 on error */
 int Interface::GetSymbolIndex(const ResRef& ref) const
@@ -1948,7 +1986,7 @@ int Interface::GetSymbolIndex(const ResRef& ref) const
 		if (!symbols[i].sm)
 			continue;
 		if (symbols[i].symbolName == ref)
-			return ( int ) i;
+			return (int) i;
 	}
 	return -1;
 }
@@ -2001,8 +2039,12 @@ int Interface::PlayMovie(const ResRef& movieRef)
 	//shutting down music and ambients before movie
 	if (music)
 		music->HardEnd();
-	AmbientMgr *ambim = AudioDriver->GetAmbientMgr();
+	AmbientMgr* ambim = AudioDriver->GetAmbientMgr();
 	if (ambim) ambim->Deactivate();
+	if (strrefHandle) {
+		strrefHandle->Stop();
+		strrefHandle.reset();
+	}
 
 	ResourceHolder<MoviePlayer> mp = gamedata->GetResourceHolder<MoviePlayer>(actualMovieRef);
 	if (!mp) {
@@ -2038,11 +2080,13 @@ int Interface::PlayMovie(const ResRef& movieRef)
 			}
 		}
 
-		size_t NextSubtitleFrame() const override {
+		size_t NextSubtitleFrame() const override
+		{
 			return nextSubFrame;
 		}
 
-		const String& SubtitleAtFrame(size_t frameNum) const override {
+		const String& SubtitleAtFrame(size_t frameNum) const override
+		{
 			// FIXME: we cant go backwards now... we dont need to, but this is ugly
 			if (NextSubtitleFrame() && frameNum >= NextSubtitleFrame()) {
 				FrameMap::const_iterator it;
@@ -2066,22 +2110,25 @@ int Interface::PlayMovie(const ResRef& movieRef)
 		int b = sttable->QueryFieldSigned<int>("blue", "frame");
 
 		if (r || g || b) {
-			mp->SetSubtitles(new IESubtitles(font, sttable, Color(r, g, b, 0xff)));
+			mp->SetSubtitles(new IESubtitles(std::move(font), sttable, Color(r, g, b, 0xff)));
 		} else {
-			mp->SetSubtitles(new IESubtitles(font, sttable));
+			mp->SetSubtitles(new IESubtitles(std::move(font), sttable));
 		}
 	}
 
 	Holder<SoundHandle> sound_override;
 	if (!sound_resref.empty()) {
-		sound_override = AudioDriver->PlayRelative(sound_resref, SFX_CHAN_NARRATOR);
+		sound_override = AudioDriver->Play(sound_resref, SFXChannel::Narrator);
 	}
 
 	// clear whatever is currently on screen
+	const GameControl* gc = GetGameControl();
+	bool inCutScene = gc && gc->GetScreenFlags().Test(ScreenFlags::Cutscene);
 	SetCutSceneMode(true);
+
 	Region screen(0, 0, config.Width, config.Height);
 	Window* win = winmgr->MakeWindow(screen);
-	win->SetFlags(Window::Borderless|Window::NoSounds, BitOp::OR);
+	win->SetFlags(Window::Borderless | Window::NoSounds, BitOp::OR);
 	winmgr->PresentModalWindow(win);
 	WindowManager::CursorFeedback cur = winmgr->SetCursorFeedback(WindowManager::MOUSE_NONE);
 	winmgr->DrawWindows();
@@ -2089,7 +2136,10 @@ int Interface::PlayMovie(const ResRef& movieRef)
 	mp->Play(win);
 	win->Close();
 	winmgr->SetCursorFeedback(cur);
-	SetCutSceneMode(false);
+	// only reset if it wasn't active before we started or if there's no game yet
+	if (!inCutScene) {
+		SetCutSceneMode(false);
+	}
 	if (sound_override) {
 		sound_override->Stop();
 		sound_override.reset();
@@ -2137,7 +2187,7 @@ DirectoryIterator Interface::GetResourceDirectory(RESOURCE_DIRECTORY dir) const
 			break;
 		case DIRECTORY_CHR_SOUNDS:
 			resourcePath = config.GameSoundsPath;
-			if (!HasFeature( GFFlags::SOUNDFOLDERS ))
+			if (!HasFeature(GFFlags::SOUNDFOLDERS))
 				filter = std::make_shared<ExtFilter>("WAV");
 			break;
 		case DIRECTORY_CHR_EXPORTS:
@@ -2154,22 +2204,22 @@ DirectoryIterator Interface::GetResourceDirectory(RESOURCE_DIRECTORY dir) const
 	}
 
 	DirectoryIterator dirIt(PathJoin(config.GamePath, resourcePath));
-	dirIt.SetFilterPredicate(filter);
+	dirIt.SetFilterPredicate(std::move(filter));
 	return dirIt;
 }
 
 bool Interface::InitializeVarsWithINI(const path_t& iniFileName)
 {
-	if (!core->IsAvailable( IE_INI_CLASS_ID ))
+	if (!core->IsAvailable(IE_INI_CLASS_ID))
 		return false;
 
 	PluginHolder<DataFileMgr> defaults = nullptr;
-	PluginHolder<DataFileMgr>  overrides = nullptr;
+	PluginHolder<DataFileMgr> overrides = nullptr;
 
 	PluginHolder<DataFileMgr> ini = MakePluginHolder<DataFileMgr>(IE_INI_CLASS_ID);
 	FileStream* iniStream = FileStream::OpenFile(iniFileName);
 	// if filename is not set we assume we are creating defaults without an INI
-	bool opened = iniStream != nullptr && ini->Open(std::unique_ptr<DataStream>{iniStream});
+	bool opened = iniStream != nullptr && ini->Open(std::unique_ptr<DataStream> { iniStream });
 	if (iniFileName[0] && !opened) {
 		Log(WARNING, "Core", "Unable to read defaults from '{}'. Using GemRB default values.", iniFileName);
 	} else {
@@ -2179,11 +2229,11 @@ bool Interface::InitializeVarsWithINI(const path_t& iniFileName)
 	PluginHolder<DataFileMgr> gemINI = MakePluginHolder<DataFileMgr>(IE_INI_CLASS_ID);
 	DataStream* gemINIStream = gamedata->GetResourceStream("defaults", IE_INI_CLASS_ID);
 
-	if (!gemINIStream || !gemINI->Open(std::unique_ptr<DataStream>{gemINIStream})) {
+	if (!gemINIStream || !gemINI->Open(std::unique_ptr<DataStream> { gemINIStream })) {
 		Log(WARNING, "Core", "Unable to load GemRB default values.");
-		defaults = ini;
+		defaults = std::move(ini);
 	} else {
-		defaults = gemINI;
+		defaults = std::move(gemINI);
 	}
 	if (!overrides) {
 		overrides = defaults;
@@ -2236,7 +2286,7 @@ bool Interface::SaveConfig()
 		gemrbINI = "gem-" + INIConfig;
 	}
 	path_t ini_path = PathJoin(config.GamePath, gemrbINI);
-	FileStream *fs = new FileStream();
+	FileStream* fs = new FileStream();
 	if (!fs->Create(ini_path)) {
 		ini_path = PathJoin(config.SavePath, gemrbINI);
 		if (!fs->Create(ini_path)) {
@@ -2248,7 +2298,7 @@ bool Interface::SaveConfig()
 	PluginHolder<DataFileMgr> defaultsINI = MakePluginHolder<DataFileMgr>(IE_INI_CLASS_ID);
 	DataStream* INIStream = gamedata->GetResourceStream("defaults", IE_INI_CLASS_ID);
 
-	if (INIStream && defaultsINI->Open(std::unique_ptr<DataStream>{INIStream})) {
+	if (INIStream && defaultsINI->Open(std::unique_ptr<DataStream> { INIStream })) {
 		// dump the formatted default config options to the file
 		std::string contents;
 
@@ -2274,16 +2324,17 @@ bool Interface::SaveConfig()
 
 // this is more of a workaround than anything else
 // needed for cases where the script runner is gone before finishing his queue
-void Interface::SetCutSceneRunner(Scriptable *runner) {
+void Interface::SetCutSceneRunner(Scriptable* runner)
+{
 	CutSceneRunner = runner;
 }
 
 /** Enables/Disables the Cut Scene Mode */
 void Interface::SetCutSceneMode(bool active)
 {
-	GameControl *gc = GetGameControl();
+	GameControl* gc = GetGameControl();
 	if (gc) {
-		gc->SetCutSceneMode( active );
+		gc->SetCutSceneMode(active);
 	}
 
 	ToggleViewsVisible(!active, "HIDE_CUT");
@@ -2291,14 +2342,14 @@ void Interface::SetCutSceneMode(bool active)
 	if (active) {
 		GetGUIScriptEngine()->RunFunction("GUICommonWindows", "CloseTopWindow");
 	} else {
-		SetCutSceneRunner(NULL);
+		SetCutSceneRunner(nullptr);
 	}
 }
 
 /** returns true if in dialogue or cutscene */
 bool Interface::InCutSceneMode() const
 {
-	const GameControl *gc = GetGameControl();
+	const GameControl* gc = GetGameControl();
 	if (!gc || gc->InDialog() || gc->GetScreenFlags().Test(ScreenFlags::Cutscene)) {
 		return true;
 	}
@@ -2327,18 +2378,18 @@ void Interface::QuitGame(int BackToMain)
 	}
 	// stop any ambients which are still enqueued
 	if (AudioDriver) {
-		AmbientMgr *ambim = AudioDriver->GetAmbientMgr();
+		AmbientMgr* ambim = AudioDriver->GetAmbientMgr();
 		if (ambim) ambim->Deactivate();
 		AudioDriver->Stop(); // also kill sounds
 	}
 	//delete game, worldmap
 	if (game) {
 		delete game;
-		game=NULL;
+		game = nullptr;
 	}
 	if (worldmap) {
 		delete worldmap;
-		worldmap=NULL;
+		worldmap = nullptr;
 	}
 	if (BackToMain) {
 		SetNextScript("Start");
@@ -2367,7 +2418,7 @@ void Interface::LoadGame(Holder<SaveGame> sg, int ver_override)
 	strings->CloseAux();
 	tokens.clear(); //clearing the token dictionary
 
-	if(calendar) delete calendar;
+	if (calendar) delete calendar;
 	calendar = new Calendar;
 
 	DataStream* gamStr = nullptr;
@@ -2486,19 +2537,19 @@ void Interface::UpdateWorldMap(const ResRef& wmResRef)
 	DataStream* wmp_str = gamedata->GetResourceStream(wmResRef, IE_WMP_CLASS_ID);
 	PluginHolder<WorldMapMgr> wmp_mgr = MakePluginHolder<WorldMapMgr>(IE_WMP_CLASS_ID);
 
-	if (!wmp_str || !wmp_mgr || !wmp_mgr->Open(wmp_str, NULL)) {
+	if (!wmp_str || !wmp_mgr || !wmp_mgr->Open(wmp_str, nullptr)) {
 		Log(ERROR, "Core", "Could not update world map {}", wmResRef);
 		return;
 	}
 
-	WorldMapArray *new_worldmap = wmp_mgr->GetWorldMapArray();
-	WorldMap *wm = worldmap->GetWorldMap(0);
-	WorldMap *nwm = new_worldmap->GetWorldMap(0);
+	WorldMapArray* new_worldmap = wmp_mgr->GetWorldMapArray();
+	WorldMap* wm = worldmap->GetWorldMap(0);
+	WorldMap* nwm = new_worldmap->GetWorldMap(0);
 
 	unsigned int ec = wm->GetEntryCount();
 	//update status of the previously existing areas
 	for (unsigned int i = 0; i < ec; i++) {
-		const WMPAreaEntry *ae = wm->GetEntry(i);
+		const WMPAreaEntry* ae = wm->GetEntry(i);
 		WMPAreaEntry* nae = nwm->GetArea(ae->AreaResRef);
 		if (nae) {
 			nae->SetAreaStatus(ae->GetAreaStatus(), BitOp::SET);
@@ -2514,16 +2565,16 @@ void Interface::UpdateWorldMap(const ResRef& wmResRef)
 void Interface::UpdateMasterScript()
 {
 	if (game) {
-		game->SetScript( GlobalScript, 0 );
+		game->SetScript(GlobalScript, 0);
 	}
 
 	PluginHolder<WorldMapMgr> wmp_mgr = MakePluginHolder<WorldMapMgr>(IE_WMP_CLASS_ID);
-	if (! wmp_mgr)
+	if (!wmp_mgr)
 		return;
 
 	if (worldmap) {
-		DataStream *wmp_str1 = gamedata->GetResourceStream(WorldMapName[0], IE_WMP_CLASS_ID);
-		DataStream *wmp_str2 = gamedata->GetResourceStream(WorldMapName[1], IE_WMP_CLASS_ID);
+		DataStream* wmp_str1 = gamedata->GetResourceStream(WorldMapName[0], IE_WMP_CLASS_ID);
+		DataStream* wmp_str2 = gamedata->GetResourceStream(WorldMapName[1], IE_WMP_CLASS_ID);
 
 		if (!wmp_mgr->Open(wmp_str1, wmp_str2)) {
 			delete wmp_str1;
@@ -2539,7 +2590,7 @@ void Interface::InitItemTypes()
 {
 	AutoTable it = gamedata->LoadTable("itemtype");
 	if (!it) {
-		throw CIE("Could not open itemtype table.");
+		ThrowException("Could not open itemtype table.");
 	}
 	ItemTypes = it->GetRowCount(); //number of itemtypes
 
@@ -2553,7 +2604,7 @@ void Interface::InitItemTypes()
 		unsigned int value = 0;
 		unsigned int k = 1;
 		for (TableMgr::index_t j = 0; j < InvSlotTypes; ++j) {
-			if (it->QueryFieldSigned<long>(i,j)) {
+			if (it->QueryFieldSigned<long>(i, j)) {
 				value |= k;
 			}
 			k <<= 1;
@@ -2583,7 +2634,7 @@ void Interface::InitItemTypes()
 			if (itemtype < ItemTypes) {
 				// we don't need the itemtype column, since it is equal to the position
 				for (TableMgr::index_t j = 0; j < colcount - 1; ++j) {
-					itemtypedata[itemtype][j] = af->QueryFieldSigned<int>(i, j+1);
+					itemtypedata[itemtype][j] = af->QueryFieldSigned<int>(i, j + 1);
 				}
 			}
 		}
@@ -2593,19 +2644,19 @@ void Interface::InitItemTypes()
 	Inventory::Init();
 	AutoTable st = gamedata->LoadTable("slottype");
 	if (!st) {
-		throw CIE("Could not open slottype table.");
+		ThrowException("Could not open slottype table.");
 	}
-	
+
 	SlotTypes = st->GetRowCount();
 	//make sure unsigned int is 32 bits
 	slotTypes.resize(SlotTypes);
 	for (unsigned int row = 0; row < SlotTypes; row++) {
 		bool alias;
 		ieDword i = strtounsigned<ieDword>(st->GetRowName(row).c_str());
-		if (i>=SlotTypes) continue;
+		if (i >= SlotTypes) continue;
 		if (slotTypes[i].slotEffects != 100) { // SLOT_EFFECT_ALIAS
 			slotTypes[row].slot = i;
-			i=row;
+			i = row;
 			alias = true;
 		} else {
 			slotTypes[row].slot = i;
@@ -2630,21 +2681,35 @@ void Interface::InitItemTypes()
 			}
 		}
 		switch (slotTypes[i].slotEffects) {
-			//fist slot, not saved, default weapon
-		case SLOT_EFFECT_FIST: Inventory::SetFistSlot(i); break;
-			//magic weapon slot, overrides all weapons
-		case SLOT_EFFECT_MAGIC: Inventory::SetMagicSlot(i); break;
-			//weapon slot, Equipping marker is relative to it
-		case SLOT_EFFECT_MELEE: Inventory::SetWeaponSlot(i); break;
-			//ranged slot
-		case SLOT_EFFECT_MISSILE: Inventory::SetRangedSlot(i); break;
-			//right hand
-		case SLOT_EFFECT_LEFT: Inventory::SetShieldSlot(i); break;
-			//head (for averting critical hit)
-		case SLOT_EFFECT_HEAD: Inventory::SetHeadSlot(i); break;
-			//armor slot
-		case SLOT_EFFECT_ITEM: Inventory::SetArmorSlot(i); break;
-		default:;
+				//fist slot, not saved, default weapon
+			case SLOT_EFFECT_FIST:
+				Inventory::SetFistSlot(i);
+				break;
+				//magic weapon slot, overrides all weapons
+			case SLOT_EFFECT_MAGIC:
+				Inventory::SetMagicSlot(i);
+				break;
+				//weapon slot, Equipping marker is relative to it
+			case SLOT_EFFECT_MELEE:
+				Inventory::SetWeaponSlot(i);
+				break;
+				//ranged slot
+			case SLOT_EFFECT_MISSILE:
+				Inventory::SetRangedSlot(i);
+				break;
+				//right hand
+			case SLOT_EFFECT_LEFT:
+				Inventory::SetShieldSlot(i);
+				break;
+				//head (for averting critical hit)
+			case SLOT_EFFECT_HEAD:
+				Inventory::SetHeadSlot(i);
+				break;
+				//armor slot
+			case SLOT_EFFECT_ITEM:
+				Inventory::SetArmorSlot(i);
+				break;
+			default:;
 		}
 	}
 }
@@ -2661,7 +2726,7 @@ ieDword Interface::FindSlot(unsigned int idx) const
 
 ieDword Interface::QuerySlot(unsigned int idx) const
 {
-	if (idx>=SlotTypes) {
+	if (idx >= SlotTypes) {
 		return 0;
 	}
 	return slotTypes[idx].slot;
@@ -2669,7 +2734,7 @@ ieDword Interface::QuerySlot(unsigned int idx) const
 
 ieDword Interface::QuerySlotType(unsigned int idx) const
 {
-	if (idx>=SlotTypes) {
+	if (idx >= SlotTypes) {
 		return 0;
 	}
 	return slotTypes[idx].slotType;
@@ -2677,7 +2742,7 @@ ieDword Interface::QuerySlotType(unsigned int idx) const
 
 ieDword Interface::QuerySlotID(unsigned int idx) const
 {
-	if (idx>=SlotTypes) {
+	if (idx >= SlotTypes) {
 		return 0;
 	}
 	return slotTypes[idx].slotID;
@@ -2685,7 +2750,7 @@ ieDword Interface::QuerySlotID(unsigned int idx) const
 
 ieDword Interface::QuerySlottip(unsigned int idx) const
 {
-	if (idx>=SlotTypes) {
+	if (idx >= SlotTypes) {
 		return 0;
 	}
 	return slotTypes[idx].slotTip;
@@ -2693,7 +2758,7 @@ ieDword Interface::QuerySlottip(unsigned int idx) const
 
 ieDword Interface::QuerySlotEffects(unsigned int idx) const
 {
-	if (idx>=SlotTypes) {
+	if (idx >= SlotTypes) {
 		return 0;
 	}
 	return slotTypes[idx].slotEffects;
@@ -2701,7 +2766,7 @@ ieDword Interface::QuerySlotEffects(unsigned int idx) const
 
 ieDword Interface::QuerySlotFlags(unsigned int idx) const
 {
-	if (idx>=SlotTypes) {
+	if (idx >= SlotTypes) {
 		return 0;
 	}
 	return slotTypes[idx].slotFlags;
@@ -2709,7 +2774,7 @@ ieDword Interface::QuerySlotFlags(unsigned int idx) const
 
 const ResRef& Interface::QuerySlotResRef(unsigned int idx) const
 {
-	if (idx>=SlotTypes) {
+	if (idx >= SlotTypes) {
 		static ResRef blank;
 		return blank;
 	}
@@ -2721,7 +2786,7 @@ int Interface::GetArmorFailure(unsigned int itemtype) const
 	if (itemtype >= ItemTypes) {
 		return 0;
 	}
-	if (slotmatrix[itemtype]&SLOT_ARMOUR) return itemtypedata[itemtype][IDT_FAILURE];
+	if (slotmatrix[itemtype] & SLOT_ARMOUR) return itemtypedata[itemtype][IDT_FAILURE];
 	return 0;
 }
 
@@ -2730,7 +2795,7 @@ int Interface::GetShieldFailure(unsigned int itemtype) const
 	if (itemtype >= ItemTypes) {
 		return 0;
 	}
-	if (slotmatrix[itemtype]&SLOT_SHIELD) return itemtypedata[itemtype][IDT_FAILURE];
+	if (slotmatrix[itemtype] & SLOT_SHIELD) return itemtypedata[itemtype][IDT_FAILURE];
 	return 0;
 }
 
@@ -2739,7 +2804,7 @@ int Interface::GetArmorPenalty(unsigned int itemtype) const
 	if (itemtype >= ItemTypes) {
 		return 0;
 	}
-	if (slotmatrix[itemtype]&SLOT_ARMOUR) return itemtypedata[itemtype][IDT_SKILLPENALTY];
+	if (slotmatrix[itemtype] & SLOT_ARMOUR) return itemtypedata[itemtype][IDT_SKILLPENALTY];
 	return 0;
 }
 
@@ -2748,7 +2813,7 @@ int Interface::GetShieldPenalty(unsigned int itemtype) const
 	if (itemtype >= ItemTypes) {
 		return 0;
 	}
-	if (slotmatrix[itemtype]&SLOT_SHIELD) return itemtypedata[itemtype][IDT_SKILLPENALTY];
+	if (slotmatrix[itemtype] & SLOT_SHIELD) return itemtypedata[itemtype][IDT_SKILLPENALTY];
 	return 0;
 }
 
@@ -2757,7 +2822,7 @@ int Interface::GetCriticalMultiplier(unsigned int itemtype) const
 	if (itemtype >= ItemTypes) {
 		return 2;
 	}
-	if (slotmatrix[itemtype]&SLOT_WEAPON) return itemtypedata[itemtype][IDT_CRITMULTI];
+	if (slotmatrix[itemtype] & SLOT_WEAPON) return itemtypedata[itemtype][IDT_CRITMULTI];
 	return 2;
 }
 
@@ -2766,28 +2831,28 @@ int Interface::GetCriticalRange(unsigned int itemtype) const
 	if (itemtype >= ItemTypes) {
 		return 20;
 	}
-	if (slotmatrix[itemtype]&SLOT_WEAPON) return itemtypedata[itemtype][IDT_CRITRANGE];
+	if (slotmatrix[itemtype] & SLOT_WEAPON) return itemtypedata[itemtype][IDT_CRITRANGE];
 	return 20;
 }
 
 // checks the itemtype vs. slottype, and also checks the usability flags
 // vs. Actor's stats (alignment, class, race, kit etc.)
-int Interface::CanUseItemType(int slottype, const Item *item, const Actor *actor, bool feedback, bool equipped) const
+int Interface::CanUseItemType(int slottype, const Item* item, const Actor* actor, bool feedback, bool equipped) const
 {
 	//inventory is a special case, we allow any items to enter it
-	if ( slottype==-1 ) {
+	if (slottype == -1) {
 		return SLOT_INVENTORY;
 	}
 	//if we look for ALL slot types, then SLOT_SHIELD shouldn't interfere
 	//with twohandedness
 	//As long as this is an Item, use the ITEM constant
 	//switch for IE_INV_ITEM_* if it is a CREItem
-	if (item->Flags&IE_ITEM_TWO_HANDED) {
+	if (item->Flags & IE_ITEM_TWO_HANDED) {
 		//if the item is twohanded and there are more slots, drop the shield slot
-		if (slottype&~SLOT_SHIELD) {
-			slottype&=~SLOT_SHIELD;
+		if (slottype & ~SLOT_SHIELD) {
+			slottype &= ~SLOT_SHIELD;
 		}
-		if (slottype&SLOT_SHIELD) {
+		if (slottype & SLOT_SHIELD) {
 			//cannot equip twohanded in offhand
 			if (feedback) displaymsg->DisplayConstantString(HCStrings::NotInOffhand, GUIColors::WHITE);
 			return 0;
@@ -2818,7 +2883,7 @@ int Interface::CanUseItemType(int slottype, const Item *item, const Actor *actor
 	}
 
 	//if any bit is true, the answer counts as true
-	int ret = (slotmatrix[item->ItemType]&slottype);
+	int ret = (slotmatrix[item->ItemType] & slottype);
 	if (ret && actor && actor->RequiresUMD(item)) {
 		// set an ugly marker for Use magic device, but only if the item is already known to be usable
 		ret |= SLOT_UMD;
@@ -2875,9 +2940,9 @@ Label* Interface::GetMessageLabel() const
 	return GetControl<Label>("MsgSys", 1);
 }
 
-TextArea* Interface::GetMessageTextArea() const
+TextArea* Interface::GetMessageTextArea(int which) const
 {
-	return GetControl<TextArea>("MsgSys", 0);
+	return GetControl<TextArea>("MsgSys", which);
 }
 
 void Interface::SetFeedbackLevel(int level)
@@ -2919,8 +2984,8 @@ bool Interface::ProtectedExtension(const path_t& filename) const
 {
 	size_t pos = filename.find_first_of('.');
 	if (pos == path_t::npos) return false;
-	int i=0;
-	while(protected_extensions[i]) {
+	int i = 0;
+	while (protected_extensions[i]) {
 		if (!stricmp(protected_extensions[i], &filename[pos])) return true;
 		i++;
 	}
@@ -2945,15 +3010,15 @@ bool Interface::StupidityDetector(const path_t& path) const
 		if (dir.IsDirectory()) {
 			// since we can't use DirectoryIterator::Hidden, exclude the special dirs manually
 			if (name[0] == '.' && name[1] == '\0') {
-					continue;
+				continue;
 			}
 			if (name[0] == '.' && name[1] == '.' && name[2] == '\0') {
-					continue;
+				continue;
 			}
 			Log(ERROR, "Interface", "**contains another dir**");
 			return true; //a directory in there???
 		}
-		if (ProtectedExtension(name) ) {
+		if (ProtectedExtension(name)) {
 			Log(ERROR, "Interface", "**contains alien files**");
 			return true; //an executable file in there???
 		}
@@ -2962,26 +3027,10 @@ bool Interface::StupidityDetector(const path_t& path) const
 	return false;
 }
 
-void Interface::DelTree(const path_t& path, bool onlysave) const
-{
-	if (path.empty()) return; //Don't delete the root filesystem :)
-
-	DirectoryIterator dir(path);
-	dir.SetFlags(DirectoryIterator::Files);
-	if (!dir) {
-		return;
-	}
-	do {
-		const path_t& name = dir.GetName();
-		if (!onlysave || SavedExtension(name) ) {
-			path_t dtmp = dir.GetFullPath();
-			unlink(dtmp.c_str());
-		}
-	} while (++dir);
-}
-
 void Interface::LoadProgress(int percent)
 {
+	if (config.UseAsLibrary) return;
+
 	WindowManager::CursorFeedback cur = winmgr->SetCursorFeedback(WindowManager::MOUSE_NONE);
 	winmgr->DrawWindows();
 	winmgr->SetCursorFeedback(cur);
@@ -3003,7 +3052,7 @@ void Interface::ReleaseDraggedItem()
 	winmgr->GetGameWindow()->SetCursor(nullptr);
 }
 
-void Interface::DragItem(CREItem *item, const ResRef& /*Picture*/)
+void Interface::DragItem(CREItem* item, const ResRef& /*Picture*/)
 {
 	//We should drop the dragged item and pick this up,
 	//we shouldn't have a valid DraggedItem at this point.
@@ -3037,10 +3086,10 @@ bool Interface::ReadItemTable(const ResRef& TableName, const path_t& Prefix)
 		}
 
 		TableMgr::index_t l = tab->GetColumnCount(j);
-		if (l<1) continue;
+		if (l < 1) continue;
 		int cl = atoi(tab->GetColumnName(0).c_str());
 		std::vector<ResRef> refs;
-		for(TableMgr::index_t k=0;k<l;k++) {
+		for (TableMgr::index_t k = 0; k < l; k++) {
 			refs.push_back(tab->QueryField(j, k));
 		}
 		RtRows.emplace(ItemName, ItemList(std::move(refs), cl));
@@ -3058,8 +3107,8 @@ bool Interface::ReadRandomItems()
 	if (!tab) {
 		return false;
 	}
-	if (difflev>=tab->GetColumnCount()) {
-		difflev = tab->GetColumnCount()-1;
+	if (difflev >= tab->GetColumnCount()) {
+		difflev = tab->GetColumnCount() - 1;
 	}
 
 	//the gold item
@@ -3069,31 +3118,31 @@ bool Interface::ReadRandomItems()
 	}
 	ResRef randTreasureRef = tab->QueryField(1, difflev);
 	int i = atoi(randTreasureRef.c_str());
-	if (i<1) {
+	if (i < 1) {
 		ReadItemTable(randTreasureRef, ""); //reading the table itself
 		return true;
 	}
-	if (i>5) {
-		i=5;
+	if (i > 5) {
+		i = 5;
 	}
-	while(i--) {
+	while (i--) {
 		randTreasureRef = tab->QueryField(2 + i, difflev);
-		ReadItemTable(randTreasureRef,tab->GetRowName(2 + i));
+		ReadItemTable(randTreasureRef, tab->GetRowName(2 + i));
 	}
 	return true;
 }
 
-CREItem *Interface::ReadItem(DataStream *str) const
+CREItem* Interface::ReadItem(DataStream* str) const
 {
-	CREItem *itm = new CREItem();
+	CREItem* itm = new CREItem();
 	if (ReadItem(str, itm)) return itm;
 	delete itm;
-	return NULL;
+	return nullptr;
 }
 
-CREItem *Interface::ReadItem(DataStream *str, CREItem *itm) const
+CREItem* Interface::ReadItem(DataStream* str, CREItem* itm) const
 {
-	str->ReadResRef( itm->ItemResRef );
+	str->ReadResRef(itm->ItemResRef);
 	str->ReadWord(itm->Expired);
 	str->ReadWord(itm->Usages[0]);
 	str->ReadWord(itm->Usages[1]);
@@ -3103,19 +3152,19 @@ CREItem *Interface::ReadItem(DataStream *str, CREItem *itm) const
 		SanitizeItem(itm);
 		return itm;
 	}
-	return NULL;
+	return nullptr;
 }
 
 //Make sure the item attributes are valid
 //we don't update all flags here because some need to be set later (like
 //unmovable items in containers (e.g. the bg2 portal key) so that they
 //can actually be picked up)
-void Interface::SanitizeItem(CREItem *item) const
+void Interface::SanitizeItem(CREItem* item) const
 {
 	//the stacked flag will be set by the engine if the item is indeed stacked
 	//this is to fix buggy saves so TakeItemNum works
 	//the equipped bit is also reset
-	item->Flags &= ~(IE_INV_ITEM_STACKED|IE_INV_ITEM_EQUIPPED);
+	item->Flags &= ~(IE_INV_ITEM_STACKED | IE_INV_ITEM_EQUIPPED);
 
 	//this is for converting IWD items magic flag
 	if ((item->Flags & IE_INV_ITEM_UNDROPPABLE) && HasFeature(GFFlags::MAGICBIT)) {
@@ -3126,7 +3175,7 @@ void Interface::SanitizeItem(CREItem *item) const
 		item->Flags &= ~IE_INV_ITEM_UNDROPPABLE;
 	}
 
-	const Item *itm = gamedata->GetItem(item->ItemResRef, true);
+	const Item* itm = gamedata->GetItem(item->ItemResRef, true);
 	if (!itm) return;
 
 	if (itm->Flags & IE_ITEM_NO_DISPEL) item->Flags |= IE_INV_ITEM_NO_DISPEL;
@@ -3144,7 +3193,7 @@ void Interface::SanitizeItem(CREItem *item) const
 		//set charge counters for non-rechargeable items if their charge is zero
 		//set charge counters for items not using charges to one
 		for (size_t i = 0; i < item->Usages.size(); i++) {
-			const ITMExtHeader *h = itm->GetExtHeader(i);
+			const ITMExtHeader* h = itm->GetExtHeader(i);
 			if (!h) {
 				item->Usages[i] = 0;
 				continue;
@@ -3233,11 +3282,11 @@ static ResRef UpgradeRandomItem(const ResRef& pickedItem, const ResRef& workResR
 // - references to other random tables to be resolved (eg. RNDMAG02 meaning the second row of RNDMAG.2da)
 // - numbers only — gold amount
 // - "UP", which causes a pick from one of the next rows (RT01_L -> RT01_M -> RT01_R -> RT01_V)
-bool Interface::ResolveRandomItem(CREItem *itm) const
+bool Interface::ResolveRandomItem(CREItem* itm) const
 {
 	if (RtRows.empty()) return true;
 
-	auto pickFromRow = [this](const ResRef& itemRef)  {
+	auto pickFromRow = [this](const ResRef& itemRef) {
 		const ItemList& itemList = RtRows.at(itemRef);
 		int idx;
 		if (itemList.WeightOdds) {
@@ -3304,7 +3353,7 @@ bool Interface::ResolveRandomItem(CREItem *itm) const
 	return false;
 }
 
-Container *Interface::GetCurrentContainer()
+Container* Interface::GetCurrentContainer()
 {
 	return CurrentContainer;
 }
@@ -3312,19 +3361,19 @@ Container *Interface::GetCurrentContainer()
 int Interface::CloseCurrentContainer()
 {
 	UseContainer = false;
-	if ( !CurrentContainer) {
+	if (!CurrentContainer) {
 		return -1;
 	}
 	//remove empty ground piles on closeup
 	CurrentContainer->GetCurrentArea()->TMap->CleanupContainer(CurrentContainer);
-	CurrentContainer = NULL;
+	CurrentContainer = nullptr;
 	return 0;
 }
 
-void Interface::SetCurrentContainer(const Actor *actor, Container *arg, bool flag)
+void Interface::SetCurrentContainer(const Actor* actor, Container* arg, bool flag)
 {
 	//abort action if the first selected PC isn't the original actor
-	if (actor!=GetFirstSelectedPC(false)) {
+	if (actor != GetFirstSelectedPC(false)) {
 		CurrentContainer = nullptr;
 		return;
 	}
@@ -3332,7 +3381,7 @@ void Interface::SetCurrentContainer(const Actor *actor, Container *arg, bool fla
 	UseContainer = flag;
 }
 
-Store *Interface::GetCurrentStore()
+Store* Interface::GetCurrentStore()
 {
 	return CurrentStore;
 }
@@ -3340,10 +3389,11 @@ Store *Interface::GetCurrentStore()
 void Interface::CloseCurrentStore()
 {
 	gamedata->SaveStore(CurrentStore);
-	CurrentStore = NULL;
+	CurrentStore = nullptr;
+	vars.Set("BARTER_PC", 0);
 }
 
-Store *Interface::SetCurrentStore(const ResRef &resName, ieDword owner)
+Store* Interface::SetCurrentStore(const ResRef& resName, ieDword owner)
 {
 	if (CurrentStore) {
 		if (CurrentStore->Name == resName) {
@@ -3355,58 +3405,68 @@ Store *Interface::SetCurrentStore(const ResRef &resName, ieDword owner)
 	}
 
 	CurrentStore = gamedata->GetStore(resName);
-	if (CurrentStore == NULL) {
-		return NULL;
+	if (CurrentStore == nullptr) {
+		vars.Set("BARTER_PC", 0);
+		return nullptr;
 	}
+	// this is set when opening the store and not updated when changing PC
+	vars.Set("BARTER_PC", game->GetSelectedPCSingle());
 	if (owner) {
 		CurrentStore->SetOwnerID(owner);
 	}
 	return CurrentStore;
 }
 
-void Interface::SetMouseScrollSpeed(int speed) {
+void Interface::SetMouseScrollSpeed(int speed)
+{
 	mousescrollspd = speed * 2;
 }
 
-int Interface::GetMouseScrollSpeed() const {
+int Interface::GetMouseScrollSpeed() const
+{
 	return mousescrollspd;
 }
 
 ieStrRef Interface::GetRumour(const ResRef& dlgref)
 {
 	PluginHolder<DialogMgr> dm = GetImporter<DialogMgr>(IE_DLG_CLASS_ID, gamedata->GetResourceStream(dlgref, IE_DLG_CLASS_ID));
-	Dialog *dlg = dm->GetDialog();
+	Dialog* dlg = dm->GetDialog();
 
 	if (!dlg) {
 		Log(ERROR, "Interface", "Cannot load dialog: {}", dlgref);
 		return ieStrRef(-1);
 	}
-	Scriptable *pc = game->GetSelectedPCSingle(false);
+	Scriptable* pc = game->GetSelectedPCSingle(false);
 
 	// forcefully rerandomize
 	RandomNumValue = RAND<int>();
 	ieStrRef ret = ieStrRef(-1);
 
-	int i = dlg->FindRandomState( pc );
-	if (i>=0 ) {
-		ret = dlg->GetState( i )->StrRef;
+	int i = dlg->FindRandomState(pc);
+	if (i >= 0) {
+		ret = dlg->GetState(i)->StrRef;
 	}
 	delete dlg;
 	return ret;
 }
 
 //plays stock sound listed in defsound.2da
-Holder<SoundHandle> Interface::PlaySound(size_t index, unsigned int channel) const
+Holder<SoundHandle> Interface::PlaySound(size_t index, SFXChannel channel) const
 {
-	if (index <= gamedata->defaultSounds.size()) {
-		return AudioDriver->PlayRelative(gamedata->defaultSounds[index], channel);
-	}
-	return NULL;
+	return PlaySound(index, channel, Point(), 0);
 }
 
-Actor *Interface::GetFirstSelectedPC(bool forced)
+Holder<SoundHandle> Interface::PlaySound(size_t index, SFXChannel channel, const Point& p, unsigned int flags) const
 {
-	Actor *ret = nullptr;
+	if (index <= gamedata->defaultSounds.size()) {
+		return AudioDriver->Play(gamedata->defaultSounds[index], channel, p, flags);
+	}
+	return nullptr;
+}
+
+Actor* Interface::GetFirstSelectedPC(bool forced)
+{
+	Actor* ret = nullptr;
 	int slot = 0;
 	int partySize = game->GetPartySize(false);
 	if (!partySize) return nullptr;
@@ -3427,12 +3487,12 @@ Actor *Interface::GetFirstSelectedPC(bool forced)
 	return ret;
 }
 
-Actor *Interface::GetFirstSelectedActor()
+Actor* Interface::GetFirstSelectedActor()
 {
 	if (!game->selected.empty()) {
 		return game->selected[0];
 	}
-	return NULL;
+	return nullptr;
 }
 
 bool Interface::HasCurrentArea() const
@@ -3463,7 +3523,7 @@ void Interface::DisableGameControl(bool disable) const
 }
 
 /* we should return -1 if it isn't gold, otherwise return the gold value */
-int Interface::CanMoveItem(const CREItem *item) const
+int Interface::CanMoveItem(const CREItem* item) const
 {
 	//This is an inventory slot, switch to IE_ITEM_* if you use Item
 	if (item->Flags & IE_INV_ITEM_UNDROPPABLE && !HasFeature(GFFlags::NO_DROP_CAN_MOVE)) {
@@ -3479,9 +3539,9 @@ int Interface::CanMoveItem(const CREItem *item) const
 }
 
 // dealing with applying effects
-void Interface::ApplySpell(const ResRef& spellRef, Actor *actor, Scriptable *caster, int level) const
+void Interface::ApplySpell(const ResRef& spellRef, Actor* actor, Scriptable* caster, int level) const
 {
-	Spell *spell = gamedata->GetSpell(spellRef);
+	Spell* spell = gamedata->GetSpell(spellRef);
 	if (!spell) {
 		return;
 	}
@@ -3492,14 +3552,14 @@ void Interface::ApplySpell(const ResRef& spellRef, Actor *actor, Scriptable *cas
 	ApplyEffectQueue(&block, actor, caster, actor->Pos);
 }
 
-void Interface::ApplySpellPoint(const ResRef& spellRef, Map* area, const Point &pos, Scriptable *caster, int level) const
+void Interface::ApplySpellPoint(const ResRef& spellRef, Map* area, const Point& pos, Scriptable* caster, int level) const
 {
-	Spell *spell = gamedata->GetSpell(spellRef);
+	Spell* spell = gamedata->GetSpell(spellRef);
 	if (!spell) {
 		return;
 	}
 	int header = spell->GetHeaderIndexFromLevel(level);
-	Projectile *pro = spell->GetProjectile(caster, header, level, pos);
+	Projectile* pro = spell->GetProjectile(caster, header, level, pos);
 	pro->SetCaster(caster->GetGlobalID(), level);
 	area->AddProjectile(pro, caster->Pos, pos);
 }
@@ -3507,7 +3567,7 @@ void Interface::ApplySpellPoint(const ResRef& spellRef, Map* area, const Point &
 //-1 means the effect was reflected back to the caster
 //0 means the effect was resisted and should be removed
 //1 means the effect was applied
-int Interface::ApplyEffect(Effect *effect, Actor *actor, Scriptable *caster) const
+int Interface::ApplyEffect(Effect* effect, Actor* actor, Scriptable* caster) const
 {
 	if (!effect) {
 		return 0;
@@ -3519,7 +3579,7 @@ int Interface::ApplyEffect(Effect *effect, Actor *actor, Scriptable *caster) con
 	return res;
 }
 
-int Interface::ApplyEffectQueue(EffectQueue *fxqueue, Actor *actor, Scriptable *caster) const
+int Interface::ApplyEffectQueue(EffectQueue* fxqueue, Actor* actor, Scriptable* caster) const
 {
 	Point p(-1, -1); //the effect should have all its coordinates already set
 	return ApplyEffectQueue(fxqueue, actor, caster, p);
@@ -3529,32 +3589,32 @@ int Interface::ApplyEffectQueue(EffectQueue *fxqueue, Actor *actor, Scriptable *
 //This means, pcf functions may not be executed when the effect is first applied
 //Adding this new effect block via RefreshEffects is possible, but that might apply existing effects twice
 
-int Interface::ApplyEffectQueue(EffectQueue *fxqueue, Actor *actor, Scriptable *caster, Point p) const
+int Interface::ApplyEffectQueue(EffectQueue* fxqueue, Actor* actor, Scriptable* caster, Point p) const
 {
-	int res = fxqueue->CheckImmunity ( actor );
+	int res = fxqueue->CheckImmunity(actor);
 	if (res) {
 		if (res == -1 && caster) {
 			//bounced back at a nonliving caster
-			if (caster->Type!=ST_ACTOR) {
+			if (caster->Type != ST_ACTOR) {
 				return 0;
 			}
-			actor = (Actor *) caster;
+			actor = (Actor*) caster;
 		}
-		fxqueue->SetOwner( caster );
+		fxqueue->SetOwner(caster);
 
-		if (fxqueue->AddAllEffects( actor, p)==FX_NOT_APPLIED) {
-			res=0;
+		if (fxqueue->AddAllEffects(actor, p) == FX_NOT_APPLIED) {
+			res = 0;
 		}
 	}
 	return res;
 }
 
-Effect *Interface::GetEffect(const ResRef& resname, int level, const Point &p)
+Effect* Interface::GetEffect(const ResRef& resname, int level, const Point& p)
 {
 	//Don't free this reference, it is cached!
-	Effect *effect = gamedata->GetEffect(resname);
+	Effect* effect = gamedata->GetEffect(resname);
 	if (!effect) {
-		return NULL;
+		return nullptr;
 	}
 	if (!level) {
 		level = 1;
@@ -3565,17 +3625,17 @@ Effect *Interface::GetEffect(const ResRef& resname, int level, const Point &p)
 }
 
 // dealing with saved games
-int Interface::SwapoutArea(Map *map) const
+int Interface::SwapoutArea(Map* map) const
 {
 	auto RemoveFromCache = [&](const ResRef& resref, SClass_ID classID) {
 		path_t filename = PathJoinExt(config.CachePath, resref, TypeExt(classID));
-		unlink(filename.c_str());
+		UnlinkFile(filename);
 	};
 
 	//refuse to save ambush areas, for example
 	if (map->AreaFlags & AF_NOSAVE) {
 		Log(DEBUG, "Core", "Not saving area {}",
-			map->GetScriptName());
+		    map->GetScriptName());
 		RemoveFromCache(map->GetScriptRef(), IE_ARE_CLASS_ID);
 		return 0;
 	}
@@ -3584,22 +3644,22 @@ int Interface::SwapoutArea(Map *map) const
 	if (mm == nullptr) {
 		return -1;
 	}
-	int size = mm->GetStoredFileSize (map);
+	int size = mm->GetStoredFileSize(map);
 	if (size > 0) {
 		//created streams are always autofree (close file on destruct)
 		//this one will be destructed when we return from here
 		FileStream str;
 
 		str.Create(map->GetScriptName().c_str(), IE_ARE_CLASS_ID);
-		int ret = mm->PutArea (&str, map);
-		if (ret <0) {
+		int ret = mm->PutArea(&str, map);
+		if (ret < 0) {
 			Log(WARNING, "Core", "Area removed: {}",
-				map->GetScriptName());
+			    map->GetScriptName());
 			RemoveFromCache(map->GetScriptRef(), IE_ARE_CLASS_ID);
 		}
 	} else {
 		Log(WARNING, "Core", "Area removed: {}",
-			map->GetScriptName());
+		    map->GetScriptName());
 		RemoveFromCache(map->GetScriptRef(), IE_ARE_CLASS_ID);
 	}
 	//make sure the stream isn't connected to sm, or it will be double freed
@@ -3618,8 +3678,7 @@ int Interface::WriteCharacter(StringView name, const Actor* actor) const
 	}
 
 	FileStream str;
-	if (!str.Create(Path, name.c_str(), IE_CHR_CLASS_ID)
-		|| gm->PutActor(&str, actor, true) < 0) {
+	if (!str.Create(Path, name.c_str(), IE_CHR_CLASS_ID) || gm->PutActor(&str, actor, true) < 0) {
 		Log(WARNING, "Core", "Character cannot be saved: {}", name);
 		return -1;
 	}
@@ -3641,15 +3700,15 @@ int Interface::WriteGame(const path_t& folder)
 		return -1;
 	}
 
-	int size = gm->GetStoredFileSize (game);
+	int size = gm->GetStoredFileSize(game);
 	if (size > 0) {
 		//created streams are always autofree (close file on destruct)
 		//this one will be destructed when we return from here
 		FileStream str;
 
 		str.Create(folder, GameNameResRef.c_str(), IE_GAM_CLASS_ID);
-		int ret = gm->PutGame (&str, game);
-		if (ret <0) {
+		int ret = gm->PutGame(&str, game);
+		if (ret < 0) {
 			Log(WARNING, "Core", "Game cannot be saved: {}", folder);
 			return -1;
 		}
@@ -3671,17 +3730,17 @@ int Interface::WriteWorldMap(const path_t& folder)
 		worldmap->SetSingle(false);
 	}
 
-	int size1 = wmm->GetStoredFileSize (worldmap, 0);
+	int size1 = wmm->GetStoredFileSize(worldmap, 0);
 	int size2 = 1; //just a dummy value
 
 	//if size is 0 for the first worldmap, then there is a problem
-	if (!worldmap->IsSingle() && (size1>0) ) {
-		size2=wmm->GetStoredFileSize (worldmap, 1);
+	if (!worldmap->IsSingle() && (size1 > 0)) {
+		size2 = wmm->GetStoredFileSize(worldmap, 1);
 	}
 
 	int ret = 0;
-	if ((size1 < 0) || (size2<0) ) {
-		ret=-1;
+	if ((size1 < 0) || (size2 < 0)) {
+		ret = -1;
 	} else {
 		//created streams are always autofree (close file on destruct)
 		//this one will be destructed when we return from here
@@ -3692,16 +3751,17 @@ int Interface::WriteWorldMap(const path_t& folder)
 		if (!worldmap->IsSingle()) {
 			str2.Create(folder, WorldMapName[1].c_str(), IE_WMP_CLASS_ID);
 		}
-		ret = wmm->PutWorldMap (&str1, &str2, worldmap);
+		ret = wmm->PutWorldMap(&str1, &str2, worldmap);
 	}
-	if (ret <0) {
+	if (ret < 0) {
 		Log(WARNING, "Core", "Internal error, worldmap cannot be saved: {}", folder);
 		return -1;
 	}
 	return 0;
 }
 
-static bool IsBlobSaveItem(const path_t& path) {
+static bool IsBlobSaveItem(const path_t& path)
+{
 	auto areExt = path.find(".blb");
 	auto pathLength = path.length();
 	return areExt != path_t::npos && areExt == pathLength - 4;
@@ -3717,7 +3777,7 @@ int Interface::CompressSave(const path_t& folder, bool overrideRunning)
 		return GEM_ERROR;
 	}
 	PluginHolder<ArchiveImporter> ai = MakePluginHolder<ArchiveImporter>(IE_SAV_CLASS_ID);
-	ai->CreateArchive( &str);
+	ai->CreateArchive(&str);
 
 	tick_t startTime = GetMilliseconds();
 	// If we override the savegame we are running to fetch AREs from, it has already dumped
@@ -3729,8 +3789,8 @@ int Interface::CompressSave(const path_t& folder, bool overrideRunning)
 
 	dir.SetFlags(DirectoryIterator::Files);
 	//.tot and .toh should be saved last, because they are updated when an .are is saved
-	int priority=2;
-	while(priority) {
+	int priority = 2;
+	while (priority) {
 		do {
 			const path_t& name = dir.GetName();
 			if (SavedExtension(name) == priority) {
@@ -3752,7 +3812,7 @@ int Interface::CompressSave(const path_t& folder, bool overrideRunning)
 		} while (++dir);
 		//reopen list for the second round
 		priority--;
-		if (priority>0) {
+		if (priority > 0) {
 			dir.Rewind();
 		}
 	}
@@ -3762,12 +3822,15 @@ int Interface::CompressSave(const path_t& folder, bool overrideRunning)
 	return GEM_OK;
 }
 
-int Interface::GetMaximumAbility() const { return MaximumAbility; }
+int Interface::GetMaximumAbility() const
+{
+	return MaximumAbility;
+}
 
 int Interface::GetStrengthBonus(int column, int value, int ex) const
 {
 	//to hit, damage, open doors, weight allowance
-	if (column<0 || column>3)
+	if (column < 0 || column > 3)
 		return -9999;
 
 	value = Clamp(value, 0, MaximumAbility);
@@ -3776,33 +3839,33 @@ int Interface::GetStrengthBonus(int column, int value, int ex) const
 	// only 18 (human max) has the differentiating extension
 	if (value == 18 && !HasFeature(GFFlags::RULES_3ED)) {
 		ex = Clamp(ex, 0, 100);
-		bonus += abilityTables->strmodex[column*101+ex];
+		bonus += abilityTables->strmodex[column * 101 + ex];
 	}
 
-	return abilityTables->strmod[column*(MaximumAbility+1)+value] + bonus;
+	return abilityTables->strmod[column * (MaximumAbility + 1) + value] + bonus;
 }
 
 //The maze columns are used only in the maze spell, no need to restrict them further
 int Interface::GetIntelligenceBonus(int column, int value) const
 {
 	//learn spell, max spell level, max spell number on level, maze duration dice, maze duration dice size
-	if (column<0 || column>4) return -9999;
+	if (column < 0 || column > 4) return -9999;
 
-	return abilityTables->intmod[column*(MaximumAbility+1)+value];
+	return abilityTables->intmod[column * (MaximumAbility + 1) + value];
 }
 
 int Interface::GetDexterityBonus(int column, int value) const
 {
 	//no dexmod in iwd2 and only one type of modifier
 	if (HasFeature(GFFlags::RULES_3ED)) {
-		return value/2-5;
+		return value / 2 - 5;
 	}
 
 	//reaction, missile, ac
-	if (column<0 || column>2)
+	if (column < 0 || column > 2)
 		return -9999;
 
-	return abilityTables->dexmod[column*(MaximumAbility+1)+value];
+	return abilityTables->dexmod[column * (MaximumAbility + 1) + value];
 }
 
 int Interface::GetConstitutionBonus(int column, int value) const
@@ -3812,20 +3875,20 @@ int Interface::GetConstitutionBonus(int column, int value) const
 		if (column == STAT_CON_HP_REGEN) {
 			return 0;
 		}
-		return value/2-5;
+		return value / 2 - 5;
 	}
 
 	//normal, warrior, minimum, regen hp, regen fatigue
-	if (column<0 || column>4)
+	if (column < 0 || column > 4)
 		return -9999;
 
-	return abilityTables->conmod[column*(MaximumAbility+1)+value];
+	return abilityTables->conmod[column * (MaximumAbility + 1) + value];
 }
 
 int Interface::GetCharismaBonus(int column, int /*value*/) const
 {
 	// store price reduction
-	if (column<0 || column>(MaximumAbility-1))
+	if (column < 0 || column > (MaximumAbility - 1))
 		return -9999;
 
 	return abilityTables->chrmod[column];
@@ -3836,8 +3899,7 @@ int Interface::GetLoreBonus(int column, int value) const
 	//no lorebon in iwd2 - lore is a skill
 	if (HasFeature(GFFlags::RULES_3ED)) return 0;
 
-	if (column<0 || column>0)
-		return -9999;
+	if (column != 0) return -9999;
 
 	return abilityTables->lorebon[value < 0 ? 0 : value];
 }
@@ -3847,8 +3909,7 @@ int Interface::GetWisdomBonus(int column, int value) const
 	if (abilityTables->wisbon.empty()) return 0;
 
 	// xp bonus
-	if (column<0 || column>0)
-		return -9999;
+	if (column != 0) return -9999;
 
 	return abilityTables->wisbon[value];
 }
@@ -3858,7 +3919,7 @@ PauseState Interface::TogglePause() const
 	if (core->IsTurnBased()) {
 		Actor* actor = core->currentTurnBasedActor;
 		if (actor) {
-			bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->GetMod(IE_STATE_ID) & (STATE_MINDLESS^STATE_BERSERK));
+			bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->Modified[IE_STATE_ID] & (STATE_MINDLESS^STATE_BERSERK));
 			if (actor->lastInit && game->GetGameTimeReal() - actor->lastInit > 4 && !notPlayerControl && !actor->InMove() && !actor->InAttack()) {
 				core->EndTurn();
 			}
@@ -3875,16 +3936,16 @@ PauseState Interface::TogglePause() const
 
 bool Interface::SetPause(PauseState pause, int flags) const
 {
-	GameControl *gc = GetGameControl();
+	GameControl* gc = GetGameControl();
 
 	if (core->IsTurnBased()) {
 		return false;
 	}
 
 	//don't allow soft pause in cutscenes and dialog
-	if (!(flags&PF_FORCED) && InCutSceneMode()) gc = NULL;
+	if (!(flags & PF_FORCED) && InCutSceneMode()) gc = nullptr;
 
-	if (gc && ((bool)(gc->GetDialogueFlags()&DF_FREEZE_SCRIPTS) != (bool)pause)) { // already paused
+	if (gc && ((bool) (gc->GetDialogueFlags() & DF_FREEZE_SCRIPTS) != (bool) pause)) { // already paused
 		HCStrings strref;
 		if (pause == PauseState::On) {
 			strref = HCStrings::Paused;
@@ -3893,7 +3954,7 @@ bool Interface::SetPause(PauseState pause, int flags) const
 			strref = HCStrings::Unpaused;
 			gc->SetDialogueFlags(DF_FREEZE_SCRIPTS, BitOp::NAND);
 		}
-		if (!(flags&PF_QUIET) ) {
+		if (!(flags & PF_QUIET)) {
 			if (pause == PauseState::On) gc->SetDisplayText(strref, 0); // time 0 = removed instantly on unpause (for pst)
 			displaymsg->DisplayConstantString(strref, GUIColors::RED);
 		}
@@ -3929,7 +3990,7 @@ bool Interface::Autopause(AUTOPAUSE flag, Scriptable* target) const
 	return true;
 }
 
-void Interface::RegisterOpcodes(int count, const EffectDesc *opcodes) const
+void Interface::RegisterOpcodes(int count, const EffectDesc* opcodes) const
 {
 	EffectQueue_RegisterOpcodes(count, opcodes);
 }
@@ -3987,13 +4048,13 @@ ieDword Interface::TranslateStat(const std::string& statName)
 		return tmp;
 	}
 
-	int symbol = LoadSymbol( "stats" );
-	auto sym = GetSymbol( symbol );
+	int symbol = LoadSymbol("stats");
+	auto sym = GetSymbol(symbol);
 	if (!sym) {
 		error("Core", "Cannot load statistic name mappings.");
 	}
 	ieDword stat = sym->GetValue(statName);
-	if (stat==(ieDword) ~0) {
+	if (stat == (ieDword) ~0) {
 		Log(WARNING, "Core", "Cannot translate symbol: {}", statName);
 	}
 	return stat;
@@ -4011,17 +4072,17 @@ int Interface::ResolveStatBonus(const Actor* actor, const ResRef& tableName, ieD
 		return -1;
 	}
 	TableMgr::index_t count = mtm->GetRowCount();
-	if (count< 1) {
+	if (count < 1) {
 		return 0;
 	}
 	int ret = 0;
 	// tables for additive modifiers of bonus type
 	for (TableMgr::index_t i = 0; i < count; i++) {
 		ResRef subTableName = mtm->GetRowName(i);
-		int checkcol = mtm->QueryFieldSigned<int>(i,1);
-		unsigned int readcol = mtm->QueryFieldUnsigned<unsigned int>(i,2);
+		int checkcol = mtm->QueryFieldSigned<int>(i, 1);
+		unsigned int readcol = mtm->QueryFieldUnsigned<unsigned int>(i, 2);
 		int stat = TranslateStat(mtm->QueryField(i, 0));
-		if (!(flags&1)) {
+		if (!(flags & 1)) {
 			value = actor->GetSafeStat(stat);
 		}
 		auto tm = gamedata->LoadTable(subTableName);
@@ -4045,15 +4106,13 @@ int Interface::ResolveStatBonus(const Actor* actor, const ResRef& tableName, ieD
 // see 8cff52b3c8 if this needs to be resurrected at some point
 void Interface::WaitForDisc(int disc_number, const path_t& path)
 {
-	vars.Set("WaitForDisc", disc_number);
-
-	GetGUIScriptEngine()->RunFunction( "GUICommonWindows", "OpenWaitForDiscWindow" );
+	GetGUIScriptEngine()->RunFunction("GUICommonWindows", "OpenWaitForDiscWindow", disc_number);
 	do {
 		winmgr->DrawWindows();
 		for (const auto& cd : config.CD[disc_number - 1]) {
 			path_t name = PathJoin(cd, path);
 			if (FileExists(name)) {
-				GetGUIScriptEngine()->RunFunction( "GUICommonWindows", "OpenWaitForDiscWindow" );
+				GetGUIScriptEngine()->RunFunction("GUICommonWindows", "OpenWaitForDiscWindow");
 				return;
 			}
 		}
@@ -4225,7 +4284,7 @@ void Interface::EndTurn() {
 
 		// delayed attack
 		if (actor->GetStance() != IE_ANI_DIE && actor->GetStance() != IE_ANI_TWITCH && actor->GetStance() != IE_ANI_SLEEP &&
-			!(actor->Immobile() || (actor->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) && GetCurrentTurnBasedSlot().haveaction && !actor->AuraCooldown &&
+			!(actor->Immobile() || (actor->Modified[IE_STATE_ID] & (STATE_CANTMOVE | STATE_PANIC))) && GetCurrentTurnBasedSlot().haveaction && !actor->AuraCooldown &&
 			!GetCurrentTurnBasedSlot().delayaction && currentTurnBasedSlot < initiatives[currentTurnBasedList].size() - 1) {
 			InitiativeSlot delayedSlot = GetCurrentTurnBasedSlot();
 			delayedSlot.delayaction = true;
@@ -4364,7 +4423,7 @@ void Interface::UpdateTurnBased() {
 
 				// can move?
 				if (actor->Immobile() || 
-					(actor->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC)) ||
+					(actor->Modified[IE_STATE_ID] & (STATE_CANTMOVE | STATE_PANIC)) ||
 					(actor->GetBase(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) {
 					actor->RemoveFromAdditionInitiativeLists();
 					continue;
@@ -4515,6 +4574,21 @@ InitiativeSlot& Interface::GetCurrentTurnBasedSlot()
 	}
 
 	return initiatives[currentTurnBasedList][currentTurnBasedSlot]; 
+}
+
+float Interface::GetAnimationFPS(const ResRef& anim) const
+{
+	AutoTable animFPS = gamedata->LoadTable("animfps", true);
+	if (!animFPS) return ANI_DEFAULT_FRAMERATE;
+
+	static TableMgr::index_t rows = animFPS->GetRowCount();
+	for (TableMgr::index_t i = 0; i < rows; ++i) {
+		if (anim != animFPS->GetRowName(i)) continue;
+
+		float fps = animFPS->QueryFieldUnsigned<unsigned int>(i, 0);
+		return fps;
+	}
+	return ANI_DEFAULT_FRAMERATE;
 }
 
 }

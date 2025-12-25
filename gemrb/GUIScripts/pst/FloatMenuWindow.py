@@ -21,6 +21,7 @@
 ###################################################
 
 import GemRB
+import ActionsWindow
 import GUICommon
 import CommonTables
 import Spellbook
@@ -84,8 +85,8 @@ def UseWeapon ():
 	GemRB.SetEquippedQuickSlot (pc, float_menu_selected)
 	return
 
-def DoSingleAction ():
-	i = GemRB.GetVar ('ItemButton')
+def DoSingleAction (btn):
+	i = btn.Value
 	OpenFloatMenuWindow ()
 	if i == 0:
 		GUIMA.OpenMapWindow ()
@@ -107,9 +108,10 @@ def OpenFloatMenuWindow (x=0, y=0):
 	global FloatMenuWindow
 	global float_menu_mode, float_menu_index, float_menu_selected
 
+	handler = GUICommonWindows.SelectionChangeHandler
 	def OnClose():
 		GemRB.GamePause (False, 0)
-		GUICommonWindows.SetSelectionChangeMultiHandler (None)
+		GUICommonWindows.SetSelectionChangeHandler (handler)
 
 		if float_menu_selected==None:
 			return
@@ -131,6 +133,7 @@ def OpenFloatMenuWindow (x=0, y=0):
 	GemRB.GameControlSetTargetMode (TARGET_MODE_NONE)
 
 	FloatMenuWindow = Window = GemRB.LoadWindow (3, "GUIWORLD")
+	Window.OnUnFocus(lambda: GemRB.SetTimer(Window.Close, 0, 0))
 
 	Window.SetFlags (WF_DRAGGABLE|WF_ALPHA_CHANNEL, OP_OR)
 	Window.SetPos (x, y)
@@ -192,7 +195,7 @@ def OpenFloatMenuWindow (x=0, y=0):
 	for i in range (SLOT_COUNT):
 		Button = Window.GetControl (CID_SLOTS + i)
 		Button.SetFlags (IE_GUI_BUTTON_ALIGN_RIGHT | IE_GUI_BUTTON_ALIGN_BOTTOM, OP_OR)
-		Button.SetVarAssoc ('ItemButton', i)
+		Button.SetVarAssoc ("ItemButton", i)
 		Button.SetFont ('NUMBER')
 		Button.SetPushOffset (0, 0)
 
@@ -233,7 +236,12 @@ def OpenFloatMenuWindow (x=0, y=0):
 
 	float_menu_index = 0
 
-	GUICommonWindows.SetSelectionChangeMultiHandler (FloatMenuSelectAnotherPC)
+	def SelChange():
+		FloatMenuSelectAnotherPC()
+		if handler:
+			handler()
+
+	GUICommonWindows.SetSelectionChangeHandler (SelChange)
 	UpdateFloatMenuWindow ()
 
 	return
@@ -391,22 +399,23 @@ def UpdateFloatMenuItem (pc, i, weapons):
 		#Button.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_NAND)
 		Button.OnPress (SelectItem)
 		Button.SetState (IE_GUI_BUTTON_ENABLED)
-		#Button.SetVarAssoc ('ItemButton', i)
 		return
 
 	ClearSlot (i)
 
 
-def SelectItem ():
+def SelectItem (btn):
 	global float_menu_selected
 
-	Button = GemRB.GetVar ('ItemButton')
 	#simulating radiobutton+checkbox hybrid
-	if float_menu_selected == Button:
+	if float_menu_selected == btn.Value:
 		float_menu_selected = None
 	else:
-		float_menu_selected = Button
-	UpdateFloatMenuWindow()
+		float_menu_selected = btn.Value
+	if GUICommon.UsingTouchInput ():
+		FloatMenuWindow.Close ()
+	else:
+		UpdateFloatMenuWindow()
 	return
 
 def UpdateFloatMenuSpell (pc, i):
@@ -420,6 +429,11 @@ def UpdateFloatMenuSpell (pc, i):
 		Button.SetPicture(None)
 		#Button.SetFlags (IE_GUI_BUTTON_PICTURE, OP_NAND)
 
+	def CloseOnPress (callback):
+		if GUICommon.UsingTouchInput ():
+			FloatMenuWindow.Close ()
+		callback ()
+
 	if i + float_menu_index < len (spell_list):
 		SpellResRef = spell_list[i + float_menu_index]["SpellResRef"]
 		Button.SetSpellIcon (SpellResRef)
@@ -427,15 +441,15 @@ def UpdateFloatMenuSpell (pc, i):
 
 		spell = GemRB.GetSpell (SpellResRef)
 		Button.SetTooltip (spell['SpellName'])
-		Button.OnPress (GUICommonWindows.SpellPressed)
+		Button.OnPress (lambda: CloseOnPress (ActionsWindow.SpellPressed))
 		Button.SetVarAssoc ("Spell", spell_list[i + float_menu_index]['SpellIndex'])
 		Button.SetState (IE_GUI_BUTTON_ENABLED)
 	elif i < 3 and GemRB.GetPlayerStat (pc, IE_CLASS) == 9:
 		# handle thieving
 		thieving = [ ACT_SEARCH, ACT_THIEVING, ACT_STEALTH ]
-		acts = [ GUICommonWindows.ActionSearchPressed, GUICommonWindows.ActionThievingPressed, GUICommonWindows.ActionStealthPressed ]
+		acts = [ ActionsWindow.ActionSearchPressed, ActionsWindow.ActionThievingPressed, ActionsWindow.ActionStealthPressed ]
 		Button.SetActionIcon (globals(), thieving[i])
-		Button.OnPress (acts[i])
+		Button.OnPress (lambda: CloseOnPress (acts[i]))
 		Button.SetState (IE_GUI_BUTTON_ENABLED)
 	else:
 		ClearSlot (i)
@@ -488,7 +502,7 @@ def FloatMenuSelectDialog ():
 	GemRB.GameControlSetTargetMode (TARGET_MODE_TALK)
 	# close it immediately for touch users, since it's hard for them rightclick to close
 	if GUICommon.UsingTouchInput ():
-		OpenFloatMenuWindow ()
+		FloatMenuWindow.Close ()
 	else:
 		UpdateFloatMenuWindow ()
 	return
@@ -499,10 +513,7 @@ def FloatMenuSelectWeapons ():
 	float_menu_index = 0
 	float_menu_selected = None
 	GemRB.GameControlSetTargetMode (TARGET_MODE_ATTACK)
-	if GUICommon.UsingTouchInput ():
-		OpenFloatMenuWindow ()
-	else:
-		UpdateFloatMenuWindow ()
+	UpdateFloatMenuWindow ()
 	return
 
 def FloatMenuSelectItems ():
@@ -510,10 +521,7 @@ def FloatMenuSelectItems ():
 	float_menu_mode = MENU_MODE_ITEMS
 	float_menu_index = 0
 	float_menu_selected = None
-	if GUICommon.UsingTouchInput ():
-		OpenFloatMenuWindow ()
-	else:
-		UpdateFloatMenuWindow ()
+	UpdateFloatMenuWindow ()
 	return
 
 def FloatMenuSelectSpells ():
@@ -528,10 +536,7 @@ def FloatMenuSelectSpells ():
 	float_menu_mode = MENU_MODE_SPELLS
 	float_menu_index = 0
 	float_menu_selected = None
-	if GUICommon.UsingTouchInput ():
-		OpenFloatMenuWindow ()
-	else:
-		UpdateFloatMenuWindow ()
+	UpdateFloatMenuWindow ()
 	return
 
 def FloatMenuSelectAbilities ():
@@ -539,10 +544,7 @@ def FloatMenuSelectAbilities ():
 	float_menu_mode = MENU_MODE_ABILITIES
 	float_menu_index = 0
 	float_menu_selected = None
-	if GUICommon.UsingTouchInput ():
-		OpenFloatMenuWindow ()
-	else:
-		UpdateFloatMenuWindow ()
+	UpdateFloatMenuWindow ()
 	return
 
 def FloatMenuPreviousItem ():

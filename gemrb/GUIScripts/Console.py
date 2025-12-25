@@ -16,7 +16,6 @@ def OnLoad():
 	histLabel = consoleWin.GetControl(2)
 	histLabel.SetText ("History:")
 	hist = consoleWin.GetControl(3)
-	hist.SetColor (ColorWhitish, TA_COLOR_OPTIONS)
 
 	console = consoleWin.ReplaceSubview (0, IE_GUI_CONSOLE, hist)
 	console.AddAlias ("CONSOLE_CTL", 1);
@@ -57,14 +56,14 @@ def cast(spellRes):
 def cc(cre, px=-1, py=-1):
 	GemRB.CreateCreature(GemRB.GameGetFirstSelectedPC(), cre, px, py)
 
-def ci(item, slot=-1, c0=1, c1=0, c2=0):
+def ci(item, c0=1, c1=0, c2=0, slot=-1):
 	GemRB.CreateItem(GemRB.GameGetFirstSelectedPC(), item, slot, c0, c1, c2)
 
 def cv(var, context="GLOBAL"):
 	GemRB.CheckVar(var, context)
 
-def ex(cmd):
-	GemRB.ExecuteString(cmd)
+def ex(cmd, runner = 0):
+	GemRB.ExecuteString(cmd, runner)
 
 def ev(trigger):
 	GemRB.EvaluateString(trigger)
@@ -95,7 +94,14 @@ def Exec(cmd):
 		if con:
 			sys.stdout = OutputCapture(stdout)
 
-		return eval(cmd)
+		locals = {} # we dont want to expose our locals
+		modend = cmd.find('.')
+		if modend > -1 and modend < len("ex('ActionOverride(Pla"): # Point arguments use a dot
+			import importlib
+			importlib.invalidate_caches()
+			modname = cmd[0:modend]
+			locals[modname] = importlib.import_module(modname)
+		return eval(cmd, globals(), locals)
 	except (SyntaxError, NameError, TypeError, ZeroDivisionError) as error:
 		if con:
 			con.Append("[color=ffffff]" + cmd + ": [/color][color=ff0000]" + str(error) + "[/color]\n")

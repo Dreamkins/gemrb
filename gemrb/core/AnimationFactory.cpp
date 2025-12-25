@@ -20,22 +20,24 @@
 
 #include "AnimationFactory.h"
 
+#include "Interface.h"
 #include "Sprite2D.h"
 
 namespace GemRB {
 
-AnimationFactory::AnimationFactory(const ResRef &resref,
-								   std::vector<Holder<Sprite2D>> f,
-								   std::vector<CycleEntry> c,
-								   std::vector<index_t> flt)
-: FactoryObject(resref, IE_BAM_CLASS_ID),
-frames(std::move(f)),
-cycles(std::move(c)),
-FLTable(std::move(flt))
+AnimationFactory::AnimationFactory(const ResRef& resref,
+				   std::vector<Holder<Sprite2D>> f,
+				   std::vector<CycleEntry> c,
+				   std::vector<index_t> flt)
+	: FactoryObject(resref, IE_BAM_CLASS_ID),
+	  frames(std::move(f)),
+	  cycles(std::move(c)),
+	  FLTable(std::move(flt))
 {
 	assert(frames.size() < InvalidIndex);
 	assert(cycles.size() < InvalidIndex);
 	assert(FLTable.size() < InvalidIndex);
+	fps = core->GetAnimationFPS(resRef);
 }
 
 Animation* AnimationFactory::GetCycle(index_t cycle) const noexcept
@@ -51,7 +53,7 @@ Animation* AnimationFactory::GetCycle(index_t cycle) const noexcept
 		animframes.push_back(frames[FLTable[i]]);
 	}
 	assert(cycles[cycle].FramesCount == animframes.size());
-	return new Animation(std::move(animframes));
+	return new Animation(std::move(animframes), fps);
 }
 
 /* returns the required frame of the named cycle, cycle defaults to 0 */
@@ -62,16 +64,16 @@ Holder<Sprite2D> AnimationFactory::GetFrame(index_t index, index_t cycle) const
 	}
 	index_t ff = cycles[cycle].FirstFrame;
 	index_t fc = cycles[cycle].FramesCount;
-	if(index >= fc) {
+	if (index >= fc) {
 		return nullptr;
 	}
-	return frames[FLTable[ff+index]];
+	return frames[FLTable[ff + index]];
 }
 
 Holder<Sprite2D> AnimationFactory::GetFrameWithoutCycle(index_t index) const
 {
-	if(index >= frames.size()) {
-		return NULL;
+	if (index >= frames.size()) {
+		return nullptr;
 	}
 	return frames[index];
 }

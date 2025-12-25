@@ -30,7 +30,7 @@ import DualClass
 import GUIRECCommon
 import PartyReform
 from GUIDefines import *
-from GUICommonWindows import CreateTopWinLoader, ToggleWindow, OpenWindowOnce, DefaultWinPos
+from GUICommonWindows import CreateTopWinLoader, ToggleWindow, OpenWindowOnce
 from ie_stats import *
 from ie_restype import *
 ###################################################
@@ -79,7 +79,7 @@ def InitRecordsWindow (Window):
 	Button.OnPress (GUIRECCommon.OpenExportWindow)
 
 	# kit info
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		Button = Window.GetControl (52)
 		Button.SetText (61265)
 		Button.OnPress (OpenKitInfoWindow)
@@ -102,9 +102,9 @@ def UpdateRecordsWindow (Window):
 	# dual-classable
 	Button = Window.GetControl (0)
 	if GUICommon.CanDualClass (pc):
-		Button.SetState (IE_GUI_BUTTON_DISABLED)
-	else:
 		Button.SetState (IE_GUI_BUTTON_ENABLED)
+	else:
+		Button.SetState (IE_GUI_BUTTON_DISABLED)
 
 	# levelup
 	Button = Window.GetControl (37)
@@ -121,10 +121,10 @@ def UpdateRecordsWindow (Window):
 	Button = Window.GetControl (2)
 	Button.SetFlags (IE_GUI_BUTTON_NO_IMAGE | IE_GUI_BUTTON_PICTURE, OP_SET)
 	Button.SetState (IE_GUI_BUTTON_LOCKED)
-	pic = GemRB.GetPlayerPortrait (pc, 0)["Sprite"]
-	if not pic:
-		pic = ""
-	if GameCheck.IsBG2() and not GameCheck.IsBG2Demo():
+	portrait = GemRB.GetPlayerPortrait (pc, 0)
+	pic = portrait["Sprite"] if portrait else ""
+
+	if GameCheck.IsBG2OrEE () and not GameCheck.IsBG2Demo():
 		Button.SetPicture (pic, "NOPORTMD")
 	else:
 		Button.SetPicture (pic, "NOPORTLG")
@@ -218,8 +218,8 @@ def UpdateRecordsWindow (Window):
 
 	return
 
-ToggleRecordsWindow = CreateTopWinLoader(2, "GUIREC", ToggleWindow, InitRecordsWindow, UpdateRecordsWindow, DefaultWinPos, True)
-OpenRecordsWindow = CreateTopWinLoader(2, "GUIREC", OpenWindowOnce, InitRecordsWindow, UpdateRecordsWindow, DefaultWinPos, True)
+ToggleRecordsWindow = CreateTopWinLoader(2, "GUIREC", ToggleWindow, InitRecordsWindow, UpdateRecordsWindow, True)
+OpenRecordsWindow = CreateTopWinLoader(2, "GUIREC", OpenWindowOnce, InitRecordsWindow, UpdateRecordsWindow, True)
 
 #original returns to game before continuing...
 def OpenRecReformPartyWindow ():
@@ -245,7 +245,7 @@ def GetStatColor (pc, stat):
 
 # GemRB.GetPlayerStat wrapper that crosschecks skill availability
 SkillStatNames = { IE_PICKPOCKET : "PICK_POCKETS", IE_LOCKPICKING : "OPEN_LOCKS", IE_TRAPS : "FIND_TRAPS", IE_STEALTH : "STEALTH", IE_HIDEINSHADOWS : "HIDE_IN_SHADOWS", IE_DETECTILLUSIONS : "DETECT_ILLUSION", IE_SETTRAPS : "SET_TRAPS" }
-if GameCheck.IsBG2 ():
+if GameCheck.IsBG2OrEE ():
 	SkillStatNames[IE_STEALTH] = "MOVE_SILENTLY"
 def GetValidSkill (pc, className, stat):
 	val = GemRB.GetPlayerStat (pc, stat)
@@ -259,7 +259,7 @@ def GetValidSkill (pc, className, stat):
 		if stat != IE_STEALTH:
 			return 0
 	else:
-		if SkillsTable.GetValue (SkillStatNames[stat], className) == -1:
+		if SkillsTable.GetValue (SkillStatNames[stat], className, GTV_INT) == -1:
 			return 0
 
 	return val
@@ -452,7 +452,7 @@ def GetProficiencies(pc, cdet):
 
 	# look ma, I can use both hands
 	
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		stats.append ( (61932, tohit["Base"], '0') )
 		if (GemRB.IsDualWielding(pc)):
 			stats.append ( (56911, tohit["Total"], '0') ) # main
@@ -518,7 +518,7 @@ def GetSkills(pc):
 			stats.append ( (15982, HatedRace, '') )
 
 	# these skills were new in bg2
-	if GameCheck.IsBG2() or GameCheck.IsIWD1():
+	if GameCheck.IsBG2OrEE () or GameCheck.IsIWD1():
 		stats.append ( (34120, GetValidSkill (pc, className, IE_HIDEINSHADOWS), '') )
 		stats.append ( (34121, GetValidSkill (pc, className, IE_DETECTILLUSIONS), '') )
 		stats.append ( (34122, GetValidSkill (pc, className, IE_SETTRAPS), '') )
@@ -570,7 +570,7 @@ def GetWeaponProficiencies(pc):
 	table = GemRB.LoadTable ("weapprof")
 	RowCount = table.GetRowCount ()
 	# the first 7 profs are foobared (bg1 style)
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		offset = 8
 	else:
 		offset = 0
@@ -665,7 +665,7 @@ def GetResistances(pc):
 	stats = []
 	# only bg2 displayed all the resistances, but it is useful information
 	# Resistances
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		stats.append(32204)
 	elif not GameCheck.IsBG1():
 		stats.append (15544)
@@ -673,7 +673,7 @@ def GetResistances(pc):
 	# 32222 Magic Fire
 	# 32214 Normal Cold
 	# 32223 Magic Cold
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		stats.append ((32213, GS (pc, IE_RESISTFIRE), '%'))
 		stats.append ((32222, GS (pc, IE_RESISTMAGICFIRE), '%'))
 		stats.append ((32214, GS (pc, IE_RESISTCOLD), '%'))
@@ -698,7 +698,7 @@ def GetResistances(pc):
 		stats.append ((14015, GS (pc, IE_RESISTACID), '%'))
 	else:
 		stats.append ((32221, GS (pc, IE_RESISTACID), '%'))
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		# Magic (others show it higher up)
 		stats.append ((62146, GS (pc, IE_RESISTMAGIC), '%'))
 	# Magic Damage
@@ -725,7 +725,7 @@ def GetResistances(pc):
 def GetWeaponStyleBonuses(pc, cdet):
 
 	stats = []
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		# Weapon Style bonuses
 		stats.append (32131)
 		wstyle = cdet["Style"] # equipped weapon style + 1000 * proficiency level
@@ -743,7 +743,7 @@ def GetWeaponStyleBonuses(pc, cdet):
 
 def TypeSetStats(stats, pc=0):
 	# everyone but bg1 has it somewhere
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		str_None = GemRB.GetString (61560)
 	elif GameCheck.IsBG1():
 		str_None = -1
@@ -824,7 +824,7 @@ def GetReputation (repvalue):
 def OpenInformationWindow ():
 	global InformationWindow
 
-	InformationWindow = Window = GemRB.LoadWindow (4)
+	InformationWindow = Window = GemRB.LoadWindow (4, "GUIREC")
 
 	# Biography
 	Button = Window.GetControl (26)
@@ -929,7 +929,7 @@ def OpenInformationWindow ():
 def OpenKitInfoWindow ():
 	global KitInfoWindow
 
-	KitInfoWindow = GemRB.LoadWindow (24)
+	KitInfoWindow = GemRB.LoadWindow (24, "GUIREC")
 
 	#back button (setting first, to be less error prone)
 	DoneButton = KitInfoWindow.GetControl (2)
@@ -988,7 +988,7 @@ def OpenColorWindow ():
 	MajorColor = GemRB.GetPlayerStat (pc, IE_MAJOR_COLOR)
 	SkinColor = GemRB.GetPlayerStat (pc, IE_SKIN_COLOR)
 	HairColor = GemRB.GetPlayerStat (pc, IE_HAIR_COLOR)
-	Window = GemRB.LoadWindow (21)
+	Window = GemRB.LoadWindow (21, "GUIREC")
 	Window.AddAlias("SUB_WIN", 0)
 
 	PaperdollButton = Window.GetControl (0)
@@ -1074,10 +1074,10 @@ def SetMajorColor ():
 	return
 
 def OpenColorPicker ():
-	Window = GemRB.LoadWindow (22)
+	Window = GemRB.LoadWindow (22, "GUIREC")
 	Window.AddAlias("SUB_WIN", 1)
 
-	GemRB.SetVar ("Selected",-1)
+	GemRB.SetVar ("Selected", None)
 	for i in range (1,35):
 		Button = Window.GetControl (i)
 		Button.SetState (IE_GUI_BUTTON_LOCKED)

@@ -21,12 +21,12 @@
 #ifndef SRCMGR_H
 #define SRCMGR_H
 
-#include <vector>
-
 #include "exports.h"
 #include "ie_types.h"
 
 #include "Resource.h"
+
+#include <vector>
 
 namespace GemRB {
 
@@ -43,7 +43,7 @@ private:
 public:
 	ResRef key;
 
-	SrcVector(const ResRef& resource);
+	explicit SrcVector(const ResRef& resource);
 
 	ieStrRef RandomRef() const;
 	bool IsEmpty() const { return strings.empty(); };

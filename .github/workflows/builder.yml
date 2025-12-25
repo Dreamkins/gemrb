@@ -8,13 +8,62 @@ on:
     branches: [ master ]
 
 jobs:
-  macos:
-    name: MacOS build
-    runs-on: macos-latest
+  tester:
+    name: Test runner linux build
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install zlib1g zlib1g-dev libsdl2-2.0-0 libsdl2-dev libopenal1 libopenal-dev libsdl2-mixer-dev libfreetype6 libfreetype6-dev libvlc-dev libpng16-16 libpng-dev libvorbis0a libvorbis-dev python3-dev zstd g++-7 gdb libgtest-dev
+
+        SCCACHE_VERSION="v0.2.15"
+        SCCACHE_LINUX_PACKAGE="sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl"
+        curl -sSfL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/${SCCACHE_LINUX_PACKAGE}.tar.gz" | sudo tar zx --strip-component=1 -C /usr/bin/
+        chmod +x /usr/bin/sccache
+
+    - name: Set up build
+      env:
+        CXX: g++-7
+        CC: gcc-7
+      run: |
+        mkdir build && cd build
+        cmake --version
+        cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release -DUSE_TESTS=ON
+
+    - name: Compiler cache (sccache)
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/sccache
+          ~/Library/Caches/Mozilla.sccache
+        key: ${{ runner.os }}-sccache-v1-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-sccache-v1-${{ github.ref }}-
+          ${{ runner.os }}-sccache-v1-refs/heads/master-
+          ${{ runner.os }}-sccache-v1-
+
+    - name: Build
+      run: |
+        cd build
+        make
+
+    - name: Test Suite
+      run: |
+        cd build
+        xvfb-run make test
+
+  macos:
+    name: MacOS build
+    runs-on: macos-13
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
 
     - name: Set up Homebrew
       run: |
@@ -31,7 +80,7 @@ jobs:
         grep -i openal CMakeCache.txt
 
     - name: Compiler cache (sccache)
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/sccache
@@ -68,7 +117,7 @@ jobs:
       run: |
         # NOTE: only do it on clang builds if we ever add more compilers
         filepath=Apple/OSX
-        tarpath=/Applications/GemRB.app
+        tarpath=/Applications/gemrb.app
 
         # there are no tags, so improvise
         version=$({ date +%F; git describe --always; } | tr -d '\n') || exit 14
@@ -76,8 +125,8 @@ jobs:
         tar cjf $file $tarpath || exit 15
 
         filepath="$filepath/$file"
-        scp $file \
-        gemrb-travisbot@frs.sourceforge.net:/home/frs/project/gemrb/Buildbot\\\ Binaries/$filepath
+        scp -v "$file" \
+        "gemrb-travisbot@frs.sourceforge.net:/home/frs/project/gemrb/botbins/$filepath"
 
   linux:
     name: Linux AppImage build
@@ -85,7 +134,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install dependencies
       run: |
@@ -107,7 +156,7 @@ jobs:
         cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release -DSTATIC_LINK=1 -DAPPIMAGE=1 -DUSE_TESTS=ON
 
     - name: Compiler cache (sccache)
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/sccache
@@ -131,16 +180,10 @@ jobs:
         echo "exit 1; fi" >> run-or-dump.sh
         chmod +x run-or-dump.sh
 
-    - name: Test Suite
+    - name: Test Run
       run: |
         cd build
-        make test
-
-    - name: Test Run
-      uses: coactions/setup-xvfb@v1
-      with:
-        run: ./run-or-dump.sh
-        working-directory: build
+        xvfb-run ./run-or-dump.sh
 
     - name: Prepare AppImage
       run: |
@@ -162,10 +205,9 @@ jobs:
         echo "::endgroup::"
 
     - name: Test AppImage
-      uses: coactions/setup-xvfb@v1
-      with:
-        run: ./grrr-gemrb.AppImage -q ../gemrb/tests/minimal/
-        working-directory: build
+      run: |
+        cd build
+        xvfb-run ./grrr-gemrb.AppImage -q ../gemrb/tests/minimal/
 
     - name: Show build cache stats
       run: |
@@ -185,7 +227,7 @@ jobs:
         # NOTE: only do it on gcc builds if we ever add more compilers
         filepath=Linux
         filei=build/GemRB-*.AppImage
-        fileo=GemRB-${GITHUB_REF##*/}-${GITHUB_SHA:0:10}-x86_64.AppImage
+        fileo=GemRB-$(date +%F)-${GITHUB_REF##*/}-${GITHUB_SHA:0:10}-x86_64.AppImage
 
         filepath="$filepath/$fileo"
         scp $filei \

@@ -93,6 +93,7 @@ def InitJournalWindow (JournalWindow):
 	if Chapter > 65535:
 		Chapter = 0
 
+	UpdateLogWindow (JournalWindow)
 	return
 
 def ToggleOrderWindow ():
@@ -156,20 +157,13 @@ def AddUserEntry ():
 	# used a separate, stripped down, window
 	Window = GemRB.LoadWindow (9, "GUIJRNL")
 
+	Window.DeleteControl (5)
+
 	Text = Window.ReplaceSubview (0, IE_GUI_TEXTAREA, "NORMAL")
 	Text.SetFlags (IE_GUI_TEXTAREA_EDITABLE, OP_OR)
 	Text.SetColor (ColorBlackish, TA_COLOR_NORMAL)
-	Text.SetColor ({'r' : 126, 'g' : 126, 'b' : 126, 'a' : 255}, TA_COLOR_BACKGROUND)
-	# disable the 1-6 hotkeys, so we can't lose focus
-	if GemRB.GetView ("PORTWIN"):
-		PortraitButtons = GUICommonWindows.GetPortraitButtonPairs (GemRB.GetView ("PORTWIN"))
-		for i, Button in PortraitButtons.items():
-			Button.SetHotKey (None)
+	Text.SetColor ({'r' : 0xf0, 'g' : 0xb0, 'b' : 0x80, 'a' : 255}, TA_COLOR_BACKGROUND)
 	Text.Focus ()
-
-	def OnClose ():
-		if GemRB.GetView ("PORTWIN"):
-			GUICommonWindows.UpdatePortraitWindow ()
 
 	# title
 	Label = Window.GetControl (0x10000005)
@@ -192,7 +186,6 @@ def AddUserEntry ():
 	Button.SetText (13957)
 	Button.OnPress (lambda: DeleteEntry (Window))
 
-	Window.SetAction (OnClose, ACTION_WINDOW_CLOSED)
 	Window.ShowModal (MODAL_SHADOW_GRAY)
 
 def UpdateLogWindow (JournalWindow):
@@ -268,8 +261,8 @@ def UpdateLogWindow (JournalWindow):
 		Text.Append (JournalTitle + JournalText)
 	return
 
-ToggleJournalWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIJRNL", GUICommonWindows.ToggleWindow, InitJournalWindow, UpdateLogWindow, GUICommonWindows.DefaultWinPos, True)
-OpenJournalWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIJRNL", GUICommonWindows.OpenWindowOnce, InitJournalWindow, UpdateLogWindow, GUICommonWindows.DefaultWinPos, True)
+ToggleJournalWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIJRNL", GUICommonWindows.ToggleWindow, InitJournalWindow, None, True)
+OpenJournalWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIJRNL", GUICommonWindows.OpenWindowOnce, InitJournalWindow, None, True)
 
 ###################################################
 def PrevChapterPress ():

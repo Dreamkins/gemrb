@@ -21,19 +21,16 @@
 // VFS.cpp : functions to access filesystem in os-independent way
 // and POSIX-like compatibility layer for win
 
-#include "Strings/UTF8Comparison.h"
 #include "System/VFS.h"
 
-#include "globals.h"
-
 #include "Interface.h"
-#include "Logging/Logging.h"
 
-#include <cctype>
-#include <locale>
-#include <cstdarg>
-#include <cstring>
+#include "Logging/Logging.h"
+#include "Strings/UTF8Comparison.h"
+
 #include <cerrno>
+#include <cstring>
+#include <sys/stat.h>
 
 #ifdef WIN32
 	// that's a workaround to live with `NOUSER` in `win32def.h`
@@ -42,40 +39,42 @@
 	// there is a macro in shlwapi.h that turns `PathAppendW` into `PathAppend`
 	#undef PathAppend
 #else
-#include <dirent.h>
+	#include <dirent.h>
 #endif
 
 #ifdef HAVE_MMAP
-#include <sys/mman.h>
+	#include <sys/mman.h>
 #endif
 
 #ifdef __APPLE__
-// for getting resources inside the bundle
-#include <CoreFoundation/CFBundle.h>
+	// for getting resources inside the bundle
+	#include <CoreFoundation/CFBundle.h>
 #endif
 
 #ifndef S_ISDIR
-#define S_ISDIR(mode) (((mode) & S_IFMT) == S_IFDIR)
+	#define S_ISDIR(mode) (((mode) & S_IFMT) == S_IFDIR)
 #endif
 
 #ifndef S_ISREG
-#define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
+	#define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
 #endif
 
 #ifdef WIN32
 
-#include <array>
+	#include <array>
 
 using namespace GemRB;
 
 struct dirent {
-	dirent() : buffer(_MAX_PATH, '\0'), d_name(const_cast<char*>(buffer.data())) {}
+	dirent()
+		: buffer(_MAX_PATH, '\0'), d_name(const_cast<char*>(buffer.data())) {}
 
 	std::string buffer;
-	char *d_name;
+	char* d_name;
 
-	dirent& operator=(std::string&& entryName) {
-		auto cutOff = entryName.length();
+	dirent& operator=(std::string&& entryName)
+	{
+		auto cutOff = std::min(entryName.length(), static_cast<size_t>(_MAX_PATH - 1));
 		buffer = std::move(entryName);
 		buffer.resize(_MAX_PATH);
 		buffer[cutOff] = 0;
@@ -87,7 +86,8 @@ struct dirent {
 
 struct DIR {
 	DIR() = default;
-	~DIR() {
+	~DIR()
+	{
 		_findclose(hFile);
 	}
 
@@ -98,8 +98,9 @@ struct DIR {
 	dirent entry;
 };
 
-static DIR* opendir(const char* filename) {
-	auto dir = new DIR{};
+static DIR* opendir(const char* filename)
+{
+	auto dir = new DIR {};
 
 	// consider $PATH\\*.*\0 for _wfindfirst
 	if (strlen(filename) > _MAX_PATH - 5) {
@@ -113,7 +114,8 @@ static DIR* opendir(const char* filename) {
 	return dir;
 }
 
-static dirent* readdir(DIR *dir) {
+static dirent* readdir(DIR* dir)
+{
 	struct _wfinddata_t c_file;
 
 	if (dir->is_first) {
@@ -127,7 +129,7 @@ static dirent* readdir(DIR *dir) {
 		}
 	}
 
-	char16_t *c = reinterpret_cast<char16_t*>(c_file.name);
+	char16_t* c = reinterpret_cast<char16_t*>(c_file.name);
 	size_t n = 0;
 	for (; n < _MAX_PATH && *c != u'\0'; ++c, ++n) {}
 
@@ -136,7 +138,8 @@ static dirent* readdir(DIR *dir) {
 	return &dir->entry;
 }
 
-static void closedir(DIR *dir) {
+static void closedir(DIR* dir)
+{
 	delete dir;
 }
 
@@ -163,12 +166,12 @@ path_t BundlePath(BundleDirectory dir)
 			bundleDirURL = CFBundleCopyBundleURL(mainBundle);
 			break;
 	}
-	
+
 	path_t outPath;
 	if (bundleDirURL) {
 		CFURLRef absoluteURL = CFURLCopyAbsoluteURL(bundleDirURL);
 		CFRelease(bundleDirURL);
-		CFStringRef bundleDirPath = CFURLCopyFileSystemPath( absoluteURL, kCFURLPOSIXPathStyle );
+		CFStringRef bundleDirPath = CFURLCopyFileSystemPath(absoluteURL, kCFURLPOSIXPathStyle);
 		CFRelease(absoluteURL);
 		outPath = CFStringGetCStringPtr(bundleDirPath, kCFStringEncodingUTF8);
 		CFRelease(bundleDirPath);
@@ -241,6 +244,60 @@ bool FileExists(const path_t& path)
 	return true;
 }
 
+std::tm* FileModificationTime(const path_t& path)
+{
+#ifdef WIN32
+	static std::tm timestamp;
+
+	auto buffer = StringFromUtf8(path.c_str());
+	auto wideChars = reinterpret_cast<const wchar_t*>(buffer.c_str());
+
+	auto file =
+		CreateFile(
+			wideChars,
+			GENERIC_READ,
+			FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+			nullptr,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL,
+			nullptr);
+
+	if (file == INVALID_HANDLE_VALUE) {
+		return nullptr;
+	}
+
+	FILETIME moditicationTime;
+	auto result = GetFileTime(file, nullptr, nullptr, &moditicationTime);
+	CloseHandle(file);
+	if (result == 0) {
+		return nullptr;
+	}
+
+	SYSTEMTIME systemTime, localTime;
+	FileTimeToSystemTime(&moditicationTime, &systemTime);
+	SystemTimeToTzSpecificLocalTime(nullptr, &systemTime, &localTime);
+
+	timestamp.tm_sec = localTime.wSecond;
+	timestamp.tm_min = localTime.wMinute;
+	timestamp.tm_hour = localTime.wHour;
+	timestamp.tm_wday = localTime.wDayOfWeek;
+	timestamp.tm_mday = localTime.wDay;
+	timestamp.tm_mon = localTime.wMonth - 1;
+	timestamp.tm_year = localTime.wYear - 1900;
+
+	return &timestamp;
+#else
+	struct stat statStruct;
+	memset(&statStruct, 0, sizeof(statStruct));
+
+	if (stat(path.c_str(), &statStruct)) {
+		return nullptr;
+	} else {
+		return std::localtime(&statStruct.st_mtime);
+	}
+#endif
+}
+
 void PathAppend(path_t& target, const path_t& name)
 {
 	if (name.empty()) {
@@ -263,9 +320,7 @@ static bool FindMatchInDir(const char* dir, MutableStringView item)
 	for (DirectoryIterator dirit(dir); dirit; ++dirit) {
 		const path_t& name = dirit.GetName();
 		bool equal =
-			multibyteCheck
-				? UTF8_stricmp(name.c_str(), item.c_str())
-				: stricmp(name.c_str(), item.c_str()) == 0;
+			multibyteCheck ? UTF8_stricmp(name.c_str(), item.c_str()) : stricmp(name.c_str(), item.c_str()) == 0;
 
 		if (equal) {
 			std::copy(name.begin(), name.end(), item.begin());
@@ -297,7 +352,7 @@ static void ResolveCase(MutableStringView path, size_t itempos)
 		char* curDelim = &path[itempos - 1];
 		*curDelim = '\0';
 
-		found = FindMatchInDir(path.c_str(), MutableStringView{path.c_str(), itempos, path.length()});
+		found = FindMatchInDir(path.c_str(), MutableStringView { path.c_str(), itempos, path.length() });
 		*curDelim = PathDelimiter;
 	}
 
@@ -329,7 +384,7 @@ path_t& ResolveCase(path_t& filePath)
 		MutableStringView msv(filePath);
 		ResolveCase(msv, nextItem);
 	} else if (!DirExists(filePath)) { // filePath is a single component
-		FindMatchInDir(".", MutableStringView{filePath});
+		FindMatchInDir(".", MutableStringView { filePath });
 	}
 
 	return filePath;
@@ -359,7 +414,7 @@ path_t& FixPath(path_t& path)
 			last = cur;
 		}
 	}
-	
+
 	if (count) {
 		path.erase(path.length() - count);
 	}
@@ -405,14 +460,15 @@ static bool MakeDirectory(StringView path)
 	char* end = const_cast<char*>(path.end());
 	std::swap(*end, term); // use swap because end may be a delimiter or a terminator
 #ifdef WIN32
-#define mkdir(path, mode) _mkdir(path)
-#endif
+	auto widePath = StringFromUtf8(path);
+
+	bool ret = _wmkdir(reinterpret_cast<const wchar_t*>(widePath.c_str())) == 0 || errno == EEXIST;
+#else
 	bool ret = mkdir(path.c_str(), S_IRWXU) == 0 || errno == EEXIST;
+#endif
+
 	std::swap(*end, term);
 	return ret;
-#ifdef WIN32
-#undef mkdir
-#endif
 }
 
 bool MakeDirectory(const path_t& path)
@@ -429,12 +485,30 @@ bool MakeDirectories(const path_t& path)
 		if (part.empty()) continue;
 
 		const char* end = part.begin() + part.length();
-		if(!MakeDirectory(StringView(begin, end - begin))) {
+		if (!MakeDirectory(StringView(begin, end - begin))) {
 			return false;
 		}
 	}
 
 	return true;
+}
+
+void DelTree(const path_t& path, bool onlySave)
+{
+	if (path.empty()) return; // don't delete the root filesystem :)
+
+	DirectoryIterator dir(path);
+	dir.SetFlags(DirectoryIterator::Files);
+	if (!dir) {
+		return;
+	}
+	do {
+		const path_t& name = dir.GetName();
+		if (!onlySave || core->SavedExtension(name)) {
+			path_t dtmp = dir.GetFullPath();
+			UnlinkFile(dtmp);
+		}
+	} while (++dir);
 }
 
 GEM_EXPORT path_t HomePath()
@@ -492,7 +566,8 @@ path_t GemDataPath()
 
 #ifdef WIN32
 
-void* readonly_mmap(void *fd) {
+void* readonly_mmap(void* fd)
+{
 	HANDLE mappingHandle =
 		CreateFileMapping(
 			static_cast<HANDLE>(fd),
@@ -500,26 +575,27 @@ void* readonly_mmap(void *fd) {
 			PAGE_READONLY,
 			0,
 			0,
-			nullptr
-		);
+			nullptr);
 
 	if (mappingHandle == nullptr) {
 		return nullptr;
 	}
 
-	void *start = MapViewOfFile(mappingHandle, FILE_MAP_READ, 0, 0, 0);
+	void* start = MapViewOfFile(mappingHandle, FILE_MAP_READ, 0, 0, 0);
 	CloseHandle(mappingHandle);
 
 	return start;
 }
 
-void munmap(void *start, size_t) {
+void munmap(void* start, size_t)
+{
 	UnmapViewOfFile(start);
 }
 
 #elif defined(HAVE_MMAP)
 
-void* readonly_mmap(void *vfd) {
+void* readonly_mmap(void* vfd)
+{
 	int fd = fileno(static_cast<FILE*>(vfd));
 	struct stat statData;
 	int ret = fstat(fd, &statData);
@@ -530,19 +606,51 @@ void* readonly_mmap(void *vfd) {
 
 #endif
 
-DirectoryIterator::DirectoryIterator(path_t path)
-: Path(std::move(FixPath(path)))
+bool UnlinkFile(const path_t& path)
 {
-	SetFlags(Files|Directories);
+#ifdef WIN32
+	auto widePath = StringFromUtf8(path);
+	return _wunlink(reinterpret_cast<const wchar_t*>(widePath.c_str())) == 0 || errno == ENOENT;
+#else
+	return unlink(path.c_str()) == 0 || errno == ENOENT;
+#endif
+}
+
+bool RemoveDirectory(const path_t& path)
+{
+#ifdef WIN32
+	auto widePath = StringFromUtf8(path);
+	return _wrmdir(reinterpret_cast<const wchar_t*>(widePath.c_str())) == 0 || errno == ENOENT;
+#else
+	return rmdir(path.c_str()) == 0 || errno == ENOENT;
+#endif
+}
+
+DirectoryIterator::DirectoryIterator(path_t path)
+	: Path(std::move(FixPath(path)))
+{
+	SetFlags(Files | Directories);
 	Rewind();
+}
+
+DirectoryIterator::DirectoryIterator(DirectoryIterator&& other) noexcept
+{
+	predicate = std::move(other.predicate);
+
+	Directory = std::move(other.Directory);
+	other.Directory = nullptr;
+
+	Entry = std::move(other.Entry);
+	other.Entry = nullptr;
+
+	Path = std::move(other.Path);
+	entrySkipFlags = std::move(other.entrySkipFlags);
 }
 
 DirectoryIterator::~DirectoryIterator()
 {
-	if (Directory.size()) {
-		closedir(static_cast<DIR*>(Directory.back()));
-		Directory.pop_back();
-	}
+	if (Directory)
+		closedir(static_cast<DIR*>(Directory));
 }
 
 void DirectoryIterator::SetFlags(int flags, bool reset)
@@ -557,7 +665,7 @@ void DirectoryIterator::SetFilterPredicate(FileFilterPredicate p, bool chain)
 	if (chain && predicate) {
 		predicate = std::make_shared<AndPredicate<path_t>>(predicate, p);
 	} else {
-		predicate = p;
+		predicate = std::move(p);
 	}
 	Rewind();
 }
@@ -587,18 +695,18 @@ DirectoryIterator& DirectoryIterator::operator++()
 	bool cont = false;
 	do {
 		errno = 0;
-		Entry = readdir(static_cast<DIR*>(Directory.back()));
+		Entry = readdir(static_cast<DIR*>(Directory));
 		cont = false;
 		if (Entry) {
 			const path_t& name = GetName();
 
-			if (entrySkipFlags&Directories) {
+			if (entrySkipFlags & Directories) {
 				cont = IsDirectory();
 			}
-			if (cont == false && entrySkipFlags&Files) {
+			if (cont == false && entrySkipFlags & Files) {
 				cont = !IsDirectory();
 			}
-			if (cont == false && entrySkipFlags&Hidden) {
+			if (cont == false && entrySkipFlags & Hidden) {
 				cont = name[0] == '.';
 			}
 			if (cont == false && predicate) {
@@ -614,12 +722,10 @@ DirectoryIterator& DirectoryIterator::operator++()
 
 void DirectoryIterator::Rewind()
 {
-	if (Directory.size()) {
-		closedir(static_cast<DIR*>(Directory.back()));
-		Directory.pop_back();
-	}
-	Directory.push_back(opendir(Path.c_str()));
-	if (Directory.empty()) {
+	if (Directory)
+		closedir(static_cast<DIR*>(Directory));
+	Directory = opendir(Path.c_str());
+	if (Directory == NULL) {
 		Entry = NULL;
 		//Log(WARNING, "DirectoryIterator", "Cannot open directory: {}\nError: {}", Path, strerror(errno));
 	} else {

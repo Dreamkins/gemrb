@@ -93,7 +93,7 @@ def OnLoad():
 				break
 			flag = True
 
-	AppearanceWindow.ShowModal(MODAL_SHADOW_NONE)
+	AppearanceWindow.ShowModal(MODAL_SHADOW_GRAY)
 	return
 
 def RightPress():
@@ -134,7 +134,7 @@ def CustomAbort():
 
 	if CustomWindow:
 		CustomWindow.Close ()
-	AppearanceWindow.ShowModal (MODAL_SHADOW_NONE) # narrower than CustomWindow, so borders will remain
+	AppearanceWindow.ShowModal (MODAL_SHADOW_GRAY) # narrower than CustomWindow, so borders will remain
 	return
 
 def LargeCustomPortrait():
@@ -188,7 +188,7 @@ def CustomPress():
 	global RowCount1, RowCount2
 	global CustomWindow
 
-	CustomWindow = Window = GemRB.LoadWindow (18)
+	CustomWindow = Window = GemRB.LoadWindow (18, "GUICG")
 	PortraitList1 = Window.GetControl (2)
 	RowCount1 = len(PortraitList1.ListResources (CHR_PORTRAITS, 1))
 

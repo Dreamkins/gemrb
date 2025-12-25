@@ -23,8 +23,9 @@
 #include "SrcMgr.h"
 
 #include "GameData.h"
-#include "Streams/DataStream.h"
+
 #include "Logging/Logging.h"
+#include "Streams/DataStream.h"
 
 namespace GemRB {
 
@@ -49,6 +50,7 @@ SrcVector::SrcVector(const ResRef& resource)
 
 	ieDword size = 0;
 	str->ReadDword(size);
+	if (size == ieDword(DataStream::Error)) return;
 	strings.resize(size);
 
 	while (size--) {

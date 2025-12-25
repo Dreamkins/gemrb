@@ -84,10 +84,10 @@ def SetupProfsWindow (pc, proftype, window, callback, level1=[0,0,0], level2=[1,
 	ProfsWindow = window
 	ProfsCallback = callback
 	ProfsTableOffset = profTableOffset
-	ProfsType = type
+	ProfsType = proftype
 	ProfsScrollBar = None
 
-	if proftype == LUPROFS_TYPE_CHARGEN and (GameCheck.IsBG1() or GameCheck.IsBG2()): #chargen
+	if proftype == LUPROFS_TYPE_CHARGEN and (GameCheck.IsBG1() or GameCheck.IsBG2OrEE ()):
 		ProfsOffsetSum = 9
 		ProfsOffsetButton1 = 11
 		ProfsOffsetStar = 27
@@ -99,10 +99,10 @@ def SetupProfsWindow (pc, proftype, window, callback, level1=[0,0,0], level2=[1,
 		if (scroll):
 			ProfsScrollBar = ProfsWindow.GetControl (78)
 
-		if GameCheck.IsBG2() or GameCheck.IsIWD2():
+		if GameCheck.IsBG2OrEE () or GameCheck.IsIWD2 ():
 			import CharGenCommon
 			CharGenCommon.PositionCharGenWin (ProfsWindow)
-	elif proftype == LUPROFS_TYPE_LEVELUP and GameCheck.IsBG2(): #levelup
+	elif proftype == LUPROFS_TYPE_LEVELUP and GameCheck.IsBG2OrEE ():
 		ProfsOffsetSum = 36
 		ProfsOffsetButton1 = 1
 		ProfsOffsetStar = 48
@@ -190,20 +190,20 @@ def SetupProfsWindow (pc, proftype, window, callback, level1=[0,0,0], level2=[1,
 	if classid: #for dual classes when we can't get the class dualing to
 		Class = classid
 	elif IsDual[0] == 3:
-		Class = CommonTables.KitList.GetValue (IsDual[2], 7)
+		Class = CommonTables.KitList.GetValue (IsDual[2], 7, GTV_INT)
 	elif IsDual[0]:
 		Class = GUICommon.GetClassRowName(IsDual[2], "index")
-		Class = CommonTables.Classes.GetValue (Class, "ID")
+		Class = CommonTables.Classes.GetValue (Class, "ID", GTV_INT)
 	else:
 		Class = GemRB.GetPlayerStat (pc, IE_CLASS)
 	ClassName = GUICommon.GetClassRowName (Class, "class")
 
 	# profs.2da has entries for everyone, so no need to muck around
-	ProfsRate = ProfsTable.GetValue (ClassName, "RATE")
+	ProfsRate = ProfsTable.GetValue (ClassName, "RATE", GTV_INT)
 
 	#figure out how many prof points we have
 	if sum (level1) == 0: #character is being generated (either chargen or dual)
-		ProfsPointsLeft = ProfsTable.GetValue (ClassName, "FIRST_LEVEL")
+		ProfsPointsLeft = ProfsTable.GetValue (ClassName, "FIRST_LEVEL", GTV_INT)
 
 	ProfIndex = 0
 	IsMulti = GUICommon.IsMultiClassed (pc, 1)
@@ -219,7 +219,7 @@ def SetupProfsWindow (pc, proftype, window, callback, level1=[0,0,0], level2=[1,
 				if cls == 0:
 					break
 				ClsName = GUICommon.GetClassRowName (cls, "class")
-				Rate = ProfsTable.GetValue (ClsName, "RATE")
+				Rate = ProfsTable.GetValue (ClsName, "RATE", GTV_INT)
 				if Rate < BestRate:
 					BestRate = Rate
 					ProfIndex = IsMulti[1:].index(cls)
@@ -285,6 +285,8 @@ def SetupProfsWindow (pc, proftype, window, callback, level1=[0,0,0], level2=[1,
 			# it also has different ordering than ProfsTable
 			col = ClassWeaponsTable.GetColumnIndex (ProfsTable.GetRowName(i))
 			maxprof = ClassWeaponsTable.GetValue (ProfsColumn, col)
+			# the above is underreporting for lvl1 fighters, but it doesn't matter,
+			# since there are enough prof types and the relevant code does use profsmax.2da
 		else:
 			maxprof = ProfsTable.GetValue(i+ProfsTableOffset, ProfsColumn)
 		if maxprof > currentprof:
@@ -353,7 +355,7 @@ def ProfsRedraw (ProfsTopIndex):
 			Button2.SetState(IE_GUI_BUTTON_DISABLED)
 			Button1.SetFlags(IE_GUI_BUTTON_NO_IMAGE,OP_OR)
 			Button2.SetFlags(IE_GUI_BUTTON_NO_IMAGE,OP_OR)
-			if GameCheck.IsBG2() and (i==0 or ((i-1) in SkipProfs)):
+			if GameCheck.IsBG2OrEE () and (i == 0 or ((i - 1) in SkipProfs)):
 				SkipProfs.append (i)
 		else:
 			Button1.SetState(IE_GUI_BUTTON_ENABLED)
@@ -449,7 +451,7 @@ def ProfsSave (pc, proftype = LUPROFS_TYPE_LEVELUP):
 			ProfID = ProfID + IE_PROFICIENCYBASTARDSWORD
 		SaveProf = GemRB.GetVar ("Prof "+str(i))
 
-		if proftype == LUPROFS_TYPE_CHARGEN and GameCheck.IsBG2():
+		if proftype == LUPROFS_TYPE_CHARGEN and GameCheck.IsBG2OrEE ():
 			GemRB.DispelEffect (pc, "Proficiency", ProfID)
 		elif proftype != LUPROFS_TYPE_DUALCLASS:
 			OldProf = GemRB.GetPlayerStat (pc, ProfID) & 0x38
@@ -459,7 +461,7 @@ def ProfsSave (pc, proftype = LUPROFS_TYPE_LEVELUP):
 			SaveProf = (OldProf << 3) | SaveProf
 
 		GemRB.SetPlayerStat (pc, ProfID, SaveProf)
-		if GameCheck.IsBG2() and proftype != LUPROFS_TYPE_DUALCLASS and SaveProf:
+		if GameCheck.IsBG2OrEE () and proftype != LUPROFS_TYPE_DUALCLASS and SaveProf:
 			GemRB.ApplyEffect (pc, "Proficiency", SaveProf, ProfID)
 	return
 

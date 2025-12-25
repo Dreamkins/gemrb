@@ -23,12 +23,12 @@ import CharGenCommon
 import GUICommon
 from GUIDefines import *
 from ie_restype import RES_WAV
-from ie_sounds import CHAN_CHAR1
+from ie_sounds import CHAN_CHAR1, SND_SPEECH
 from ie_stats import IE_SEX
 
-SoundSequence = [ "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m" ]
+SoundSequence = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m"]
 # bg1 default soundset is whack, but at least provides the same amount of sounds
-SoundSequence2 = [ "03", "08", "09", "10", "11", "17", "18", "19", "20", "21", "22", "38", "39" ]
+SoundSequence2 = ["03", "08", "09", "10", "11", "17", "18", "19", "20", "21", "22", "38", "39"]
 VoiceList = 0
 CharSoundWindow = 0
 SoundIndex = 0
@@ -61,7 +61,7 @@ def OnLoad():
 	VoiceList.OnSelect (ChangeVoice)
 	DoneButton.OnPress (NextPress)
 	BackButton.OnPress (lambda: CharGenCommon.back(CharSoundWindow))
-	CharSoundWindow.ShowModal(MODAL_SHADOW_NONE)
+	CharSoundWindow.ShowModal(MODAL_SHADOW_GRAY)
 	return
 
 def PlayPress():
@@ -78,7 +78,7 @@ def PlayPress():
 	while (not GemRB.HasResource (CharSound + SoundSeq[SoundIndex], RES_WAV)):
 		NextSound()
 	# play the sound like it was a speech, so any previous yells are quieted
-	GemRB.PlaySound (CharSound + SoundSeq[SoundIndex], CHAN_CHAR1, 0, 0, 4)
+	GemRB.PlaySound (CharSound + SoundSeq[SoundIndex], CHAN_CHAR1, 0, 0, SND_SPEECH)
 	NextSound()
 	return
 

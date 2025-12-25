@@ -28,17 +28,18 @@
 #include "GameData.h"
 #include "Interface.h"
 #include "Projectile.h"
+#include "RNG.h"
 #include "Spell.h"
 #include "Sprite2D.h"
-#include "Video/Video.h"
-#include "GameScript/GSUtils.h"
-#include "GameScript/Matching.h" // MatchActor
+
 #include "GUI/GUIAnimation.h"
 #include "GUI/GameControl.h"
 #include "GUI/TextSystem/Font.h"
-#include "RNG.h"
-#include "Scriptable/InfoPoint.h"
- 
+#include "GameScript/GSUtils.h"
+#include "GameScript/Matching.h" // MatchActor
+#include "Scriptable/Highlightable.h"
+#include "Video/Video.h"
+
 #include <utility>
 
 namespace GemRB {
@@ -84,7 +85,7 @@ Scriptable::~Scriptable(void)
 	if (CurrentAction) {
 		ReleaseCurrentAction();
 	}
-	ClearActions();
+	ClearActions(4);
 	for (auto& script : Scripts) {
 		delete script;
 	}
@@ -128,8 +129,9 @@ const ieVariable& Scriptable::GetScriptName(void) const
 	return scriptName;
 }
 
-void Scriptable::SetDialog(const ResRef &resref) {
-	if (gamedata->Exists(resref, IE_DLG_CLASS_ID) ) {
+void Scriptable::SetDialog(const ResRef& resref)
+{
+	if (!resref.IsEmpty() && gamedata->Exists(resref, IE_DLG_CLASS_ID, true)) {
 		Dialog = resref;
 	}
 }
@@ -140,9 +142,9 @@ Map* Scriptable::GetCurrentArea() const
 	return area;
 }
 
-void Scriptable::SetMap(Map *map)
+void Scriptable::SetMap(Map* map)
 {
-	if (map && (map->GetCurrentArea()!=map)) {
+	if (map && (map->GetCurrentArea() != map)) {
 		//a map always points to itself (if it is a real map)
 		error("Scriptable", "Invalid map set!");
 	}
@@ -152,7 +154,7 @@ void Scriptable::SetMap(Map *map)
 //ai is nonzero if this is an actor currently in the party
 //if the script level is AI_SCRIPT_LEVEL, then we need to
 //load an AI script (.bs) instead of (.bcs)
-void Scriptable::SetScript(const ResRef &aScript, int idx, bool ai)
+void Scriptable::SetScript(const ResRef& aScript, int idx, bool ai)
 {
 	if (idx >= MAX_SCRIPTS) {
 		error("Scriptable", "Invalid script index!");
@@ -166,12 +168,13 @@ void Scriptable::SetScript(const ResRef &aScript, int idx, bool ai)
 	// NONE is an 'invalid' script name, seldom used to reset the slot, which we do above
 	// This check is to prevent flooding of the console
 	if (!aScript.IsEmpty() && aScript != "NONE") {
-		if (idx!=AI_SCRIPT_LEVEL) ai = false;
+		if (idx != AI_SCRIPT_LEVEL) ai = false;
 		Scripts[idx] = new GameScript(aScript, this, idx, ai);
 	}
 }
 
-void Scriptable::SetSpellResRef(const ResRef& resref) {
+void Scriptable::SetSpellResRef(const ResRef& resref)
+{
 	SpellResRef = resref;
 }
 
@@ -188,7 +191,7 @@ void Scriptable::ImmediateEvent()
 bool Scriptable::IsPC() const
 {
 	if (Type != ST_ACTOR) return false;
-	return ((const Actor *) this)->GetStat(IE_EA) <= EA_CHARMED;
+	return ((const Actor*) this)->GetStat(IE_EA) <= EA_CHARMED;
 }
 
 void Scriptable::Update()
@@ -207,7 +210,7 @@ void Scriptable::Update()
 	if (UnselectableTimer) {
 		UnselectableTimer--;
 		if (!UnselectableTimer && Type == ST_ACTOR) {
-			Actor *actor = (Actor *) this;
+			Actor* actor = (Actor*) this;
 			actor->SetCircleSize();
 			if (actor->InParty) {
 				core->GetGame()->SelectActor(actor, true, SELECT_QUIET);
@@ -227,7 +230,8 @@ void Scriptable::Update()
 void Scriptable::TickScripting()
 {
 	// Stagger script updates.
-	if (Ticks % 16 != globalID % 16) {
+	// but not for just loaded area scripts, ensuring they run first
+	if (Ticks % 16 != globalID % 16 && (Type != ST_AREA || Ticks > 1)) {
 		return;
 	}
 
@@ -285,12 +289,12 @@ void Scriptable::TickScripting()
 
 void Scriptable::ExecuteScript(int scriptCount)
 {
-	const GameControl *gc = core->GetGameControl();
+	const GameControl* gc = core->GetGameControl();
 
 	// area scripts still run for at least the current area, in bg1 (see ar2631, confirmed by testing)
 	// but not in bg2 (kill Abazigal in ar6005)
 	if (gc->GetScreenFlags().Test(ScreenFlags::Cutscene)) {
-		if (! (core->HasFeature(GFFlags::CUTSCENE_AREASCRIPTS) && Type == ST_AREA)) {
+		if (!(core->HasFeature(GFFlags::CUTSCENE_AREASCRIPTS) && (Type == ST_AREA || Type == ST_PROXIMITY))) {
 			return;
 		}
 	}
@@ -331,7 +335,7 @@ void Scriptable::ExecuteScript(int scriptCount)
 
 	// don't run scripts if we're in dialog, regardless of DF_FREEZE_SCRIPTS
 	if (gc->InDialog() && gc->dialoghandler->InDialog(this) &&
-		(!act || act->Modified[IE_IGNOREDIALOGPAUSE] == 0)) {
+	    (!act || act->Modified[IE_IGNOREDIALOGPAUSE] == 0)) {
 		return;
 	}
 
@@ -359,7 +363,9 @@ void Scriptable::ExecuteScript(int scriptCount)
 		GameScript* script = Scripts[scriptLevel];
 		if (script) {
 			changed |= script->Update(&continuing, &done);
-			if (script->dead) delete script;
+			if (script->dead) {
+				delete script;
+			}
 		}
 
 		/* scripts are not concurrent, see WAITPC override script for example */
@@ -372,7 +378,7 @@ void Scriptable::ExecuteScript(int scriptCount)
 
 	if (act) {
 		// if nothing is happening, look around, check if we're bored and so on
-		act->IdleActions(CurrentAction!=NULL);
+		act->IdleActions(CurrentAction != NULL);
 	}
 }
 
@@ -389,7 +395,7 @@ void Scriptable::AddAction(Action* aC)
 		return;
 	}
 
-	InternalFlags|=IF_ACTIVE;
+	InternalFlags |= IF_ACTIVE;
 	if (startActive) {
 		InternalFlags &= ~IF_IDLE;
 	}
@@ -402,7 +408,7 @@ void Scriptable::AddAction(Action* aC)
 	// when added if the action queue is empty, even on actors which are Held/etc
 	// but try to ignore iwd2 ActionOverride for 41pstail.bcs
 	// FIXME: area check hack until fuzzie fixes scripts here
-	const Action *nextAction = GetNextAction();
+	const Action* nextAction = GetNextAction();
 	bool ignoreQueue = !nextAction || (third && nextAction->objects[0]);
 	if (!CurrentAction && ignoreQueue && area) {
 		int instant = AF_SCR_INSTANT;
@@ -411,12 +417,12 @@ void Scriptable::AddAction(Action* aC)
 		}
 		if (actionflags[aC->actionID] & instant) {
 			CurrentAction = aC;
-			GameScript::ExecuteAction( this, CurrentAction );
+			GameScript::ExecuteAction(this, CurrentAction);
 			return;
 		}
 	}
 
-	actionQueue.push_back( aC );
+	actionQueue.push_back(aC);
 }
 
 void Scriptable::AddActionInFront(Action* aC)
@@ -425,8 +431,8 @@ void Scriptable::AddActionInFront(Action* aC)
 		Log(WARNING, "Scriptable", "AAIF: null action encountered for {}!", scriptName);
 		return;
 	}
-	InternalFlags|=IF_ACTIVE;
-	actionQueue.push_front( aC );
+	InternalFlags |= IF_ACTIVE;
+	actionQueue.push_front(aC);
 	aC->IncRef();
 }
 
@@ -448,6 +454,12 @@ Action* Scriptable::PopNextAction()
 // clear all actions, unless some are marked to be preserved
 void Scriptable::ClearActions(int skipFlags)
 {
+	// clear dialog target if it was us that wanted to talk
+	// this is here just to clear the target reticle back to a circle
+	if (CurrentAction && CurrentAction->actionID == 70) { // NIDSpecial1
+		core->GetGameControl()->dialoghandler->SetTarget(nullptr);
+	}
+
 	// pst sometimes uses clearactions in the middle of a cutscene (eg. 1203cd21)
 	// and expect it to clear only the previous actions, not the whole queue
 	bool savedCurrentAction = false;
@@ -484,6 +496,7 @@ void Scriptable::ClearActions(int skipFlags)
 
 	if (Type == ST_ACTOR) {
 		Interrupt();
+		if (skipFlags != 4) As<Actor>(this)->ResetAttackProjectile();
 	} else {
 		NoInterrupt();
 	}
@@ -527,18 +540,22 @@ void Scriptable::ProcessActions()
 			CurrentActionTicks++;
 		}
 		if (!CurrentAction) {
-			ClearActions();
+			ClearActions(4);
 			// clear lastAction here if you'll ever need it after exiting the loop
 			break;
 		}
 		lastAction = CurrentAction->actionID;
-		GameScript::ExecuteAction( this, CurrentAction );
+		GameScript::ExecuteAction(this, CurrentAction);
 		//break execution in case of a Wait flag
 		if (WaitCounter) {
 			break;
 		}
-		//break execution in case of blocking action
+		// break execution in case of blocking action (AF_BLOCKING)
 		if (CurrentAction) {
+			break;
+		}
+		// break execution if a fade was started (it pauses script processing, so this can only be true once here)
+		if (core->timer.IsFading()) {
 			break;
 		}
 		//break execution in case of movement
@@ -555,11 +572,10 @@ void Scriptable::ProcessActions()
 
 bool Scriptable::InMove() const
 {
-	if (Type!=ST_ACTOR) {
+	if (Type != ST_ACTOR) {
 		return false;
 	}
-	Movable *me = (Movable *) this;
-	return me->GetStep() != NULL;
+	return !As<Movable>(this)->GetPath().Empty();
 }
 
 void Scriptable::SetWait(tick_t time)
@@ -600,7 +616,7 @@ void Scriptable::NoInterrupt()
 //also turning off the idle flag so it won't run continuously
 void Scriptable::Deactivate()
 {
-	InternalFlags &=~(IF_ACTIVE|IF_IDLE);
+	InternalFlags &= ~(IF_ACTIVE | IF_IDLE);
 }
 
 void Scriptable::Activate()
@@ -611,7 +627,6 @@ void Scriptable::Activate()
 
 void Scriptable::PartyRested()
 {
-	//InternalFlags |=IF_PARTYRESTED;
 	AddTrigger(TriggerEntry(trigger_partyrested));
 }
 
@@ -668,7 +683,7 @@ bool Scriptable::MatchTrigger(unsigned short id, ieDword param) const
 	return false;
 }
 
-bool Scriptable::MatchTriggerWithObject(unsigned short id, const Object *obj, ieDword param) const
+bool Scriptable::MatchTriggerWithObject(unsigned short id, const Object* obj, ieDword param) const
 {
 	for (auto& trigger : triggers) {
 		if (trigger.triggerID != id) continue;
@@ -680,7 +695,7 @@ bool Scriptable::MatchTriggerWithObject(unsigned short id, const Object *obj, ie
 	return false;
 }
 
-const TriggerEntry *Scriptable::GetMatchingTrigger(unsigned short id, unsigned int notflags) const
+const TriggerEntry* Scriptable::GetMatchingTrigger(unsigned short id, unsigned int notflags) const
 {
 	for (auto& trigger : triggers) {
 		if (trigger.triggerID != id) continue;
@@ -692,13 +707,13 @@ const TriggerEntry *Scriptable::GetMatchingTrigger(unsigned short id, unsigned i
 }
 
 // handle wild surge projectile modifiers
-void Scriptable::ModifyProjectile(Projectile* &pro, Spell* spl, ieDword tgt, int level)
+void Scriptable::ModifyProjectile(Projectile*& pro, Spell* spl, ieDword tgt, int level)
 {
 	Actor* caster = Scriptable::As<Actor>(this);
 	assert(caster);
 
 	int count;
-	const Actor *newact = nullptr;
+	const Actor* newact = nullptr;
 	SPLExtHeader* seh = nullptr;
 	// check for target (type) change
 	switch (caster->wildSurgeMods.target_change_type) {
@@ -820,8 +835,8 @@ void Scriptable::CreateProjectile(const ResRef& spellResRef, ieDword tgt, int le
 		}
 	}
 
-	while(projectileCount --) {
-		Projectile *pro = NULL;
+	while (projectileCount--) {
+		Projectile* pro = NULL;
 		// jump through hoops to skip applying selftargeting spells to the caster
 		// if we'll be changing the target
 		int tct = 0;
@@ -837,11 +852,12 @@ void Scriptable::CreateProjectile(const ResRef& spellResRef, ieDword tgt, int le
 		}
 
 		Point origin = Pos;
-		if (Type == ST_TRIGGER || Type == ST_PROXIMITY) {
+		if (Type == ST_TRIGGER || Type == ST_PROXIMITY || Type == ST_DOOR) {
 			// try and make projectiles start from the right trap position
 			// see the traps in the duergar/assassin battle in bg2 dungeon
 			// see also function below - maybe we should fix Pos instead
-			origin = ((InfoPoint *)this)->TrapLaunch;
+			// iwd2 ar6050 doors need the same (the closed outline is moved to the map corner), same for traps in ar6100
+			origin = As<const Highlightable>(this)->TrapLaunch;
 		}
 
 		if (caster) {
@@ -856,7 +872,7 @@ void Scriptable::CreateProjectile(const ResRef& spellResRef, ieDword tgt, int le
 	}
 
 	ieDword spellnum = ResolveSpellNumber(spellResRef);
-	if (spellnum!=0xffffffff) {
+	if (spellnum != 0xffffffff) {
 		area->SeeSpellCast(this, spellnum);
 
 		// spellcasting feedback
@@ -879,11 +895,11 @@ void Scriptable::DisplaySpellCastMessage(ieDword tgt, const Spell* spl) const
 
 	// caster - Casts spellname : target OR
 	// caster - spellname : target (repeating spells)
-	const Scriptable *target = nullptr;
+	const Scriptable* target = nullptr;
 	if (tgt) {
 		target = area->GetActorByGlobalID(tgt);
 		if (!target) {
-			target=core->GetGame()->GetActorByGlobalID(tgt);
+			target = core->GetGame()->GetActorByGlobalID(tgt);
 		}
 	}
 
@@ -913,10 +929,17 @@ void Scriptable::SendTriggerToAll(TriggerEntry entry, int extraFlags)
 	for (const auto& neighbour : nearActors) {
 		neighbour->AddTrigger(entry);
 	}
+
+	std::vector<Scriptable*> nearOthers = area->GetScriptablesInRect(Pos, 15);
+	for (const auto& neighbour : nearOthers) {
+		neighbour->AddTrigger(entry);
+	}
+
 	area->AddTrigger(entry);
 }
 
-inline void Scriptable::ResetCastingState(Actor *caster) {
+inline void Scriptable::ResetCastingState(Actor* caster)
+{
 	SpellHeader = -1;
 	SpellResRef.Reset();
 	objects.LastTargetPos.Invalidate();
@@ -974,31 +997,34 @@ void Scriptable::CastSpellPointEnd(int level, bool keepStance)
 
 	if (!keepStance) {
 		// yep, the original didn't use the casting channel for this!
-		core->GetAudioDrv()->Play(spl->CompletionSound, SFX_CHAN_MISSILE, Pos);
+		core->GetAudioDrv()->Play(spl->CompletionSound, SFXChannel::Missile, Pos, GEM_SND_SPATIAL);
 	}
 
 	CreateProjectile(SpellResRef, 0, level, false);
 
 	// the original engine saves lasttrigger only in case of SpellCast, so we have to differentiate
+	ieDword oldLastTrigger = objects.LastTrigger;
 	// NOTE: unused in iwd2, so the fact that it has no stored spelltype is of no consequence
 	ieDword spellID = ResolveSpellNumber(SpellResRef);
 	switch (nSpellType) {
-	case 1:
-		SendTriggerToAll(TriggerEntry(trigger_spellcast, GetGlobalID(), spellID));
-		break;
-	case 2:
-		SendTriggerToAll(TriggerEntry(trigger_spellcastpriest, GetGlobalID(), spellID));
-		break;
-	default:
-		SendTriggerToAll(TriggerEntry(trigger_spellcastinnate, GetGlobalID(), spellID));
-		break;
+		case 1:
+			SendTriggerToAll(TriggerEntry(trigger_spellcast, GetGlobalID(), spellID));
+			break;
+		case 2:
+			SendTriggerToAll(TriggerEntry(trigger_spellcastpriest, GetGlobalID(), spellID));
+			break;
+		default:
+			SendTriggerToAll(TriggerEntry(trigger_spellcastinnate, GetGlobalID(), spellID));
+			break;
 	}
 
-	Actor* target = area->GetActor(objects.LastTargetPos, GA_NO_UNSCHEDULED | GA_NO_HIDDEN);
+	Scriptable* target = area->GetScriptable(objects.LastTargetPos, GA_NO_UNSCHEDULED | GA_NO_HIDDEN);
 	if (target) {
 		target->AddTrigger(TriggerEntry(trigger_spellcastonme, GetGlobalID(), spellID));
 		target->objects.LastSpellOnMe = spellID;
 	}
+	// restore LastTrigger as bg2 otygrate.bcs relies on it; mangles trigger_spellcast for the caster
+	objects.LastTrigger = oldLastTrigger;
 
 	ResetCastingState(caster);
 }
@@ -1047,38 +1073,42 @@ void Scriptable::CastSpellEnd(int level, bool keepStance)
 	}
 
 	if (!keepStance) {
-		core->GetAudioDrv()->Play(spl->CompletionSound, SFX_CHAN_MISSILE, Pos);
+		core->GetAudioDrv()->Play(spl->CompletionSound, SFXChannel::Missile, Pos, GEM_SND_SPATIAL);
 	}
 
 	//if the projectile doesn't need to follow the target, then use the target position
-	CreateProjectile(SpellResRef, objects.LastSpellTarget, level, GetSpellDistance(SpellResRef, this) == 0xffffffff);
+	CreateProjectile(SpellResRef, objects.LastSpellTarget, level, GetSpellDistance(SpellResRef, this) == 0x7fffffff);
 
 	// the original engine saves lasttrigger only in case of SpellCast, so we have to differentiate
+	ieDword oldLastTrigger = objects.LastTrigger;
 	// NOTE: unused in iwd2, so the fact that it has no stored spelltype is of no consequence
 	ieDword spellID = ResolveSpellNumber(SpellResRef);
 	switch (nSpellType) {
-	case 1:
-		SendTriggerToAll(TriggerEntry(trigger_spellcast, GetGlobalID(), spellID));
-		break;
-	case 2:
-		SendTriggerToAll(TriggerEntry(trigger_spellcastpriest, GetGlobalID(), spellID));
-		break;
-	default:
-		SendTriggerToAll(TriggerEntry(trigger_spellcastinnate, GetGlobalID(), spellID));
-		break;
+		case 1:
+			SendTriggerToAll(TriggerEntry(trigger_spellcast, GetGlobalID(), spellID));
+			break;
+		case 2:
+			SendTriggerToAll(TriggerEntry(trigger_spellcastpriest, GetGlobalID(), spellID));
+			break;
+		default:
+			SendTriggerToAll(TriggerEntry(trigger_spellcastinnate, GetGlobalID(), spellID));
+			break;
 	}
 
-	Actor* target = area->GetActorByGlobalID(objects.LastSpellTarget);
+	Scriptable* target = area->GetScriptableByGlobalID(objects.LastSpellTarget);
 	if (target) {
 		target->AddTrigger(TriggerEntry(trigger_spellcastonme, GetGlobalID(), spellID));
 		target->objects.LastSpellOnMe = spellID;
 	}
+	// restore LastTrigger as bg2 otygrate.bcs relies on it; mangles trigger_spellcast for the caster
+	objects.LastTrigger = oldLastTrigger;
 
 	ResetCastingState(caster);
 }
 
 // check for input sanity and good casting conditions
-int Scriptable::CanCast(const ResRef& SpellRef, bool verbose) {
+int Scriptable::CanCast(const ResRef& SpellRef, bool verbose)
+{
 	const Spell* spl = gamedata->GetSpell(SpellRef);
 	if (!spl) {
 		SpellHeader = -1;
@@ -1088,12 +1118,12 @@ int Scriptable::CanCast(const ResRef& SpellRef, bool verbose) {
 
 	// check for area dead magic
 	// tob AR3004 is a dead magic area, but using a script with personal dead magic
-	if (area->GetInternalFlag()&AF_DEADMAGIC && !(spl->Flags&SF_HLA)) {
+	if (area->GetInternalFlag() & AF_DEADMAGIC && !(spl->Flags & SF_HLA)) {
 		displaymsg->DisplayConstantStringName(HCStrings::DeadmagicFail, GUIColors::WHITE, this);
 		return 0;
 	}
 
-	if (spl->Flags&SF_NOT_INDOORS && !(area->AreaType&AT_OUTDOOR)) {
+	if (spl->Flags & SF_NOT_INDOORS && !(area->AreaType & AT_OUTDOOR)) {
 		displaymsg->DisplayConstantStringName(HCStrings::IndoorFail, GUIColors::WHITE, this);
 		return 0;
 	}
@@ -1102,7 +1132,7 @@ int Scriptable::CanCast(const ResRef& SpellRef, bool verbose) {
 	if (Type != ST_ACTOR) {
 		return 1;
 	}
-	const Actor *actor = (const Actor *) this;
+	const Actor* actor = (const Actor*) this;
 
 	// check for silence
 	// only a handful of spells don't have a verbal component -
@@ -1116,7 +1146,7 @@ int Scriptable::CanCast(const ResRef& SpellRef, bool verbose) {
 	}
 
 	// check for personal dead magic
-	if (actor->Modified[IE_DEADMAGIC] && !(spl->Flags&SF_HLA)) {
+	if (actor->Modified[IE_DEADMAGIC] && !(spl->Flags & SF_HLA)) {
 		displaymsg->DisplayConstantStringName(HCStrings::DeadmagicFail, GUIColors::WHITE, this);
 		return 0;
 	}
@@ -1124,18 +1154,19 @@ int Scriptable::CanCast(const ResRef& SpellRef, bool verbose) {
 	// check for miscast magic and similar
 	ieDword roll = actor->LuckyRoll(1, 100, 0, 0);
 	bool failed = false;
-	ieDword chance = 0;
-	switch(spl->SpellType)
-	{
-	case IE_SPL_PRIEST:
-		chance = actor->GetSpellFailure(false);
-		break;
-	case IE_SPL_WIZARD:
-		chance = actor->GetSpellFailure(true);
-		break;
-	case IE_SPL_INNATE:
-		chance = actor->Modified[IE_SPELLFAILUREINNATE];
-		break;
+	ieDword chance = 1000;
+	switch (spl->SpellType) {
+		case IE_SPL_PRIEST:
+			chance = actor->GetSpellFailure(false);
+			break;
+		case IE_SPL_WIZARD:
+			chance = actor->GetSpellFailure(true);
+			break;
+		case IE_SPL_INNATE:
+			chance = actor->Modified[IE_SPELLFAILUREINNATE];
+			break;
+		default:
+			break;
 	}
 	if (chance >= roll) {
 		failed = true;
@@ -1159,7 +1190,7 @@ int Scriptable::CanCast(const ResRef& SpellRef, bool verbose) {
 
 // checks if a party-friendly actor is nearby and if so, if it recognizes the spell
 // this enemy just started casting
-void Scriptable::SpellcraftCheck(const Actor *caster, const ResRef& spellRef)
+void Scriptable::SpellcraftCheck(const Actor* caster, const ResRef& spellRef)
 {
 	if (!third || !caster || caster->GetStat(IE_EA) <= EA_CONTROLLABLE || !area) {
 		return;
@@ -1168,7 +1199,7 @@ void Scriptable::SpellcraftCheck(const Actor *caster, const ResRef& spellRef)
 	const Spell* spl = gamedata->GetSpell(spellRef);
 	assert(spl); // only a bad surge could make this fail and we want to catch it
 	int AdjustedSpellLevel = spl->SpellLevel + 15;
-	std::vector<Actor *> neighbours = area->GetAllActorsInRadius(caster->Pos, GA_NO_DEAD|GA_NO_ENEMY|GA_NO_SELF|GA_NO_UNSCHEDULED, caster->GetBase(IE_VISUALRANGE), this);
+	std::vector<Actor*> neighbours = area->GetAllActorsInRadius(caster->Pos, GA_NO_DEAD | GA_NO_ENEMY | GA_NO_SELF | GA_NO_UNSCHEDULED, caster->GetBase(IE_VISUALRANGE), this);
 	for (const auto& detective : neighbours) {
 		// disallow neutrals from helping the party
 		if (detective->GetStat(IE_EA) > EA_CONTROLLABLE) {
@@ -1187,7 +1218,7 @@ void Scriptable::SpellcraftCheck(const Actor *caster, const ResRef& spellRef)
 			const String castmsg = core->GetString(DisplayMessage::GetStringReference(HCStrings::Casts));
 			const String spellname = core->GetString(spl->SpellName);
 			overHead.SetText(fmt::format(u".:{} {}:.", castmsg, spellname));
-			displaymsg->DisplayRollStringName(ieStrRef::ROLL15, GUIColors::LIGHTGREY, detective, Spellcraft+IntMod, AdjustedSpellLevel, IntMod);
+			displaymsg->DisplayRollStringName(ieStrRef::ROLL15, GUIColors::LIGHTGREY, detective, Spellcraft + IntMod, AdjustedSpellLevel, IntMod);
 			break;
 		}
 	}
@@ -1254,7 +1285,7 @@ int Scriptable::CastSpellPoint(const Point& target, bool deplete, bool instant, 
 	if (!instant && !noInterrupt) {
 		AuraCooldown = core->Time.attack_round_size;
 	}
-	if(!noInterrupt && !CanCast(SpellResRef)) {
+	if (!noInterrupt && !CanCast(SpellResRef)) {
 		SpellResRef.Reset();
 		if (actor) {
 			actor->SetStance(IE_ANI_READY);
@@ -1264,14 +1295,16 @@ int Scriptable::CastSpellPoint(const Point& target, bool deplete, bool instant, 
 
 	objects.LastTargetPos = target;
 
-	if(!CheckWildSurge()) {
+	if (!CheckWildSurge()) {
 		return -1;
 	}
-	if (!instant) {
+
+	int duration = SpellCast(instant, nullptr, level);
+	if (!instant && duration) {
 		SpellcraftCheck(actor, SpellResRef);
 		if (actor) actor->CureInvisibility();
 	}
-	return SpellCast(instant, nullptr, level);
+	return duration;
 }
 
 //set target as actor (if target isn't actor, use its position)
@@ -1293,7 +1326,7 @@ int Scriptable::CastSpell(Scriptable* target, bool deplete, bool instant, bool n
 	if (!instant && !noInterrupt) {
 		AuraCooldown = core->Time.attack_round_size;
 	}
-	if(!noInterrupt && !CanCast(SpellResRef)) {
+	if (!noInterrupt && !CanCast(SpellResRef)) {
 		SpellResRef.Reset();
 		if (actor) {
 			actor->SetStance(IE_ANI_READY);
@@ -1302,20 +1335,21 @@ int Scriptable::CastSpell(Scriptable* target, bool deplete, bool instant, bool n
 	}
 
 	objects.LastTargetPos = target->Pos;
-	if (target->Type==ST_ACTOR) {
+	if (target->Type == ST_ACTOR || target->Type == ST_CONTAINER || target->Type == ST_DOOR) {
 		objects.LastSpellTarget = target->GetGlobalID();
 	}
 
-	if(!CheckWildSurge()) {
+	if (!CheckWildSurge()) {
 		return -1;
 	}
 
-	if (!instant) {
+	int duration = SpellCast(instant, target, level);
+	if (!instant && duration) {
 		SpellcraftCheck(actor, SpellResRef);
 		// self-targeted spells that are not hostile maintain invisibility
 		if (actor && target != this) actor->CureInvisibility();
 	}
-	return SpellCast(instant, target, level);
+	return duration;
 }
 
 static EffectRef fx_force_surge_modifier_ref = { "ForceSurgeModifier", -1 };
@@ -1334,13 +1368,13 @@ int Scriptable::SpellCast(bool instant, Scriptable* target, int level)
 		SpellHeader = 0;
 	}
 
-	const SPLExtHeader *header = spl->GetExtHeader(SpellHeader);
-	int casting_time = (int)header->CastingTime;
+	const SPLExtHeader* header = spl->GetExtHeader(SpellHeader);
+	int casting_time = (int) header->CastingTime;
 	// how does this work for non-actors exactly?
 	if (actor) {
 		// The mental speed effect can shorten or lengthen the casting time.
 		// But first check if a special maximum is set
-		const Effect *fx = actor->fxqueue.HasEffectWithParam(fx_castingspeed_modifier_ref, 2);
+		const Effect* fx = actor->fxqueue.HasEffectWithParam(fx_castingspeed_modifier_ref, 2);
 		int max = 1000;
 		if (fx) {
 			max = fx->Parameter1;
@@ -1348,13 +1382,12 @@ int Scriptable::SpellCast(bool instant, Scriptable* target, int level)
 		if (max < 10 && casting_time > max) {
 			casting_time = max;
 		} else {
-			casting_time -= (int)actor->Modified[IE_MENTALSPEED];
+			casting_time -= (int) actor->Modified[IE_MENTALSPEED];
 		}
 		casting_time = Clamp(casting_time, 0, 10);
 	}
 
-	// The casting time of a spell is the number of tenths of rounds that it takes to cast the spell. A tenth of a round is 0.6 seconds of real time. 
-	// Casting times range from 1 to 9, therefore, the quickest spells are cast in 0.6 seconds, while the slowest spells are cast in 5.4 seconds.
+	// this is a guess which seems approximately right so far (same as in the bg2 manual, except that it may be a combat round instead)
 	int duration = (casting_time * core->Time.round_size) / 10;
 	if (instant) {
 		duration = 0;
@@ -1374,7 +1407,7 @@ int Scriptable::SpellCast(bool instant, Scriptable* target, int level)
 		fxqueue = spl->GetEffectBlock(this, this->Pos, -1, level);
 		fxqueue.SetOwner(actor);
 		if (target && target->Type == ST_ACTOR) {
-			fxqueue.AddAllEffects((Actor *)target, target->Pos);
+			fxqueue.AddAllEffects((Actor*) target, target->Pos);
 		} else {
 			fxqueue.AddAllEffects(actor, actor->Pos);
 		}
@@ -1388,6 +1421,7 @@ int Scriptable::SpellCast(bool instant, Scriptable* target, int level)
 	}
 
 	gamedata->FreeSpell(spl, SpellResRef, false);
+	core->SetEventFlag(EF_ACTION); // in case it was cast from a quickspell slot, so we update the count
 	return duration;
 }
 
@@ -1409,15 +1443,15 @@ int Scriptable::CheckWildSurge()
 		return 1;
 	}
 
-	Actor *caster = (Actor *) this;
+	Actor* caster = (Actor*) this;
 
 	int roll = core->Roll(1, 100, 0);
 	if ((roll <= 5 && caster->Modified[IE_SURGEMOD]) || caster->Modified[IE_FORCESURGE]) {
 		ResRef oldSpellResRef;
 		oldSpellResRef = SpellResRef;
-		const Spell *spl = gamedata->GetSpell(oldSpellResRef); // this was checked before we got here
+		const Spell* spl = gamedata->GetSpell(oldSpellResRef); // this was checked before we got here
 		// ignore non-magic "spells"
-		if (spl->Flags&(SF_HLA|SF_TRIGGER)) {
+		if (spl->Flags & (SF_HLA | SF_TRIGGER)) {
 			gamedata->FreeSpell(spl, oldSpellResRef, false);
 			return 1;
 		}
@@ -1430,12 +1464,12 @@ int Scriptable::CheckWildSurge()
 		if (caster->Modified[IE_CHAOSSHIELD]) {
 			//avert the surge and decrease the chaos shield counter
 			check = 0;
-			caster->fxqueue.DecreaseParam1OfEffect(fx_chaosshield_ref,1);
-			displaymsg->DisplayConstantStringName(HCStrings::ChaosShield,GUIColors::LIGHTGREY,caster);
+			caster->fxqueue.DecreaseParam1OfEffect(fx_chaosshield_ref, 1);
+			displaymsg->DisplayConstantStringName(HCStrings::ChaosShield, GUIColors::LIGHTGREY, caster);
 		}
 
 		// hundred or more means a normal cast; same for negative values (for absurd antisurge modifiers)
-		if ((check > 0) && (check < 100) ) {
+		if ((check > 0) && (check < 100)) {
 			// display feedback: Wild Surge: bla bla
 			// look up the spell in the "check" row of wildmag.2da
 			const SurgeSpell& surgeSpell = gamedata->GetSurgeSpell(check - 1);
@@ -1464,17 +1498,17 @@ int Scriptable::CheckWildSurge()
 	return 1;
 }
 
-bool Scriptable::HandleHardcodedSurge(const ResRef& surgeSpell, const Spell *spl, Actor *caster)
+bool Scriptable::HandleHardcodedSurge(const ResRef& surgeSpell, const Spell* spl, Actor* caster)
 {
 	// format: ID or ID.param1 or +SPELLREF
 	int types = caster->spellbook.GetTypes();
-	int lvl = spl->SpellLevel-1;
+	int lvl = spl->SpellLevel - 1;
 	int count, i, tmp, tmp3;
-	Scriptable *target = NULL;
+	Scriptable* target = NULL;
 	Point targetpos(-1, -1);
 	ResRef newSpell;
 	auto parts = Explode<ResRef, ResRef>(surgeSpell, '.', 2);
-	
+
 	int level = caster->GetCasterLevel(spl->SpellType);
 	switch (surgeSpell[0]) {
 		case '+': // cast normally, but also cast SPELLREF first
@@ -1513,7 +1547,7 @@ bool Scriptable::HandleHardcodedSurge(const ResRef& surgeSpell, const Spell *spl
 			}
 			// SpellResRef still contains the original spell and we need to keep it that way
 			// as any of the rerolls could result in a "spell cast normally" (non-surge)
-			for (i=0; i<count; i++) {
+			for (i = 0; i < count; i++) {
 				if (target) {
 					caster->CastSpell(target, false, true, false, level);
 					newSpell = SpellResRef;
@@ -1544,11 +1578,11 @@ bool Scriptable::HandleHardcodedSurge(const ResRef& surgeSpell, const Spell *spl
 			break;
 		case '7': // random spell of the same level
 			// change this if we ever want the surges to respect the original type
-			for (i=0; i<types; i++) {
+			for (i = 0; i < types; i++) {
 				unsigned int spellCount = caster->spellbook.GetKnownSpellsCount(i, lvl);
 				if (!spellCount) continue;
 				int id = core->Roll(1, spellCount, -1);
-				const CREKnownSpell *ck = caster->spellbook.GetKnownSpell(i, lvl, id);
+				const CREKnownSpell* ck = caster->spellbook.GetKnownSpell(i, lvl, id);
 				if (ck) {
 					SpellResRef = ck->SpellResRef;
 					break;
@@ -1572,15 +1606,24 @@ bool Scriptable::HandleHardcodedSurge(const ResRef& surgeSpell, const Spell *spl
 String Scriptable::GetName() const
 {
 	switch (Type) {
-		case ST_PROXIMITY:	return u"Proximity";
-		case ST_TRIGGER:	return u"Trigger";
-		case ST_TRAVEL:		return u"Travel";
-		case ST_DOOR:		return u"Door";
-		case ST_CONTAINER:	return u"Container";
-		case ST_AREA:		return u"Area";
-		case ST_GLOBAL:		return u"Global";
-		case ST_ACTOR:		return As<const Actor>()->GetLongName();
-		default:	return u"NONE";
+		case ST_PROXIMITY:
+			return u"Proximity";
+		case ST_TRIGGER:
+			return u"Trigger";
+		case ST_TRAVEL:
+			return u"Travel";
+		case ST_DOOR:
+			return u"Door";
+		case ST_CONTAINER:
+			return u"Container";
+		case ST_AREA:
+			return u"Area";
+		case ST_GLOBAL:
+			return u"Global";
+		case ST_ACTOR:
+			return As<const Actor>()->GetLongName();
+		default:
+			return u"NONE";
 	}
 }
 
@@ -1593,7 +1636,7 @@ bool Scriptable::AuraPolluted()
 	}
 
 	// check for improved alacrity
-	const Actor *actor = static_cast<const Actor*>(this);
+	const Actor* actor = static_cast<const Actor*>(this);
 	if (actor->GetStat(IE_AURACLEANSING)) {
 		AuraCooldown = 0;
 		if (core->HasFeedback(FT_STATES)) displaymsg->DisplayConstantStringName(HCStrings::AuraCleansed, GUIColors::WHITE, this);
@@ -1638,875 +1681,4 @@ void Scriptable::StartTimer(ieDword ID, ieDword expiration)
 	scriptTimers.emplace(ID, newTime);
 }
 
-/********************
- * Selectable Class *
- ********************/
-
-void Selectable::SetBBox(const Region &newBBox)
-{
-	BBox = newBBox;
-}
-
-// NOTE: still need to multiply by 4 or 3 to get full pixel radii
-int Selectable::CircleSize2Radius() const
-{
-	// for size >= 2, radii are (size-1)*16, (size-1)*12
-	// for size == 1, radii are 12, 9
-	int adjustedSize = (circleSize - 1) * 4;
-	if (adjustedSize < 4) adjustedSize = 3;
-	return adjustedSize;
-}
-
-Color Selectable::GetCircleColor() const
-{
-	Color mix;
-	const Color* col = &selectedColor;
-
-	if (Selected && !Over) {
-	} else if (Over) {
-		mix = GlobalColorCycle.Blend(overColor, selectedColor);
-		col = &mix;
-	} else if (IsPC()) {
-		col = &overColor;
-	}
-
-	return *col;
-}
-
-void Selectable::DrawCircle(const Point& p) const
-{
-	if (circleSize <= 0) {
-		return;
-	}
-
-	const Color col = GetCircleColor();
-	Holder<Sprite2D> sprite = circleBitmap[0];
-
-	if (sprite) {
-		VideoDriver->BlitSprite(sprite, Pos - p);
-	} else {
-		float baseSize = CircleSize2Radius() * sizeFactor;
-		const Size s(baseSize * 8, baseSize * 6);
-		const Region r(Pos - p - s.Center(), s);
-		VideoDriver->DrawEllipse(r, col);
-	}
-}
-
-// Check if P is over our ground circle
-bool Selectable::IsOver(const Point &P) const
-{
-	int csize = circleSize;
-	if (csize < 2) csize = 2;
-
-	int dx = P.x - Pos.x;
-	int dy = P.y - Pos.y;
-
-	// check rectangle first
-	if (dx < -(csize-1)*16 || dx > (csize-1)*16) return false;
-	if (dy < -(csize-1)*12 || dy > (csize-1)*12) return false;
-
-	// then check ellipse
-	int r = 9*dx*dx + 16*dy*dy; // 48^2 * ( (dx/16)^2 + (dy/12)^2 )
-
-	return (r <= 48*48*(csize-1)*(csize-1));
-}
-
-bool Selectable::IsSelected() const
-{
-	return Selected == 1;
-}
-
-void Selectable::SetOver(bool over)
-{
-	Over = over;
-}
-
-//don't call this function after rendering the cover and before the
-//blitting of the sprite or bad things will happen :)
-void Selectable::Select(int Value)
-{
-	if (Selected!=0x80 || Value!=1) {
-		Selected = (ieWord) Value;
-	}
-}
-
-void Selectable::SetCircle(int circlesize, float factor, const Color &color, Holder<Sprite2D> normal_circle, Holder<Sprite2D> selected_circle)
-{
-	circleSize = circlesize;
-	sizeFactor = factor;
-	selectedColor = color;
-	overColor.r = color.r >> 1;
-	overColor.g = color.g >> 1;
-	overColor.b = color.b >> 1;
-	overColor.a = color.a;
-	circleBitmap[0] = std::move(normal_circle);
-	circleBitmap[1] = std::move(selected_circle);
-}
-
-/***********************
- * Highlightable Class *
- ***********************/
-
-bool Highlightable::IsOver(const Point &Place) const
-{
-	if (!outline) {
-		return false;
-	}
-	return outline->PointIn(Place);
-}
-
-void Highlightable::DrawOutline(Point origin) const
-{
-	if (!outline) {
-		return;
-	}
-	origin = outline->BBox.origin - origin;
-
-	if (core->HasFeature(GFFlags::PST_STATE_FLAGS)) {
-		VideoDriver->DrawPolygon(outline.get(), origin, outlineColor, true, BlitFlags::MOD | BlitFlags::HALFTRANS);
-	} else {
-		VideoDriver->DrawPolygon( outline.get(), origin, outlineColor, true, BlitFlags::BLENDED|BlitFlags::HALFTRANS );
-		VideoDriver->DrawPolygon( outline.get(), origin, outlineColor, false );
-	}
-}
-
-void Highlightable::SetCursor(unsigned char CursorIndex)
-{
-	Cursor = CursorIndex;
-}
-
-//trap that will fire now
-bool Highlightable::TriggerTrap(int /*skill*/, ieDword ID)
-{
-	if (!Trapped) {
-		return false;
-	}
-	//actually this could be script name[0]
-	if (!Scripts[0] && EnterWav.IsEmpty()) {
-		return false;
-	}
-	AddTrigger(TriggerEntry(trigger_entered, ID));
-	AddTrigger(TriggerEntry(trigger_traptriggered, ID)); // for that one user in bg2
-
-	// the second part is a hack to deal with bg2's ar1401 lava floor trap ("muck"), which doesn't have the repeating bit set
-	// just testing TrapDetectionDiff/TrapRemovalDiff is not good enough as DeadThiefProx in the initial bg2 chamber exit is
-	// almost identical and would retrigger instead of being a one-off
-	// at the same time iwd2 Saablic_Greeting in ar6200 shouldn't repeat, while being practically identical
-	// should we always send Entered instead, also when !Trapped? Does not appear so, see history of InfoPoint::TriggerTrap
-	if (TrapResets()) {
-		AddTrigger(TriggerEntry(trigger_reset, GetGlobalID()));
-	} else if (third || scriptName != "muck") {
-		Trapped = false;
-	}
-	return true;
-}
-
-bool Highlightable::TryUnlock(Actor *actor, bool removekey) const {
-	if (KeyResRef.IsEmpty()) {
-		return false;
-	}
-
-	Actor* haskey = nullptr;
-	if (actor->InParty) {
-		const Game *game = core->GetGame();
-		//allow unlock when the key is on any partymember
-		for (int idx = 0; idx < game->GetPartySize(false); idx++) {
-			Actor *pc = game->FindPC(idx + 1);
-			if (!pc) continue;
-			if (HasItemCore(&pc->inventory, KeyResRef, 0)) {
-				haskey = pc;
-				break;
-			}
-		}
-	// actor is not in party, check only actor
-	} else if (HasItemCore(&actor->inventory, KeyResRef, 0)) {
-		haskey = actor;
-	}
-
-	if (!haskey) {
-		return false;
-	}
-
-	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
-			return false;
-		}
-		core->GetCurrentTurnBasedSlot().haveaction = false;
-		actor->RemoveFromAdditionInitiativeLists();
-	}
-
-	if (removekey) {
-		CREItem* item = nullptr;
-		int result = haskey->inventory.RemoveItem(KeyResRef, 0, &item);
-		// check also in bags if nothing was found
-		if (result == -1) {
-			int i= haskey->inventory.GetSlotCount();
-			while (i--) {
-				// maybe we could speed this up if we mark bag items with a flags bit
-				const CREItem* itemSlot = haskey->inventory.GetSlotItem(i);
-				if (!itemSlot) continue;
-				const Item* itemStore = gamedata->GetItem(itemSlot->ItemResRef);
-				if (!itemStore) continue;
-				if (core->CheckItemType(itemStore, SLOT_BAG)) {
-					//the store is the same as the item's name
-					RemoveStoreItem(itemSlot->ItemResRef, KeyResRef);
-				}
-				gamedata->FreeItem(itemStore, itemSlot->ItemResRef);
-			}
-		}
-		//the item should always be existing!!!
-		delete item;
-	}
-
-	return true;
-}
-
-//detect this trap, using a skill, skill could be set to 256 for 'sure'
-//skill is the all around modified trap detection skill
-//a trapdetectiondifficulty of 100 means impossible detection short of a spell
-void Highlightable::DetectTrap(int skill, ieDword actorID)
-{
-	if (!CanDetectTrap()) return;
-	if (TrapDetected) return;
-	if (!Scripts[0]) return;
-	if (skill >= 100 && skill != 256) skill = 100;
-
-	int check = 0;
-	Actor* detective = core->GetGame()->GetActorByGlobalID(actorID);
-	assert(detective);
-	if (third) {
-		//~Search (detect traps) check. Search skill %d vs. trap's difficulty %d (searcher's %d INT bonus).~
-		int bonus = detective->GetAbilityBonus(IE_INT);
-		displaymsg->DisplayRollStringName(ieStrRef::ROLL13, GUIColors::LIGHTGREY, detective, skill - bonus, TrapDetectionDiff, bonus);
-		check = (skill + bonus) * 7;
-	} else {
-		check = skill/2 + core->Roll(1, skill/2, 0);
-	}
-	if (check > TrapDetectionDiff) {
-		SetTrapDetected(1); //probably could be set to the player #?
-		AddTrigger(TriggerEntry(trigger_detected, actorID));
-		displaymsg->DisplayMsgAtLocation(HCStrings::TrapFound, FT_ANY, detective, detective, GUIColors::WHITE);
-	}
-}
-
-bool Highlightable::PossibleToSeeTrap() const
-{
-	return CanDetectTrap();
-}
-
-/*****************
- * Movable Class *
- *****************/
-
-Movable::~Movable(void)
-{
-	if (path) {
-		ClearPath(true);
-	}
-}
-
-int Movable::GetPathLength() const
-{
-	const PathListNode *node = GetNextStep(0);
-	if (!node) return 0;
-
-	int i = 0;
-	while (node->Next) {
-		i++;
-		node = node->Next;
-	}
-	return i;
-}
-
-PathListNode *Movable::GetNextStep(int x) const
-{
-	if (!step) {
-		error("GetNextStep", "Hit with step = null");
-	}
-	PathListNode *node = step;
-	while(node && x--) {
-		node = node->Next;
-	}
-	return node;
-}
-
-Point Movable::GetMostLikelyPosition() const
-{
-	if (!path) {
-		return Pos;
-	}
-
-//actually, sometimes middle path would be better, if
-//we stand in Destination already
-	int halfway = GetPathLength()/2;
-	const PathListNode *node = GetNextStep(halfway);
-	if (node) {
-		return Map::ConvertCoordFromTile(node->point) + Point(8, 6);
-	}
-	return Destination;
-}
-
-void Movable::SetStance(unsigned int arg)
-{
-	//don't modify stance from dead back to anything if the actor is dead
-	if ((StanceID==IE_ANI_TWITCH || StanceID==IE_ANI_DIE) && (arg!=IE_ANI_TWITCH) ) {
-		if (GetInternalFlag()&IF_REALLYDIED) {
-			Log(WARNING, "Movable", "Stance overridden by death");
-			return;
-		}
-	}
-
-	if (arg >= MAX_ANIMS) {
-		StanceID = IE_ANI_AWAKE;
-		Log(ERROR, "Movable", "Tried to set invalid stance id({})", arg);
-		return;
-	}
-
-	Actor* caster = Scriptable::As<Actor>(this);
-	if (StanceID == IE_ANI_CONJURE && StanceID != arg) {
-		if (caster && caster->casting_sound) {
-			caster->casting_sound->Stop();
-			caster->casting_sound.reset();
-		}
-	}
-
-	if (arg == IE_ANI_ATTACK) {
-		// Set stance to a random attack animation
-		int random = RAND(0, 99);
-		if (random < AttackMovements[0]) {
-			arg = IE_ANI_ATTACK_BACKSLASH;
-		} else if (random < AttackMovements[0] + AttackMovements[1]) {
-			arg = IE_ANI_ATTACK_SLASH;
-		} else {
-			arg = IE_ANI_ATTACK_JAB;
-		}
-	}
-
-	StanceID = (unsigned char)arg;
-
-	// this doesn't get hit on movement, since movement overrides the stance manually
-	// but it is needed for the twang/clank when an actor stops moving
-	// a lot of other stances would get skipped later, since we check we're out of combat
-	if (caster) {
-		caster->PlayArmorSound();
-	}
-}
-
-void Movable::SetOrientation(orient_t value, bool slow) {
-	NewOrientation = value;
-	if (NewOrientation != Orientation && Type == ST_ACTOR) {
-		const Actor *actor = (Actor *) this;
-		actor->PlayArmorSound();
-	}
-	if (!slow) {
-		Orientation = NewOrientation;
-	}
-}
-
-void Movable::SetOrientation(const Point& from, const Point& to, bool slow)
-{
-	SetOrientation(GetOrient(from, to), slow);
-}
-
-void Movable::SetAttackMoveChances(const std::array<ieWord, 3>& amc)
-{
-	AttackMovements = amc;
-}
-
-//this could be used for WingBuffet as well
-void Movable::MoveLine(int steps, orient_t orient)
-{
-	if (path || !steps) {
-		return;
-	}
-	// DoStep takes care of stopping on walls if necessary
-	path = area->GetLine(Pos, steps, orient);
-}
-
-orient_t Movable::GetNextFace() const
-{
-	//slow turning
-	if (timeStartStep==core->GetGame()->Ticks) {
-		return Orientation;
-	}
-	return GemRB::GetNextFace(Orientation, NewOrientation);
-}
-
-
-void Movable::Backoff()
-{
-	StanceID = IE_ANI_READY;
-	if (InternalFlags & IF_RUNNING) {
-		randomBackoff = RAND(MAX_PATH_TRIES * 2 / 3, MAX_PATH_TRIES * 4 / 3);
-	} else {
-		randomBackoff = RAND(MAX_PATH_TRIES, MAX_PATH_TRIES * 2);
-	}
-}
-
-
-void Movable::BumpAway()
-{
-	area->ClearSearchMapFor(this);
-	if (!IsBumped()) oldPos = Pos;
-	bumped = true;
-	bumpBackTries = 0;
-	area->AdjustPositionNavmap(Pos);
-}
-
-void Movable::BumpBack()
-{
-	if (Type != ST_ACTOR) return;
-	const Actor *actor = (const Actor*) this;
-	area->ClearSearchMapFor(this);
-	PathMapFlags oldPosBlockStatus = area->GetBlocked(oldPos);
-	if (!(oldPosBlockStatus & PathMapFlags::PASSABLE)) {
-		// Do bump back if the actor is "blocking" itself
-		if (!((oldPosBlockStatus & PathMapFlags::ACTOR) == PathMapFlags::ACTOR && area->GetActor(oldPos, GA_NO_DEAD|GA_NO_UNSCHEDULED) == actor)) {
-			area->BlockSearchMapFor(this);
-			if (actor->GetStat(IE_EA) < EA_GOODCUTOFF) {
-				bumpBackTries++;
-				if (bumpBackTries > MAX_BUMP_BACK_TRIES && SquaredDistance(Pos, oldPos) < unsigned(circleSize * 32 * circleSize * 32)) {
-					oldPos = Pos;
-					bumped = false;
-					bumpBackTries = 0;
-					if (SquaredDistance(Pos, Destination) < unsigned(circleSize * 32 * circleSize * 32)) {
-						ClearPath(true);
-					}
-
-				}
-			}
-			return;
-		}
-	}
-	bumped = false;
-	MoveTo(oldPos);
-	bumpBackTries = 0;
-}
-
-// Takes care of movement and actor bumping, i.e. gently pushing blocking actors out of the way
-// The movement logic is a proportional regulator: the displacement/movement vector has a
-// fixed radius, based on actor walk speed, and its direction heads towards the next waypoint.
-// The bumping logic checks if there would be a collision if the actor was to move according to this
-// displacement vector and then, if that is the case, checks if that actor can be bumped
-// In that case, it bumps it and goes on with its step, otherwise it either stops and waits
-// for a random time (inspired by network media access control algorithms) or just stops if
-// the goal is close enough.
-void Movable::DoStep(unsigned int walkScale, ieDword time) {
-	Actor* actor = Scriptable::As<Actor>(this);
-
-	if (actor->ShouldStopAttack()) {
-		return;
-	}
-
-	if (core->IsTurnBased()) {
-		if (path && core->opportunity || actor->InAttack() || GetStance() == IE_ANI_CAST || GetStance() == IE_ANI_CONJURE) {
-			ClearPath(true);
-			return;
-		}
-		if (path && actor->InInitiativeList() && (core->currentTurnBasedActor != actor || core->GetCurrentTurnBasedSlot().movesleft <= 0)) {
-			ClearPath(true);
-			if (GetStance() == IE_ANI_WALK) {
-				SetStance(IE_ANI_READY);
-			}
-			return;
-		}
-	}
-
-	// Only bump back if not moving
-	// Actors can be bumped while moving if they are backing off
-	if (!path) {
-		if (IsBumped()) {
-			BumpBack();
-		}
-		return;
-	}
-	if (!time) time = core->GetGame()->Ticks;
-	if (!walkScale) {
-		// zero speed: no movement
-		StanceID = IE_ANI_READY;
-		timeStartStep = time;
-		return;
-	}
-	if (!step) {
-		step = path;
-		timeStartStep = time;
-		return;
-	}
-
-	if (time > timeStartStep) {
-		Point nmptStep = step->point;
-		double dx = nmptStep.x - Pos.x;
-		double dy = nmptStep.y - Pos.y;
-		Map::NormalizeDeltas(dx, dy, double(gamedata->GetStepTime()) / double(walkScale));
-		if (dx == 0 && dy == 0) {
-			// probably shouldn't happen, but it does when running bg2's cut28a set of cutscenes
-			ClearPath(true);
-			Log(DEBUG, "PathFinderWIP", "Abandoning because I'm exactly at the goal");
-			pathAbandoned = true;
-			return;
-		}
-
-		Actor *actorInTheWay = nullptr;
-		// We can't use GetActorInRadius because we want to only check directly along the way
-		// and not be blocked by actors who are on the sides
-		int collisionLookaheadRadius = ((circleSize < 3 ? 3 : circleSize) - 1);
-		for (int r = collisionLookaheadRadius; r > 0 && !actorInTheWay; r--) {
-			double xCollision = Pos.x + dx * r;
-			double yCollision = Pos.y + dy * r * 0.75;
-			Point nmptCollision(xCollision, yCollision);
-			actorInTheWay = area->GetActor(nmptCollision, GA_NO_DEAD|GA_NO_UNSCHEDULED|GA_NO_SELF, this);
-		}
-
-		bool blocksSearch = BlocksSearchMap();
-		if (actorInTheWay && blocksSearch && actorInTheWay->BlocksSearchMap()) {
-			// Give up instead of bumping if you are close to the goal
-			if (!(step->Next) && PersonalDistance(nmptStep, this) < MAX_OPERATING_DISTANCE) {
-				ClearPath(true);
-				NewOrientation = Orientation;
-				// Do not call ReleaseCurrentAction() since other actions
-				// than MoveToPoint can cause movement
-				Log(DEBUG, "PathFinderWIP", "Abandoning because I'm close to the goal");
-				pathAbandoned = true;
-				return;
-			}
-			if (actor && actor->ValidTarget(GA_CAN_BUMP) && actorInTheWay->ValidTarget(GA_ONLY_BUMPABLE)) {
-				actorInTheWay->BumpAway();
-			} else {
-				if (core->IsTurnBased() && !actor->IsPC() && actor == core->currentTurnBasedActor) {
-					ClearPath(true);
-					NewOrientation = Orientation;
-					core->GetCurrentTurnBasedSlot().movesleft -= 0.1f;
-				}
-				Backoff();
-				return;
-			}
-		}
-		// Stop if there's a door in the way
-		if (blocksSearch && bool(area->GetBlocked(Pos + Point(dx, dy)) & PathMapFlags::SIDEWALL)) {
-			ClearPath(true);
-			NewOrientation = Orientation;
-			return;
-		}
-		if (blocksSearch) {
-			area->ClearSearchMapFor(this);
-		}
-		StanceID = IE_ANI_WALK;
-		if (InternalFlags & IF_RUNNING) {
-			StanceID = IE_ANI_RUN;
-		}
-
-		if (core->IsTurnBased() && core->currentTurnBasedActor == actor) {
-			Point newPos(Pos.x + dx, Pos.y + dy);
-
-			if (core->lasOpportunityPos != Pos) {
-				core->opportunists.clear();
-				// check enemys for opportunity
-				for (size_t idx = 0; idx < core->initiatives[0].size(); idx++) {
-					if (core->initiatives[0][idx].actor == this) {
-						continue;
-					}
-
-					if (actor->IsPC() && core->initiatives[0][idx].actor->IsPC()) {
-						continue;
-					}
-
-					// enemy?
-					if (EARelation(actor, core->initiatives[0][idx].actor) != EAR_HOSTILE) {
-						continue;
-					}
-
-					Actor* enemy = core->initiatives[0][idx].actor;
-
-					// can attack?
-					if (enemy->GetStance() == IE_ANI_DIE || 
-						enemy->GetStance() == IE_ANI_TWITCH  || 
-						enemy->GetStance() == IE_ANI_SLEEP || 
-						enemy->GetStance() == IE_ANI_CAST) {
-						continue;
-					}
-
-					// can move?
-					if (enemy->Immobile() || 
-						(enemy->GetMod(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC)) || 
-						(enemy->GetBase(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) {
-						continue;
-					}
-
-					// current area?
-					if (enemy->GetCurrentArea() != GetCurrentArea()) {
-						continue;
-					}
-
-					// can see?
-					if (actor->IsInvisibleTo(enemy) || !CanSee(enemy, this, true, 0)) {
-						continue;
-					}
-
-					const ITMExtHeader* header = enemy->GetWeapon(false);
-					//melee weapon
-					if (header && (header->AttackType != ITEM_AT_MELEE)) {
-						continue;
-					}
-
-					InitiativeSlot* slot = core->GetTurnBasedSlotWithAttack(enemy);
-
-					// have attacks?
-					if (!slot) {
-						continue;
-					}
-
-					unsigned int weaponRange = enemy->GetWeaponRange(false);
-					if (slot->actor == enemy && WithinPersonalRange(enemy, Pos, weaponRange) && !WithinPersonalRange(enemy, newPos, weaponRange)) {
-						core->opportunists.push_back(enemy->GetGlobalID());
-						core->opportunity = GetGlobalID();
-					}
-				}
-
-				if (core->opportunity) {
-					core->lasOpportunityPos = Pos;
-					ClearPath(true);
-					return;
-				}
-			}
-
-			float dist = SquaredDistance(Pos, newPos);
-			int speed = actor->GetSpeed() ? gamedata->GetStepTime() / actor->GetSpeed() : 0;
-			core->GetCurrentTurnBasedSlot().movesleft -= dist / (speed * core->Time.defaultTicksPerSec * core->Time.round_sec * 10);
-			actor->lastInit = core->GetGame()->GetGameTimeReal();
-		}
-
-		Pos.x += dx;
-		Pos.y += dy;
-		oldPos = Pos;
-		if (actor && blocksSearch) {
-			auto flag = actor->IsPartyMember() ? PathMapFlags::PC : PathMapFlags::NPC;
-			area->tileProps.PaintSearchMap(Map::ConvertCoordToTile(Pos), circleSize, flag);
-		}
-
-		SetOrientation(step->orient, false);
-		timeStartStep = time;
-		if (Pos == nmptStep) {
-			if (step->Next) {
-				step = step->Next;
-			} else {
-				ClearPath(true);
-				NewOrientation = Orientation;
-				pathfindingDistance = circleSize;
-			}
-		}
-	}
-}
-
-void Movable::AdjustPosition()
-{
-	area->AdjustPosition(Pos);
-	ImpedeBumping();
-}
-
-void Movable::AddWayPoint(const Point &Des)
-{
-	if (!path) {
-		WalkTo(Des);
-		return;
-	}
-	Destination = Des;
-	//it is tempting to use 'step' here, as it could
-	//be about half of the current path already
-	PathListNode *endNode = path;
-	while(endNode->Next) {
-		endNode = endNode->Next;
-	}
-	Point p = endNode->point;
-	area->ClearSearchMapFor(this);
-	PathListNode* path2 = area->FindPath(p, Des, circleSize);
-	// if the waypoint is too close to the current position, no path is generated
-	if (!path2) {
-		if (BlocksSearchMap()) {
-			area->BlockSearchMapFor(this);
-		}
-		return;
-	}
-	endNode->Next = path2;
-	//probably it is wise to connect it both ways?
-	path2->Parent = endNode;
-}
-
-// This function is called at each tick if an actor is following another actor
-// Therefore it's rate-limited to avoid actors being stuck as they keep pathfinding
-void Movable::WalkTo(const Point &Des, int distance)
-{
-	// Only rate-limit when moving
-	if ((GetPath() || InMove()) && prevTicks && Ticks < prevTicks + 2) {
-		return;
-	}
-
-	const Actor* actor = Scriptable::As<Actor>(this);
-
-	prevTicks = Ticks;
-	Destination = Des;
-	if (pathAbandoned) {
-		Log(DEBUG, "WalkTo", "{}: Path was just abandoned", fmt::WideToChar{actor->GetShortName()});
-		ClearPath(true);
-		return;
-	}
-
-	if (Pos.x / 16 == Des.x / 16 && Pos.y / 12 == Des.y / 12) {
-		ClearPath(true);
-		SetStance(IE_ANI_HEAD_TURN);
-		return;
-	}
-
-	if (BlocksSearchMap()) area->ClearSearchMapFor(this);
-	PathListNode* newPath = area->FindPath(Pos, Des, circleSize, distance, PF_SIGHT | PF_ACTORS_ARE_BLOCKING, actor);
-	if (!newPath && actor && actor->ValidTarget(GA_CAN_BUMP)) {
-		Log(DEBUG, "WalkTo", "{} re-pathing ignoring actors", fmt::WideToChar{actor->GetShortName()});
-		newPath = area->FindPath(Pos, Des, circleSize, distance, PF_SIGHT, actor);
-	}
-
-	if (newPath) {
-		ClearPath(false);
-		path = newPath;
-		step = path;
-		HandleAnkhegStance(false);
-	}  else {
-		pathfindingDistance = std::max(circleSize, distance);
-		if (BlocksSearchMap()) {
-			area->BlockSearchMapFor(this);
-		}
-	}
-}
-
-void Movable::RunAwayFrom(const Point &Source, int PathLength, bool noBackAway)
-{
-	ClearPath(true);
-	area->ClearSearchMapFor(this);
-	path = area->RunAway(Pos, Source, circleSize, PathLength, !noBackAway, As<Actor>());
-	HandleAnkhegStance(false);
-}
-
-void Movable::RandomWalk(bool can_stop, bool run)
-{
-	if (path) {
-		return;
-	}
-	// if not continuous random walk, then stops for a while
-	if (can_stop) {
-		Region vp = core->GetGameControl()->Viewport();
-		if (!vp.PointInside(Pos)) {
-			SetWait(core->Time.defaultTicksPerSec * core->Roll(1, 40, 0));
-			return;
-		}
-		// a 50/50 chance to move or do a spin (including its own wait)
-		if (RandomFlip()) {
-			Action *me = ParamCopy(CurrentAction);
-			Action *turnAction = GenerateAction("RandomTurn()");
-			// only spin once before relinquishing control back
-			turnAction->int0Parameter = 3;
-			// remove and readd ourselves, so the turning gets a chance to run
-			ReleaseCurrentAction();
-			AddActionInFront(me);
-			AddActionInFront(turnAction);
-			return;
-		}
-	}
-
-	// handle the RandomWalkTime variants, which only count moves
-	if (CurrentAction->int0Parameter && !CurrentAction->int1Parameter) {
-		// first run only
-		CurrentAction->int1Parameter = 1;
-		CurrentAction->int0Parameter++;
-	}
-	if (CurrentAction->int0Parameter) {
-		CurrentAction->int0Parameter--;
-	}
-	if (CurrentAction->int1Parameter && !CurrentAction->int0Parameter) {
-		ReleaseCurrentAction();
-		return;
-	}
-
-	randomWalkCounter++;
-	if (randomWalkCounter > MAX_RAND_WALK) {
-		randomWalkCounter = 0;
-		WalkTo(HomeLocation);
-		return;
-	}
-
-	if (run) {
-		InternalFlags|=IF_RUNNING;
-	}
-
-	if (BlocksSearchMap()) {
-		area->ClearSearchMapFor(this);
-	}
-
-	//the 5th parameter is controlling the orientation of the actor
-	//0 - back away, 1 - face direction
-	path = area->RandomWalk(Pos, circleSize, maxWalkDistance ? maxWalkDistance : 5, As<Actor>());
-	if (BlocksSearchMap()) {
-		area->BlockSearchMapFor(this);
-	}
-	if (path) {
-		Destination = path->point;
-	} else {
-		randomWalkCounter = 0;
-		WalkTo(HomeLocation);
-		return;
-	}
-
-}
-
-void Movable::MoveTo(const Point &Des)
-{
-	area->ClearSearchMapFor(this);
-	Pos = Des;
-	oldPos = Des;
-	Destination = Des;
-	if (BlocksSearchMap()) {
-		area->BlockSearchMapFor(this);
-	}
-}
-
-void Movable::Stop(int flags)
-{
-	Scriptable::Stop(flags);
-	ClearPath(true);
-}
-
-void Movable::ClearPath(bool resetDestination)
-{
-	pathAbandoned = false;
-
-	if (resetDestination) {
-		//this is to make sure attackers come to us
-		//make sure ClearPath doesn't screw Destination (in the rare cases Destination
-		//is set before ClearPath
-		Destination = Pos;
-
-		if (StanceID == IE_ANI_WALK || StanceID == IE_ANI_RUN) {
-			StanceID = IE_ANI_AWAKE;
-		}
-		HandleAnkhegStance(true);
-		InternalFlags &= ~IF_NORETICLE;
-	}
-	PathListNode* thisNode = path;
-	while (thisNode) {
-		PathListNode* nextNode = thisNode->Next;
-		delete thisNode;
-		thisNode = nextNode;
-	}
-	path = nullptr;
-	step = nullptr;
-	//don't call ReleaseCurrentAction
-}
-
-// (un)hide ankhegs when they stop/start moving
-void Movable::HandleAnkhegStance(bool emerge)
-{
-	const Actor* actor = As<Actor>();
-	int nextStance = emerge ? IE_ANI_EMERGE : IE_ANI_HIDE;
-	if (actor && path && StanceID != nextStance && actor->GetAnims()->GetAnimType() == IE_ANI_TWO_PIECE) {
-		SetStance(nextStance);
-		SetWait(15); // both stances have 15 frames, at 15 fps
-	}
-}
 }

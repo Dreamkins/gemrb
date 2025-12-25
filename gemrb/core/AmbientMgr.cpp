@@ -79,11 +79,11 @@ void AmbientMgr::AmbientsSet(const std::vector<Ambient*>& a)
 	}
 }
 
-void AmbientMgr::RemoveAmbients(const std::vector<Ambient*> &oldAmbients)
+void AmbientMgr::RemoveAmbients(const std::vector<Ambient*>& oldAmbients)
 {
 	std::lock_guard<std::recursive_mutex> l(mutex);
 	// manually deleting ambientSources as regenerating them causes a several second pause
-	for (auto it = ambientSources.begin(); it != ambientSources.end(); ) {
+	for (auto it = ambientSources.begin(); it != ambientSources.end();) {
 		auto ambientSource = *it;
 		bool deleted = false;
 		for (const auto& ambient : oldAmbients) {
@@ -97,7 +97,7 @@ void AmbientMgr::RemoveAmbients(const std::vector<Ambient*> &oldAmbients)
 		if (!deleted) ++it;
 	}
 
-	for (auto it = ambients.begin(); it != ambients.end(); ) {
+	for (auto it = ambients.begin(); it != ambients.end();) {
 		bool deleted = false;
 		for (const auto& ambient : oldAmbients) {
 			if (*it == ambient) {
@@ -112,7 +112,7 @@ void AmbientMgr::RemoveAmbients(const std::vector<Ambient*> &oldAmbients)
 }
 
 
-void AmbientMgr::SetAmbients(const std::vector<Ambient*> &a)
+void AmbientMgr::SetAmbients(const std::vector<Ambient*>& a)
 {
 	std::lock_guard<std::mutex> l(ambientsMutex);
 	ambients = a;
@@ -279,7 +279,7 @@ tick_t AmbientMgr::AmbientSource::Tick(tick_t ticks, Point listener, ieDword tim
 		return nextdelay;
 	}
 
-	unsigned int channel = ambient->GetFlags() & IE_AMBI_LOOPING ? (ambient->GetFlags() & IE_AMBI_MAIN ? SFX_CHAN_AREA_AMB : SFX_CHAN_AMB_LOOP) : SFX_CHAN_AMB_OTHER;
+	SFXChannel channel = ambient->GetFlags() & IE_AMBI_LOOPING ? (ambient->GetFlags() & IE_AMBI_MAIN ? SFXChannel::MainAmbient : SFXChannel::AmbientLoop) : SFXChannel::AmbientOther;
 	totalgain = ambient->GetTotalGain() * core->GetAudioDrv()->GetVolume(channel) / 100;
 
 	unsigned int v = core->GetDictionary().Get("Volume Ambients", 100);
@@ -314,10 +314,10 @@ tick_t AmbientMgr::AmbientSource::Enqueue() const
 {
 	if (stream < 0) return -1;
 	// print("Playing ambient %s, %d/%ld on stream %d", ambient->sounds[nextref], nextref, ambient->sounds.size(), stream);
-	return core->GetAudioDrv()->QueueAmbient(stream, ambient->sounds[nextref]);
+	return core->GetAudioDrv()->QueueAmbient(stream, ambient->sounds[nextref], !(ambient->GetFlags() & IE_AMBI_MAIN));
 }
 
-bool AmbientMgr::AmbientSource::IsHeard(const Point &listener) const
+bool AmbientMgr::AmbientSource::IsHeard(const Point& listener) const
 {
 	return Distance(listener, ambient->GetOrigin()) <= ambient->GetRadius();
 }

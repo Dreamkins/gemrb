@@ -40,7 +40,7 @@ bool NullSound::Init(void)
 	return true;
 }
 
-Holder<SoundHandle> NullSound::Play(StringView, unsigned int, const Point&, unsigned int, tick_t *len)
+Holder<SoundHandle> NullSound::Play(StringView, SFXChannel, const Point&, unsigned int, tick_t* len)
 {
 	if (len) *len = 1000; //Returning 1 Second Length
 	return Holder<SoundHandle>();
@@ -95,7 +95,7 @@ int NullSound::SetupNewStream(int, int, int, ieWord, bool, int)
 	return -1;
 }
 
-tick_t NullSound::QueueAmbient(int, const ResRef&)
+tick_t NullSound::QueueAmbient(int, const ResRef&, bool)
 {
 	return -1;
 }
@@ -107,19 +107,15 @@ bool NullSound::ReleaseStream(int, bool)
 
 void NullSound::SetAmbientStreamVolume(int, int)
 {
-
 }
 
 void NullSound::SetAmbientStreamPitch(int, int)
 {
-
 }
 
 void NullSound::QueueBuffer(int, unsigned short, int, short*, int, int)
 {
-
 }
-
 
 
 #include "plugindef.h"

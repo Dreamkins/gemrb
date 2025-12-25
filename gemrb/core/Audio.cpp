@@ -24,104 +24,89 @@ namespace GemRB {
 
 const TypeID Audio::ID = { "Audio" };
 
-#define SFX_CHAN_UNKNOWN	((unsigned int) -1)
+static std::unordered_map<std::string, SFXChannel> channelEnumMap = {
+	{ "NARRATIO", SFXChannel::Narrator },
+	{ "AREA_AMB", SFXChannel::MainAmbient },
+	{ "ACTIONS", SFXChannel::Actions },
+	{ "SWINGS", SFXChannel::Swings },
+	{ "CASTING", SFXChannel::Casting },
+	{ "GUI", SFXChannel::GUI },
+	{ "DIALOG", SFXChannel::Dialog },
+	{ "CHARACT0", SFXChannel::Char0 },
+	{ "CHARACT1", SFXChannel::Char1 },
+	{ "CHARACT2", SFXChannel::Char2 },
+	{ "CHARACT3", SFXChannel::Char3 },
+	{ "CHARACT4", SFXChannel::Char4 },
+	{ "CHARACT5", SFXChannel::Char5 },
+	{ "CHARACT6", SFXChannel::Char6 },
+	{ "CHARACT7", SFXChannel::Char7 },
+	{ "CHARACT8", SFXChannel::Char8 },
+	{ "CHARACT9", SFXChannel::Char9 },
+	{ "MONSTER", SFXChannel::Monster },
+	{ "HITS", SFXChannel::Hits },
+	{ "MISSILE", SFXChannel::Missile },
+	{ "AMBIENTL", SFXChannel::AmbientLoop },
+	{ "AMBIENTN", SFXChannel::AmbientOther },
+	{ "WALKINGC", SFXChannel::WalkChar },
+	{ "WALKINGM", SFXChannel::WalkMonster },
+	{ "ARMOR", SFXChannel::Armor }
+};
 
-Audio::Audio(void)
+void Audio::UpdateChannel(const std::string& name, int volume, float reverb)
 {
-	// create the built-in default channels
-	CreateChannel("NARRATIO");
-	CreateChannel("AREA_AMB");
-	CreateChannel("ACTIONS");
-	CreateChannel("SWINGS");
-	CreateChannel("CASTING");
-	CreateChannel("GUI");
-	CreateChannel("DIALOG");
-	CreateChannel("CHARACT0");
-	CreateChannel("CHARACT1");
-	CreateChannel("CHARACT2");
-	CreateChannel("CHARACT3");
-	CreateChannel("CHARACT4");
-	CreateChannel("CHARACT5");
-	CreateChannel("CHARACT6");
-	CreateChannel("CHARACT7");
-	CreateChannel("CHARACT8");
-	CreateChannel("CHARACT9");
-	CreateChannel("MONSTER");
-	CreateChannel("HITS");
-	CreateChannel("MISSILE");
-	CreateChannel("AMBIENTL");
-	CreateChannel("AMBIENTN");
-	CreateChannel("WALKINGC");
-	CreateChannel("WALKINGM");
-	CreateChannel("ARMOR");
-}
-
-unsigned int Audio::CreateChannel(const std::string& name)
-{
-	channels.emplace_back(name);
-	return channels.size() - 1;
-}
-
-void Audio::SetChannelVolume(const std::string& name, int volume)
-{
-	if (volume > 100) {
-		volume = 100;
-	} else if (volume < 0) {
-		volume = 0;
+	auto it = channelEnumMap.find(name);
+	if (it == channelEnumMap.cend()) {
+		return;
 	}
 
-	unsigned int channel = GetChannel(name);
-	if (channel == SFX_CHAN_UNKNOWN) {
-		channel = CreateChannel(name);
-	}
-	channels[channel].setVolume(volume);
+	auto idx = it->second;
+	channels[idx] = Channel(name);
+
+	volume = Clamp(volume, 0, 100);
+	channels[idx].setVolume(volume);
+
+	reverb = Clamp(reverb, 0.0f, 100.0f);
+	channels[idx].setReverb(reverb);
 }
 
-void Audio::SetChannelReverb(const std::string& name, float reverb)
+SFXChannel Audio::GetChannel(const std::string& name) const
 {
-	if (reverb > 1.0f) {
-		reverb = 1.0f;
-	} else if (reverb < 0.0f) {
-		reverb = 0.0f;
-	}
-
-	unsigned int channel = GetChannel(name);
-	if (channel == SFX_CHAN_UNKNOWN) {
-		channel = CreateChannel(name);
-	}
-	channels[channel].setReverb(reverb);
-}
-
-unsigned int Audio::GetChannel(const std::string& name) const
-{
-	for (std::vector<Channel>::const_iterator c = channels.begin(); c != channels.end(); ++c) {
-		if (c->getName() == name) {
-			return c - channels.begin();
+	for (SFXChannel channelID : EnumIterator<SFXChannel>()) {
+		if (channels[channelID].getName() == name) {
+			return channelID;
 		}
 	}
-	return SFX_CHAN_UNKNOWN;
+	return SFXChannel::count;
 }
 
-int Audio::GetVolume(unsigned int channel) const
+int Audio::GetVolume(SFXChannel channel) const
 {
-	if (channel >= channels.size()) {
+	if (channel >= SFXChannel::count) {
 		return 100;
 	}
 	return channels[channel].getVolume();
 }
 
-float Audio::GetReverb(unsigned int channel) const
+float Audio::GetReverb(SFXChannel channel) const
 {
-	if (channel >= channels.size()) {
+	if (channel >= SFXChannel::count) {
 		return 0.0f;
 	}
 	return channels[channel].getReverb();
 }
 
-Holder<SoundHandle> Audio::PlayMB(const String& resource, unsigned int channel, const Point& p, unsigned int flags, tick_t* length)
+float Audio::GetHeight(SFXChannel channel) const
+{
+	if (channel >= SFXChannel::count) {
+		return 0.0f;
+	}
+	return channels[channel].getHeight(channel);
+}
+
+Holder<SoundHandle> Audio::PlayMB(const String& resource, SFXChannel channel, const Point& p, unsigned int flags, tick_t* length)
 {
 	auto mbString = MBStringFromString(resource);
-	auto mbResource = StringView{mbString};
+	auto mbResource = StringView { mbString };
 
 	return Play(mbResource, channel, p, flags, length);
 }

@@ -32,6 +32,7 @@ private:
 	PNGInternal* inf;
 
 	bool hasPalette = false;
+
 public:
 	PNGImporter(void);
 	PNGImporter(const PNGImporter&) = delete;
@@ -41,7 +42,7 @@ public:
 	bool Import(DataStream* stream) override;
 	Holder<Sprite2D> GetSprite2D() override;
 	Holder<Sprite2D> GetSprite2D(Region&&) override { return {}; };
-	int GetPalette(int colors, Color* pal) override;
+	int GetPalette(int colors, Palette& pal) override;
 };
 
 }

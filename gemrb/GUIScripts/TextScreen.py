@@ -19,7 +19,7 @@
 
 import GemRB
 from ie_restype import RES_2DA
-from ie_sounds import CHAN_GUI
+from ie_sounds import CHAN_GUI, SND_SPEECH, GEM_SND_VOL_AMBIENTS
 from GUIDefines import *
 import GameCheck
 
@@ -68,6 +68,7 @@ def StartTextScreen ():
 	elif GameCheck.IsGemRBDemo ():
 		#TODO: set MusicName
 		TableName = "chapters"
+		Message = "*"
 
 	if TableName == "":
 		EndTextScreen ()
@@ -86,7 +87,7 @@ def StartTextScreen ():
 		GemRB.DisplayString (Message, ColorRed)
 
 	Table = GemRB.LoadTable (TableName)
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		LoadPic = Table.GetValue (-1, -1)
 		if LoadPic.startswith ("*"): # BG2 epilogues
 			ID = 63
@@ -98,10 +99,12 @@ def StartTextScreen ():
 		ID = GemRB.GetGameVar("CHAPTER") & 0x7fffffff
 		Chapter = ID + 1
 
+	# Textscreen should always stop currently playing music before starting
+	# to play any chapter music.
+	GemRB.HardEndPL ()
+
 	if MusicName != "*":
 		GemRB.LoadMusicPL (MusicName + ".mus")
-	else:
-		GemRB.HardEndPL ()
 
 	TextScreen = GemRB.LoadWindow (ID, "GUICHAP")
 	TextArea = TextScreen.GetControl (2)
@@ -114,7 +117,7 @@ def StartTextScreen ():
 	if GameCheck.IsBG1():
 		#these suckers couldn't use a fix row
 		FindTextRow (Table)
-	elif GameCheck.IsBG2():
+	elif GameCheck.IsBG2OrEE ():
 		FindTextRow (Table)
 		if LoadPic != "":
 			if ID == 63:
@@ -171,7 +174,7 @@ def ToggleAmbients (state):
 		AmbientVolume = GemRB.GetVar ("Volume Ambients")
 		GemRB.SetVar ("Volume Ambients", 0)
 
-	GemRB.UpdateAmbientsVolume ()
+	GemRB.UpdateVolume (GEM_SND_VOL_AMBIENTS)
 
 def EndTextScreen ():
 	global TextScreen, TableName
@@ -179,7 +182,7 @@ def EndTextScreen ():
 	if TextScreen:
 		TextScreen.Close ()
 		GemRB.HardEndPL ()
-		GemRB.PlaySound(None, CHAN_GUI, 0, 0, 4)
+		GemRB.PlaySound(None, CHAN_GUI, 0, 0, SND_SPEECH)
 
 	GameWin = GemRB.GetView("GAMEWIN")
 	GameWin.SetDisabled(False)
@@ -193,8 +196,7 @@ def EndTextScreen ():
 def ReplayTextScreen ():
 	global TextArea, TableName, Row
 
-	# stop any current speech, flag of 5 = GEM_SND_RELATIVE|GEM_SND_SPEECH
-	GemRB.PlaySound(None, CHAN_GUI, 0, 0, 5)
+	GemRB.PlaySound(None, CHAN_GUI, 0, 0, SND_SPEECH)
 
 	Table = GemRB.LoadTable (TableName)
 	Count = Table.GetColumnCount (Row)

@@ -21,52 +21,57 @@
 #ifndef AUDIO_H_INCLUDED
 #define AUDIO_H_INCLUDED
 
-#include <vector>
-
 #include "globals.h"
 
+#include "EnumIndex.h"
+#include "Holder.h"
 #include "MapReverb.h"
 #include "Plugin.h"
 #include "Resource.h"
-#include "Holder.h"
 
 #include <string>
+#include <vector>
 
 namespace GemRB {
 
-#define GEM_SND_RELATIVE 1
+#define GEM_SND_SPATIAL 1
 #define GEM_SND_LOOPING 2
 #define GEM_SND_SPEECH  4 // STRING_FLAGS::SPEECH
-#define GEM_SND_QUEUE	8
+#define GEM_SND_QUEUE   8
+#define GEM_SND_EFX     16
 
 #define GEM_SND_VOL_MUSIC    1
 #define GEM_SND_VOL_AMBIENTS 2
 
-#define SFX_CHAN_NARRATOR	0
-#define SFX_CHAN_AREA_AMB	1
-#define SFX_CHAN_ACTIONS	2
-#define SFX_CHAN_SWINGS		3
-#define SFX_CHAN_CASTING	4
-#define SFX_CHAN_GUI		5
-#define SFX_CHAN_DIALOG		6
-#define SFX_CHAN_CHAR0		7
-#define SFX_CHAN_CHAR1		8
-#define SFX_CHAN_CHAR2		9
-#define SFX_CHAN_CHAR3		10
-#define SFX_CHAN_CHAR4		11
-#define SFX_CHAN_CHAR5		12
-#define SFX_CHAN_CHAR6		13
-#define SFX_CHAN_CHAR7		14
-#define SFX_CHAN_CHAR8		15
-#define SFX_CHAN_CHAR9		16
-#define SFX_CHAN_MONSTER	17
-#define SFX_CHAN_HITS		18
-#define SFX_CHAN_MISSILE	19
-#define SFX_CHAN_AMB_LOOP	20
-#define SFX_CHAN_AMB_OTHER 	21
-#define SFX_CHAN_WALK_CHAR 	22
-#define SFX_CHAN_WALK_MONSTER 23
-#define SFX_CHAN_ARMOR		24
+enum class SFXChannel : unsigned int {
+	Narrator,
+	MainAmbient, // AREA_AMB in the 2da
+	Actions,
+	Swings,
+	Casting,
+	GUI,
+	Dialog,
+	Char0,
+	Char1, // all the other CharN are used derived from Char0
+	Char2,
+	Char3,
+	Char4,
+	Char5,
+	Char6,
+	Char7,
+	Char8,
+	Char9,
+	Monster,
+	Hits,
+	Missile,
+	AmbientLoop,
+	AmbientOther,
+	WalkChar,
+	WalkMonster,
+	Armor,
+
+	count
+};
 
 class AmbientMgr;
 class SoundMgr;
@@ -81,10 +86,13 @@ public:
 	virtual ~SoundHandle() = default;
 };
 
+static const EnumArray<SFXChannel, float> channelHeights { 0.0F, 0.0F, 100.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F };
+
 class GEM_EXPORT Channel {
 public:
+	Channel() = default;
 	explicit Channel(std::string str)
-	: name(std::move(str))
+		: name(std::move(str))
 	{}
 
 	const std::string& getName() const { return name; }
@@ -92,6 +100,7 @@ public:
 	void setVolume(int vol) { volume = vol; }
 	float getReverb() const { return reverb; }
 	void setReverb(float r) { reverb = r; }
+	float getHeight(SFXChannel channel) const { return channelHeights[channel]; }
 
 private:
 	std::string name;
@@ -102,25 +111,26 @@ private:
 class GEM_EXPORT Audio : public Plugin {
 public:
 	static const TypeID ID;
+
 public:
-	Audio(void);
 	virtual bool Init(void) = 0;
 	virtual Holder<SoundHandle> Play(
 		StringView ResRef,
-		unsigned int channel,
+		SFXChannel channel,
 		const Point&,
 		unsigned int flags = 0,
-		tick_t *length = nullptr
-	) = 0;
+		tick_t* length = nullptr) = 0;
 	Holder<SoundHandle> PlayMB(
 		const String& resource,
-		unsigned int channel,
+		SFXChannel channel,
 		const Point&,
 		unsigned int flags = 0,
 		tick_t* length = nullptr);
-	Holder<SoundHandle> PlayRelative(StringView ResRef, unsigned int channel, tick_t *length = 0)
-			{ return Play(ResRef, channel, Point(), GEM_SND_RELATIVE, length); }
-	
+	Holder<SoundHandle> Play(StringView ResRef, SFXChannel channel, tick_t* length = nullptr)
+	{
+		return Play(ResRef, channel, Point(), 0, length);
+	}
+
 	virtual AmbientMgr* GetAmbientMgr() { return ambim; }
 	virtual void UpdateVolume(unsigned int flags = GEM_SND_VOL_MUSIC | GEM_SND_VOL_AMBIENTS) = 0;
 	virtual bool CanPlay() = 0;
@@ -132,25 +142,27 @@ public:
 	virtual int CreateStream(ResourceHolder<SoundMgr>) = 0;
 	virtual void UpdateListenerPos(const Point&) = 0;
 	virtual Point GetListenerPos() = 0;
-	virtual bool ReleaseStream(int stream, bool HardStop=false ) = 0;
+	virtual bool ReleaseStream(int stream, bool HardStop = false) = 0;
 	virtual int SetupNewStream(int x, int y, int z,
-				ieWord gain, bool point, int ambientRange) = 0;
-	virtual tick_t QueueAmbient(int stream, const ResRef& sound) = 0;
+				   ieWord gain, bool point, int ambientRange) = 0;
+	virtual tick_t QueueAmbient(int stream, const ResRef& sound, bool spatial) = 0;
 	virtual void SetAmbientStreamVolume(int stream, int volume) = 0;
 	virtual void SetAmbientStreamPitch(int stream, int pitch) = 0;
 	virtual void QueueBuffer(int stream, unsigned short bits,
-				int channels, short* memory, int size, int samplerate) = 0;
+				 int channels, short* memory, int size, int samplerate) = 0;
 	virtual void UpdateMapAmbient(const MapReverbProperties&) {};
 
-	unsigned int CreateChannel(const std::string& name);
-	void SetChannelVolume(const std::string& name, int volume);
-	void SetChannelReverb(const std::string& name, float reverb);
-	unsigned int GetChannel(const std::string& name) const;
-	int GetVolume(unsigned int channel) const;
-	float GetReverb(unsigned int channel) const;
+	void UpdateChannel(const std::string& name, int volume, float reverb);
+	SFXChannel GetChannel(const std::string& name) const;
+	int GetVolume(SFXChannel channel) const;
+	float GetReverb(SFXChannel channel) const;
+	float GetHeight(SFXChannel channel) const;
+	void SetScreenSize(Size size) { screenSize = size; }
+
 protected:
 	AmbientMgr* ambim = nullptr;
-	std::vector<Channel> channels;
+	EnumArray<SFXChannel, Channel> channels;
+	Size screenSize;
 };
 
 }

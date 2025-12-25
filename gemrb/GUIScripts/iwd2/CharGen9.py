@@ -104,7 +104,7 @@ def BioPress():
 	global BioWindow, EditControl, BioData
 
 	BioData = GemRB.GetToken("BIO")
-	BioWindow = Window = GemRB.LoadWindow (51)
+	BioWindow = Window = GemRB.LoadWindow (51, "GUICG")
 	Button = Window.GetControl (5)
 	Button.SetText (2240)
 	Button.OnPress (RevertPress)
@@ -120,6 +120,8 @@ def BioPress():
 	Button = Window.GetControl (2)
 	Button.SetText (36788)
 	Button.OnPress (BioCancelPress)
+
+	Window.DeleteControl (3)
 
 	EditControl = Window.GetControl (4)
 	BioData = GemRB.GetToken("BIO")
@@ -185,10 +187,12 @@ def NextPress():
 	GemRB.SetPlayerStat (MyChar, IE_HITPOINTS, GemRB.HasFeat (MyChar, FEAT_TOUGHNESS) * 3, 0)
 	LUCommon.SetupHP (MyChar)
 
-	TmpTable=GemRB.LoadTable ("repstart")
-	t = TmpTable.GetValue (GemRB.GetVar ("Alignment"), 0)
+	# must be set, see #2091
+	TmpTable = GemRB.LoadTable ("repstart")
+	t = TmpTable.GetValue (GemRB.GetVar ("Alignment") - 1, 0) * 10
 	GemRB.SetPlayerStat (MyChar, IE_REPUTATION, t)
-	TmpTable=GemRB.LoadTable ("strtgold")
+
+	TmpTable = GemRB.LoadTable ("strtgold")
 	a = TmpTable.GetValue (Class, 1) #number of dice
 	b = TmpTable.GetValue (Class, 0) #size
 	c = TmpTable.GetValue (Class, 2) #adjustment
@@ -201,7 +205,7 @@ def NextPress():
 		e=0
 	t = GemRB.Roll(a,b,c)*d+e
 	GemRB.SetPlayerStat (MyChar, IE_GOLD, t)
-	GemRB.SetPlayerStat (MyChar, IE_HATEDRACE, GemRB.GetVar ("HatedRace") )
+	GemRB.SetPlayerStat (MyChar, IE_HATEDRACE, GemRB.GetVar ("HatedRace") or 0)
 
 	GUICommon.SetColorStat (MyChar, IE_HAIR_COLOR, GemRB.GetVar ("Color1") )
 	GUICommon.SetColorStat (MyChar, IE_SKIN_COLOR, GemRB.GetVar ("Color2") )
@@ -213,7 +217,8 @@ def NextPress():
 	GemRB.SetPlayerStat (MyChar, IE_EA, 2 )
 	GemRB.SetPlayerName (MyChar, GemRB.GetToken ("CHARNAME"), 0)
 
-	# feats are set already in the Feats step
+	# feats are set already in the Feats step, but not all their consequences, since users could backpedal
+	IDLUCommon.LearnFeatInnates (MyChar, MyChar, True)
 
 	#does all the rest
 	LargePortrait = GemRB.GetToken ("LargePortrait")

@@ -32,21 +32,18 @@
 #include "Map.h"
 #include "PluginMgr.h"
 #include "ScriptEngine.h"
+
+#include "GUI/GameControl.h"
 #include "GameScript/GSUtils.h"
 #include "GameScript/Matching.h"
-#include "GUI/GameControl.h"
 #include "Scriptable/Actor.h"
 
 namespace GemRB {
 
-static const int StatValues[9]={
-IE_EA, IE_FACTION, IE_TEAM, IE_GENERAL, IE_RACE, IE_CLASS, IE_SPECIFIC,
-IE_SEX, IE_ALIGNMENT };
-
 static PluginHolder<DataFileMgr> GetIniFile(const ResRef& DefaultArea)
 {
 	//the lack of spawn ini files is not a serious problem, happens all the time
-	if (!gamedata->Exists( DefaultArea, IE_INI_CLASS_ID)) {
+	if (!gamedata->Exists(DefaultArea, IE_INI_CLASS_ID)) {
 		return {};
 	}
 
@@ -54,18 +51,18 @@ static PluginHolder<DataFileMgr> GetIniFile(const ResRef& DefaultArea)
 	if (!inifile) {
 		return {};
 	}
-	if (!core->IsAvailable( IE_INI_CLASS_ID )) {
+	if (!core->IsAvailable(IE_INI_CLASS_ID)) {
 		Log(ERROR, "IniSpawn", "No INI Importer Available.");
 		return {};
 	}
 
 	PluginHolder<DataFileMgr> ini = MakePluginHolder<DataFileMgr>(IE_INI_CLASS_ID);
-	ini->Open(std::unique_ptr<DataStream>{inifile});
+	ini->Open(std::unique_ptr<DataStream> { inifile });
 	return ini;
 }
 
 IniSpawn::IniSpawn(Map* owner, const ResRef& defaultArea)
-: map(owner)
+	: map(owner)
 {
 	this->detail_level = core->GetDictionary().Get("Detail Level", 0);
 
@@ -127,7 +124,7 @@ IniSpawn::IniSpawn(Map* owner, const ResRef& defaultArea)
 		auto events = Explode<StringView, ieVariable>(s);
 		auto eventcount = events.size();
 		eventspawns.resize(eventcount);
-		while(eventcount--) {
+		while (eventcount--) {
 			ReadSpawnEntry(inifile.get(), events[eventcount], eventspawns[eventcount]);
 		}
 	}
@@ -288,7 +285,7 @@ void IniSpawn::PrepareSpawnPoints(const DataFileMgr* iniFile, StringView critter
 	// determine the creature orientation if "point_select" is set to 'e'
 	// However, both attributes had to be specified to work
 	StringView spawnFacingGlobal = iniFile->GetKeyAsString(critterName, "spawn_facing_global");
-	if (spawnFacingGlobal  && critter.SpawnMode == 'e') {
+	if (spawnFacingGlobal && critter.SpawnMode == 'e') {
 		critter.Orientation = static_cast<int>(CheckVariable(map, ieVariable(spawnFacingGlobal.begin() + 8), ResRef(spawnFacingGlobal)));
 	}
 
@@ -378,7 +375,7 @@ static void AssignScripts(const DataFileMgr* iniFile, CritterEntry& critter, Str
 // control_var, spec_area, check_crowd, spawn_time_of_day, check_view_port (used!) & check_by_view_port
 CritterEntry IniSpawn::ReadCreature(const DataFileMgr* inifile, StringView crittername) const
 {
-	CritterEntry critter{};
+	CritterEntry critter {};
 
 	// does its section even exist?
 	auto lookup = inifile->find(crittername);
@@ -395,9 +392,9 @@ CritterEntry IniSpawn::ReadCreature(const DataFileMgr* inifile, StringView critt
 	if (s && s.length() >= 24) {
 		ieDword value = 0;
 		ieDword j = 1;
-		for(int i = 0; i < 24 && s[i]; i++) {
+		for (int i = 0; i < 24 && s[i]; i++) {
 			if (s[i] == '0' || s[i] == 'o') value |= j;
-			j<<=1;
+			j <<= 1;
 		}
 		//turn off individual bits marked by a 24 long string scheduling
 		//example: '0000xxxxxxxxxxxxxxxx00000000'
@@ -414,9 +411,17 @@ CritterEntry IniSpawn::ReadCreature(const DataFileMgr* inifile, StringView critt
 		ieDword level;
 
 		switch (s[0]) {
-			case 'h': case 'H': level = 2; break;
-			case 'm': case 'M': level = 1; break;
-			default: level = 0; break;
+			case 'h':
+			case 'H':
+				level = 2;
+				break;
+			case 'm':
+			case 'M':
+				level = 1;
+				break;
+			default:
+				level = 0;
+				break;
 		}
 		//If the detail level is lower than this creature's detail level,
 		//skip this entry, creature_count is 0, so it will be ignored at evaluation of the spawn
@@ -445,11 +450,11 @@ CritterEntry IniSpawn::ReadCreature(const DataFileMgr* inifile, StringView critt
 
 	//add this to specvar at each spawn
 	int ps = inifile->GetKeyAsInt(crittername, "spec_var_inc", 0);
-	critter.SpecVarInc=ps;
+	critter.SpecVarInc = ps;
 
 	//use this value with spec_var_operation to determine spawn
 	ps = inifile->GetKeyAsInt(crittername, "spec_var_value", 0);
-	critter.SpecVarValue=ps;
+	critter.SpecVarValue = ps;
 	//this operation uses DiffCore
 	s = inifile->GetKeyAsString(crittername, "spec_var_operation", "");
 	critter.SpecVarOperator = GetDiffMode(s);
@@ -494,7 +499,7 @@ CritterEntry IniSpawn::ReadCreature(const DataFileMgr* inifile, StringView critt
 	critter.Orientation2 = ps;
 
 	static const std::string aiStats[] = { "ai_ea", "ai_faction", "ai_team", "ai_general", "ai_race", "ai_class", "ai_specifics", "ai_gender", "ai_alignment" };
-	for (int i = AI_EA; i <= AI_ALIGNMENT; i++)  {
+	for (int i = 0; i < 9; i++) {
 		ps = inifile->GetKeyAsInt(crittername, aiStats[i], -1);
 		if (ps != -1) critter.SetSpec[i] = static_cast<ieByte>(ps);
 	}
@@ -502,9 +507,9 @@ CritterEntry IniSpawn::ReadCreature(const DataFileMgr* inifile, StringView critt
 	s = inifile->GetKeyAsString(crittername, "spec");
 	if (s) {
 		ieByte x[9];
-		
+
 		ps = sscanf(s.c_str(), "[%hhu.%hhu.%hhu.%hhu.%hhu.%hhu.%hhu.%hhu.%hhu]", x, x + 1, x + 2, x + 3, x + 4, x + 5,
-			x + 6, x + 7, x + 8);
+			    x + 6, x + 7, x + 8);
 		if (ps == 0) {
 			critter.ScriptName = ieVariable(s);
 			critter.Flags |= CF_CHECK_NAME;
@@ -519,16 +524,22 @@ CritterEntry IniSpawn::ReadCreature(const DataFileMgr* inifile, StringView critt
 	AssignScripts(inifile, critter, crittername);
 
 	// remaining flag bits
-	// area diff flags disable spawns based on game difficulty in iwd2
-	static const std::map<int, std::string> flagNames = { { CF_DEATHVAR, "death_scriptname" }, { CF_FACTION, "death_faction" }, { CF_TEAM, "death_team" }, { CF_BUDDY, "auto_buddy" }, { CF_NO_DIFF_1, "area_diff_1" }, { CF_NO_DIFF_2, "area_diff_2" }, { CF_NO_DIFF_3, "area_diff_3" } };
-	for (const auto& flag : flagNames)  {
+	static const std::map<int, std::string> flagNames = { { CF_DEATHVAR, "death_scriptname" }, { CF_FACTION, "death_faction" }, { CF_TEAM, "death_team" }, { CF_BUDDY, "auto_buddy" } };
+	for (const auto& flag : flagNames) {
 		if (inifile->GetKeyAsBool(crittername, flag.second, false)) {
+			critter.Flags |= flag.first;
+		}
+	}
+	// area diff flags disable spawns based on game difficulty in iwd2, but they are all on by default
+	static const std::map<int, std::string> flagNames2 = { { CF_NO_DIFF_1, "area_diff_1" }, { CF_NO_DIFF_2, "area_diff_2" }, { CF_NO_DIFF_3, "area_diff_3" } };
+	for (const auto& flag : flagNames2) {
+		if (!inifile->GetKeyAsBool(crittername, flag.second, true)) {
 			critter.Flags |= flag.first;
 		}
 	}
 
 	static const std::string deathCounters[] = { "good_mod", "law_mod", "lady_mod", "murder_mod" };
-	for (int i = DC_GOOD; i <= DC_MURDER; i++)  {
+	for (int i = DC_GOOD; i <= DC_MURDER; i++) {
 		ps = inifile->GetKeyAsInt(crittername, deathCounters[i], 0);
 		if (ps) {
 			critter.Flags |= CF_GOOD << i;
@@ -593,8 +604,8 @@ void IniSpawn::RespawnNameless()
 
 	if (NamelessSpawnPoint.IsZero()) {
 		game->JoinParty(nameless, JP_INITPOS);
-		NamelessSpawnPoint=nameless->Pos;
-		NamelessSpawnArea = nameless->Area;
+		NamelessSpawnPoint = nameless->Pos;
+		NamelessSpawnArea = nameless->AreaName;
 	}
 
 	nameless->Resurrect(NamelessSpawnPoint);
@@ -657,21 +668,21 @@ void IniSpawn::SpawnCreature(const CritterEntry& critter) const
 	}
 
 	if (critter.Flags & CF_NO_DIFF_MASK) {
-		ieDword diff_bit;
+		int diff_bit;
 
-		ieDword difficulty = core->GetDictionary().Get("Difficulty Level", 0);
+		ieByte difficulty = map->AreaDifficulty;
 		switch (difficulty) {
-		case 0:
-			diff_bit = CF_NO_DIFF_1;
-			break;
-		case 1:
-			diff_bit = CF_NO_DIFF_2;
-			break;
-		case 2:
-			diff_bit = CF_NO_DIFF_3;
-			break;
-		default:
-			diff_bit = 0;
+			case 1:
+				diff_bit = CF_NO_DIFF_1;
+				break;
+			case 2:
+				diff_bit = CF_NO_DIFF_2;
+				break;
+			case 4:
+				diff_bit = CF_NO_DIFF_3;
+				break;
+			default:
+				diff_bit = 0;
 		}
 		if (critter.Flags & diff_bit) {
 			return;
@@ -691,7 +702,7 @@ void IniSpawn::SpawnCreature(const CritterEntry& critter) const
 			object.objectFields[i] = critter.Spec[i];
 		}
 
-		int cnt = GetObjectCount(map, &object);
+		int cnt = GetObjectCount(map, &object, false);
 		if (cnt >= critter.TotalQuantity) {
 			return;
 		}
@@ -719,8 +730,10 @@ void IniSpawn::SpawnCreature(const CritterEntry& critter) const
 		SetVariable(map, critter.PointSelectVar, value + 1, critter.PointSelectContext);
 	}
 
-	SetVariable(map, critter.SpecVar, specvar + (ieDword) critter.SpecVarInc, critter.SpecContext);
+	SetVariable(map, critter.SpecVar, ieDword((int) specvar + critter.SpecVarInc), critter.SpecContext);
 	map->AddActor(cre, true);
+
+	static const int StatValues[9] = { IE_EA, IE_FACTION, IE_TEAM, IE_GENERAL, IE_RACE, IE_CLASS, IE_SPECIFIC, IE_SEX, IE_ALIGNMENT };
 	for (x = 0; x < 9; x++) {
 		if (critter.SetSpec[x]) {
 			cre->SetBase(StatValues[x], critter.SetSpec[x]);
@@ -729,6 +742,9 @@ void IniSpawn::SpawnCreature(const CritterEntry& critter) const
 	cre->SetPosition(critter.SpawnPoint, true);
 	cre->SetOrientation(ClampToOrientation(critter.Orientation), false);
 
+	//Empty critter script name can remove worked cre script name.
+	//As a result, PST script 1500CS1.bsc step MoveToObject("Hargrim")
+	//does not work because it doesn’t find a character with this script name.
 	if (!critter.ScriptName.empty()) {
 		cre->SetScriptName(critter.ScriptName);
 	}
@@ -778,9 +794,7 @@ void IniSpawn::SpawnCreature(const CritterEntry& critter) const
 	SetScript(cre, critter.AreaScript, SCR_AREA);
 	SetScript(cre, critter.SpecificScript, SCR_SPECIFICS);
 
-	if (!critter.Dialog.IsEmpty()) {
-		cre->SetDialog(critter.Dialog);
-	}
+	cre->SetDialog(critter.Dialog);
 }
 
 void IniSpawn::SpawnGroup(SpawnEntry& event) const
@@ -796,7 +810,7 @@ void IniSpawn::SpawnGroup(SpawnEntry& event) const
 			return;
 		}
 	}
-	
+
 	for (auto& critter : event.critters) {
 		if (!Schedule(critter.TimeOfDay, event.lastSpawndate)) {
 			continue;

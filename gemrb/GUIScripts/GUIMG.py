@@ -27,6 +27,7 @@ import GUICommon
 import CommonTables
 import GUICommonWindows
 import Spellbook
+from GUICommon import BindControlCallbackParams
 from GUIDefines import *
 from ie_stats import *
 from ie_spells import LS_MEMO
@@ -43,13 +44,13 @@ ContTarg = None
 SpellType = None
 Level = 1
 
-FlashResRef = "FLASHBR" if GameCheck.IsBG2() else "FLASH"
+FlashResRef = "FLASHBR" if GameCheck.IsBG2OrEE () else "FLASH"
 
 def ToggleSpellWindow (btn):
 	global Sorcerer
 	# added game check, since although sorcerers have almost no use for their spellbook, there's no other way to quickly check spell descriptions
 	pc = GemRB.GameGetSelectedPCSingle ()
-	Sorcerer = GameCheck.IsBG2() and Spellbook.HasSorcererBook (pc)
+	Sorcerer = GameCheck.IsBG2OrEE () and Spellbook.HasSorcererBook (pc) > 0
 	
 	ToggleSpellWindow.Args = btn
 	
@@ -68,15 +69,29 @@ def InitMageWindow (window):
 	Button = MageWindow.GetControl (2)
 	Button.OnPress (MageNextLevelPress)
 
-	#unknown usage
+	# contingencies
 	Button = MageWindow.GetControl (55)
+	if GameCheck.IsBG2EE ():
+		Button = MageWindow.GetControl (59)
 	if Button:
-		Button.SetState (IE_GUI_BUTTON_LOCKED)
+		Button.OnPress (OpenContingenciesWindow)
+		pc = GemRB.GameGetSelectedPCSingle ()
+		if GemRB.CountEffects (pc, "CastSpellOnCondition", -1, -1) + GemRB.CountEffects (pc, "Sequencer:Store", -1, -1) == 0:
+			Button.SetState (IE_GUI_BUTTON_DISABLED)
+			Button.SetText (None)
+		else:
+			Button.SetState (IE_GUI_BUTTON_ENABLED)
+			Button.SetText (34586)
 
 	#setup level buttons
-	if GameCheck.IsBG2():
+	spellLevelOffset = None
+	if GameCheck.IsBG2 ():
+		spellLevelOffset = 56
+	elif GameCheck.IsBG2EE ():
+		spellLevelOffset = 61
+	if spellLevelOffset:
 		for i in range (9):
-			Button = MageWindow.GetControl (56 + i)
+			Button = MageWindow.GetControl (spellLevelOffset + i)
 			Button.OnPress (RefreshMageLevel)
 			Button.SetFlags (IE_GUI_BUTTON_RADIOBUTTON, OP_OR)
 			Button.SetVarAssoc ("MageSpellLevel", i)
@@ -90,24 +105,46 @@ def InitMageWindow (window):
 			Button.SetSprites ("SPELFRAM",0,0,0,0,0)
 			Button.SetState (IE_GUI_BUTTON_LOCKED)
 			Button.SetAnimation (None)
-			Button.SetVarAssoc ("SpellButton", i)
+			Button.SetVarAssoc ("Memorized", i)
+
+	# reposition from a 4x3 grid to the bottom or top
+	# for mages that's the memoed spells, for sorcerers the known
+	if GameCheck.IsBG2EE ():
+		for i in range (12):
+			Button = MageWindow.GetControl (3 + i + 24 * int(Sorcerer))
+			row = i // 4
+			col = i % 4
+			width = 54 + 8 * (1 + int(Sorcerer)) # slot + padding
+			# don't bother transposing 4x3 grid to 3x4 grid
+			if Sorcerer:
+				frame = Button.GetFrame ()
+				x = frame["x"] - (314 - 166)
+				y = frame["y"] - (536 - 234)
+			else:
+				x = 100 + row * width * 4 + col * width + 66 * int(Sorcerer)
+				y = 644
+			Button.SetPos (x, y)
+			# the bam isn't centered, so let's cheat
+			Button.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_OR)
+
+		# some extra slot button, sorcerer button and a label on a button
+		MageWindow.DeleteControl (51)
+		if Sorcerer:
+			MageWindow.DeleteControl (59)
+		else:
+			MageWindow.DeleteControl (0x10000000 + 51)
 
 	# Setup book spells buttons
 	for i in range (GUICommon.GetGUISpellButtonCount()):
 		Button = MageWindow.GetControl (27 + i)
-		Button.SetFlags (IE_GUI_BUTTON_NO_IMAGE | IE_GUI_BUTTON_PLAYONCE | IE_GUI_BUTTON_PLAYALWAYS, OP_SET)
+		Button.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_SET)
 		Button.SetState (IE_GUI_BUTTON_LOCKED)
-		Button.SetVarAssoc ("SpellButton", 100 + i)
+		Button.SetValue (i)
 
 	UpdateMageWindow (MageWindow)
 	return
 
 def UpdateMageWindow (MageWindow):
-	global MageMemorizedSpellList, MageKnownSpellList
-
-	MageMemorizedSpellList = []
-	MageKnownSpellList = []
-
 	pc = GemRB.GameGetSelectedPCSingle ()
 	spelltype = IE_SPELL_TYPE_WIZARD
 	level = MageSpellLevel
@@ -117,7 +154,7 @@ def UpdateMageWindow (MageWindow):
 	GUICommon.AdjustWindowVisibility (MageWindow, pc, CantCast)
 
 	Label = MageWindow.GetControl (0x10000032)
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		GemRB.SetToken ("SPELLLEVEL", str(level + 1))
 		Label.SetText (10345)
 	else:
@@ -138,24 +175,21 @@ def UpdateMageWindow (MageWindow):
 			if i < mem_cnt:
 				ms = GemRB.GetMemorizedSpell (pc, spelltype, level, i)
 				Button.SetSpellIcon (ms['SpellResRef'], 0)
-				Button.SetFlags (IE_GUI_BUTTON_PICTURE | IE_GUI_BUTTON_PLAYONCE | IE_GUI_BUTTON_PLAYALWAYS, OP_SET)
+				if not GameCheck.IsBG2EE ():
+					Button.SetFlags (IE_GUI_BUTTON_PICTURE, OP_SET)
 				if ms['Flags']:
 					Button.OnPress (OpenMageSpellUnmemorizeWindow)
 				else:
 					Button.OnPress (OnMageUnmemorizeSpell)
-				Button.OnRightPress (OpenMageSpellInfoWindow)
-				MageMemorizedSpellList.append (ms['SpellResRef'])
-				Button.EnableBorder (0, ms['Flags'] == 0)
 				spell = GemRB.GetSpell (ms['SpellResRef'])
-				if not spell:
-					print("Missing memorised spell!", ms['SpellResRef'])
-					continue
+				Button.OnRightPress(BindControlCallbackParams(OpenMageSpellInfoWindow, spell, Button.VarName))
+				Button.EnableBorder (0, ms['Flags'] == 0)
 				Button.SetTooltip (spell['SpellName'])
 			else:
 				if i < max_mem_cnt:
-					Button.SetFlags (IE_GUI_BUTTON_NORMAL | IE_GUI_BUTTON_PLAYONCE | IE_GUI_BUTTON_PLAYALWAYS, OP_SET)
+					Button.SetFlags (IE_GUI_BUTTON_NORMAL, OP_SET)
 				else:
-					Button.SetFlags (IE_GUI_BUTTON_NO_IMAGE | IE_GUI_BUTTON_PLAYONCE | IE_GUI_BUTTON_PLAYALWAYS, OP_SET)
+					Button.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_SET)
 				Button.OnPress (None)
 				Button.OnRightPress (None)
 				Button.SetTooltip ('')
@@ -176,12 +210,9 @@ def UpdateMageWindow (MageWindow):
 		ks = GemRB.GetKnownSpell (pc, spelltype, level, i)
 		Button.SetSpellIcon (ks['SpellResRef'], 0)
 		Button.OnPress (OnMageMemorizeSpell)
-		Button.OnRightPress (OpenMageSpellInfoWindow)
-		MageKnownSpellList.append (ks['SpellResRef'])
 		spell = GemRB.GetSpell (ks['SpellResRef'])
-		if not spell:
-			print("Missing known spell!", ms['SpellResRef'])
-			continue
+		spell['CurrentIndex'] = i # save it for later
+		Button.OnRightPress (BindControlCallbackParams(OpenMageSpellInfoWindow, spell, Button.VarName))
 		Button.SetTooltip (spell['SpellName'])
 
 	if known_cnt == 0: i = -1
@@ -203,18 +234,18 @@ def MageSelectionChanged (oldwin):
 	UpdateMageWindow(oldwin)
 	
 	pc = GemRB.GameGetSelectedPCSingle ()
-	Sorcerer = GameCheck.IsBG2() and Spellbook.HasSorcererBook (pc)
+	Sorcerer = GameCheck.IsBG2OrEE () and Spellbook.HasSorcererBook (pc)
 
 	if Sorcerer:
 		OpenSorcererWindow (ToggleSpellWindow.Args)
 	else:
 		OpenMageWindow (ToggleSpellWindow.Args)
 
-ToggleMageWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIMG", GUICommonWindows.ToggleWindow, InitMageWindow, MageSelectionChanged, GUICommonWindows.DefaultWinPos, True)
-OpenMageWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIMG", GUICommonWindows.OpenWindowOnce, InitMageWindow, MageSelectionChanged, GUICommonWindows.DefaultWinPos, True)
+ToggleMageWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIMG", GUICommonWindows.ToggleWindow, InitMageWindow, MageSelectionChanged, True)
+OpenMageWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIMG", GUICommonWindows.OpenWindowOnce, InitMageWindow, MageSelectionChanged, True)
 
-ToggleSorcererWindow = GUICommonWindows.CreateTopWinLoader(8, "GUIMG", GUICommonWindows.ToggleWindow, InitMageWindow, MageSelectionChanged, GUICommonWindows.DefaultWinPos, True)
-OpenSorcererWindow = GUICommonWindows.CreateTopWinLoader(8, "GUIMG", GUICommonWindows.OpenWindowOnce, InitMageWindow, MageSelectionChanged, GUICommonWindows.DefaultWinPos, True)
+ToggleSorcererWindow = GUICommonWindows.CreateTopWinLoader(8, "GUIMG", GUICommonWindows.ToggleWindow, InitMageWindow, MageSelectionChanged, True)
+OpenSorcererWindow = GUICommonWindows.CreateTopWinLoader(8, "GUIMG", GUICommonWindows.OpenWindowOnce, InitMageWindow, MageSelectionChanged, True)
 
 def MagePrevLevelPress ():
 	global MageSpellLevel
@@ -239,7 +270,7 @@ def RefreshMageLevel ():
 	UpdateMageWindow (MageWindow)
 	return
 
-def OpenMageSpellInfoWindow ():
+def OpenMageSpellInfoWindow (spell, kind):
 	Window = GemRB.LoadWindow (3, "GUIMG")
 
 	#back
@@ -248,27 +279,20 @@ def OpenMageSpellInfoWindow ():
 	Button.OnPress (Window.Close)
 
 	#erase
-	index = GemRB.GetVar ("SpellButton")
 	Button = Window.GetControl (6)
 	if Button:
-		if index < 100 or Sorcerer:
+		if kind == "Memorized" or Sorcerer:
 			Button.OnPress (None)
 			Button.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_SET)
 		else:
-			Button.OnPress (lambda: OpenMageSpellRemoveWindow(Window))
+			Button.OnPress (lambda: OpenMageSpellRemoveWindow(Window, spell['CurrentIndex']))
 			Button.SetText (63668)
-	if index < 100:
-		ResRef = MageMemorizedSpellList[index]
-	else:
-		ResRef = MageKnownSpellList[index - 100]
-
-	spell = GemRB.GetSpell (ResRef)
 
 	Label = Window.GetControl (0x0fffffff)
 	Label.SetText (spell['SpellName'])
 
 	Button = Window.GetControl (2)
-	Button.SetSpellIcon (ResRef, 1)
+	Button.SetSpellIcon (spell['SpellResRef'], 1)
 
 	Text = Window.GetControl (3)
 	Text.SetText (spell['SpellDesc'])
@@ -276,25 +300,30 @@ def OpenMageSpellInfoWindow ():
 	Window.ShowModal (MODAL_SHADOW_GRAY)
 	return
 
-def OnMageMemorizeSpell ():
+def OnMageMemorizeSpell (btn):
 	pc = GemRB.GameGetSelectedPCSingle ()
 	level = MageSpellLevel
 	spelltype = IE_SPELL_TYPE_WIZARD
+	Window = btn.Window
 
-	index = GemRB.GetVar ("SpellButton") - 100
+	def Complete():
+		mem_cnt = GemRB.GetMemorizedSpellsCount (pc, spelltype, level, False)
+		AnimBtn = Window.GetControl(mem_cnt + 2)
+		AnimBtn.SetAnimation(FlashResRef, 0, A_ANI_PLAYONCE | A_ANI_BLEND)
+		AnimBtn.OnAnimEnd(lambda: UpdateMageWindow(Window))
+		UpdateMageWindow(Window)
 
+	index = btn.Value
 	if GemRB.MemorizeSpell (pc, spelltype, level, index):
 		GemRB.PlaySound ("GAM_24")
 		Button = MageWindow.GetControl(index + 27)
-		Button.SetAnimation (FlashResRef, 0, 0x80)
-		mem_cnt = GemRB.GetMemorizedSpellsCount (pc, spelltype, level, False)
-		Button = MageWindow.GetControl(mem_cnt + 2)
-		Button.SetAnimation (FlashResRef, 0, 0x80)
-		UpdateMageWindow (MageWindow)
+		Button.SetAnimation (FlashResRef, 0, A_ANI_PLAYONCE | A_ANI_BLEND)
+		Button.OnAnimEnd(Complete)
+
 	return
 
-def OpenMageSpellRemoveWindow (parentWin):
-	if GameCheck.IsBG2():
+def OpenMageSpellRemoveWindow (parentWin, spellIndex):
+	if GameCheck.IsBG2OrEE ():
 		Window = GemRB.LoadWindow (101, "GUIMG")
 	else:
 		Window = GemRB.LoadWindow (5, "GUIMG")
@@ -307,12 +336,12 @@ def OpenMageSpellRemoveWindow (parentWin):
 	Button = Window.GetControl (0)
 	Button.SetText (17507)
 	
-	def RemoveSpell ():
-		OnMageRemoveSpell()
+	def RemoveSpell (spellIndex):
+		OnMageRemoveSpell (spellIndex)
 		Window.Close()
 		parentWin.Close()
 	
-	Button.OnPress (RemoveSpell)
+	Button.OnPress (lambda: RemoveSpell(spellIndex))
 	Button.MakeDefault()
 
 	# Cancel
@@ -325,7 +354,7 @@ def OpenMageSpellRemoveWindow (parentWin):
 	return
 
 def OpenMageSpellUnmemorizeWindow (btn):
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		Window = GemRB.LoadWindow (101, "GUIMG")
 	else:
 		Window = GemRB.LoadWindow (5, "GUIMG")
@@ -364,19 +393,17 @@ def OnMageUnmemorizeSpell (btn):
 	if GemRB.UnmemorizeSpell (pc, spelltype, level, index):
 		GemRB.PlaySound ("GAM_44")
 		Button = MageWindow.GetControl(index + 3)
-		Button.SetAnimation (FlashResRef, 0, 0x80)
-		UpdateMageWindow (MageWindow)
+		Button.SetAnimation (FlashResRef, 0, A_ANI_PLAYONCE | A_ANI_BLEND)
+		Button.OnAnimEnd(lambda: UpdateMageWindow (MageWindow))
 	return
 
-def OnMageRemoveSpell ():
+def OnMageRemoveSpell (spellIndex):
 	pc = GemRB.GameGetSelectedPCSingle ()
 	level = MageSpellLevel
 	spelltype = IE_SPELL_TYPE_WIZARD
 
-	index = GemRB.GetVar ("SpellButton")-100
-
 	#remove spell from book
-	GemRB.RemoveSpell (pc, spelltype, level, index)
+	GemRB.RemoveSpell (pc, spelltype, level, spellIndex)
 	UpdateMageWindow (MageWindow)
 	return
 
@@ -458,11 +485,9 @@ def OpenSequencerWindow ():
 		TargLabel.SetVisible (False)
 	else:
 		CondSelect.OnSelect (ContingencyHelpCondition)
-		CondSelect.SetColor (ColorWhitish, TA_COLOR_OPTIONS)
 		CondSelect.SetOptions ([elem[0] for elem in ContCond], "ContCond", 0)
 
 		TargSelect.OnSelect (ContingencyHelpTarget)
-		TargSelect.SetColor (ColorWhitish, TA_COLOR_OPTIONS)
 		if Target:
 			TargSelect.SetOptions ([ContTarg[0][0]], "ContTarg", 1)
 		else:
@@ -729,6 +754,76 @@ def LevelDecrease():
 		Level = Level-1
 	UpdateSpellList()
 	return
+
+def OpenContingenciesWindow():
+	global OtherWindow
+
+	OtherWindow = Window = GemRB.LoadWindow (7, "GUIMG")
+
+	OkButton = Window.GetControl (2)
+	OkButton.SetText (11973)
+	OkButton.OnPress (Window.Close)
+	OkButton.MakeDefault ()
+
+	pc = GemRB.GameGetSelectedPCSingle ()
+	contingencies = GemRB.GetEffects (pc, "CastSpellOnCondition")
+	sequencers = GemRB.GetEffects (pc, "Sequencer:Store")
+	targets = [ 30992, 30990, 30994, "Anyone"]
+	conditions = [ "Was hit", 30973, 30975, 30982, 30984, 30986, 30988, "Attacked", "Near 4'", "Near 10'", "Every round", "Took damage", "Killed", "Time of day", "In personal space", "State", "I died", "Someone died", "Got turned", "HP <", "HP% <", "Spell state" ]
+	for cidx in range(5):
+		rowID1 = Window.GetControl (0x10000000 + 31 + cidx)
+		rowID2 = Window.GetControl (0x10000000 + 37 + cidx)
+		rowID3 = Window.GetControl (0x10000000 + 43 + cidx)
+		spellBtn1 = Window.GetControl (25 + cidx)
+		spellBtn2 = Window.GetControl (31 + cidx)
+		spellBtn3 = Window.GetControl (37 + cidx)
+		handBtn = Window.GetControl (43 + cidx)
+		spellBtn1.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_OR)
+		spellBtn2.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_OR)
+		spellBtn3.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_OR)
+		spellBtn1.SetState (IE_GUI_BUTTON_LOCKED)
+		spellBtn2.SetState (IE_GUI_BUTTON_LOCKED)
+		spellBtn3.SetState (IE_GUI_BUTTON_LOCKED)
+		if cidx < len(contingencies):
+			rowID1.SetText (str(cidx + 1))
+			cont = contingencies[cidx]
+			rowID2.SetText (conditions[cont["Param2"]])
+			rowID3.SetText (targets[cont["Param1"]])
+
+			spellBtn1.SetBAM (cont["Spell1Icon"][:-1] + "b", 0, 0)
+			if cont["Resource2"] != "":
+				spellBtn2.SetBAM (cont["Spell2Icon"][:-1] + "b", 0, 0)
+			if cont["Resource3"] != "":
+				spellBtn3.SetBAM (cont["Spell3Icon"][:-1] + "b", 0, 0)
+
+			# warning: can take out too many
+			handBtn.OnPress (lambda: GemRB.DispelEffect (pc, "CastSpellOnCondition", cont["Param2"]))
+		elif cidx < len(contingencies) + len(sequencers):
+			rowID1.SetText (str(cidx + 1))
+			cont = sequencers[cidx - len(contingencies)]
+			rowID2.SetText (25951)
+			rowID3.SetText (None)
+
+			spellBtn1.SetBAM (cont["Spell1Icon"][:-1] + "b", 0, 0)
+			if cont["Resource2"] != "":
+				spellBtn2.SetBAM (cont["Spell2Icon"][:-1] + "b", 0, 0)
+			if cont["Resource3"] != "":
+				spellBtn3.SetBAM (cont["Spell3Icon"][:-1] + "b", 0, 0)
+
+			# warning: can take out too many
+			handBtn.OnPress (lambda: GemRB.DispelEffect (pc, "CastSpellOnCondition", cont["Param2"]))
+		else:
+			rowID1.SetText (None)
+			rowID2.SetText (None)
+			rowID3.SetText (None)
+			spellBtn1.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_SET)
+			spellBtn1.SetState (IE_GUI_BUTTON_DISABLED)
+			spellBtn2.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_SET)
+			spellBtn2.SetState (IE_GUI_BUTTON_DISABLED)
+			spellBtn3.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_SET)
+			spellBtn3.SetState (IE_GUI_BUTTON_DISABLED)
+			handBtn.SetFlags (IE_GUI_BUTTON_NO_IMAGE, OP_OR)
+
 
 ###################################################
 # End of file GUIMG.py

@@ -1,3 +1,5 @@
+1 ActionOverride(O:Actor*,A:Action*)
+2 AddWayPoint(P:WayPoint*)
 23 MoveToPoint(P:Point*)
 30 SetGlobal(S:Name*,S:Area*,I:Value*)
 49 MoveViewPoint(P:Target*,I:ScrollSpeed*Scroll)
@@ -28,7 +30,6 @@
 178 BreakInstants()
 186 EndCredits()
 200 RandomWalkContinuous()
-248 RunToPoint(P:Point*)
 254 ScreenShake(P:Point*,I:Duration*)
 272 CreateVisualEffect(S:Object*,P:Location*)
 301 AmbientActivate(O:Object*,I:State*Boolean)

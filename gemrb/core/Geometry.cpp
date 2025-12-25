@@ -21,18 +21,58 @@
 
 #include "Geometry.h"
 
+#include <cmath>
+
 namespace GemRB {
 
-double AngleFromPoints(const Point& p1, const Point& p2)
+// Fast approximation of atan2(y, x)
+// with a maximum error of 0.1620 degrees
+// rcor's rational approximation that can be arbitrarily
+// improved if we ever want greater precision
+static float pseudoAtan2(float y, float x)
 {
-	double xdiff = p1.x - p2.x;
-	double ydiff = p1.y - p2.y;
-	
-	double angle = std::atan2(ydiff, xdiff);
+	static const uint32_t signMask = 0x80000000;
+	static const float b = 0.596227F;
+	if (x == 0 && y == 0) return -M_PI_2;
+
+	// Extract the sign bits
+	uint32_t xS = signMask & (uint32_t&) x;
+	uint32_t yS = signMask & (uint32_t&) y;
+
+	// Determine the quadrant offset
+	float q = float((~xS & yS) >> 29 | xS >> 30);
+
+	// Calculate the arctangent in the first quadrant
+	float bxy = std::fabs(b * x * y);
+	float num = bxy + y * y;
+	float atan1q = num / (x * x + bxy + num);
+
+	// Translate it to the proper quadrant
+	uint32_t uatan2q = (xS ^ yS) | (uint32_t&) atan1q;
+	return (q + (float&) uatan2q) * M_PI_2;
+}
+
+float_t AngleFromPoints(float_t y, float_t x)
+{
+	return pseudoAtan2(y, x);
+}
+
+float_t AngleFromPoints(const Point& p1, const Point& p2, bool exact)
+{
+	float_t xdiff = p1.x - p2.x;
+	float_t ydiff = p1.y - p2.y;
+	if (xdiff == 0 && ydiff == 0) return -M_PI_2;
+
+	float_t angle;
+	if (exact) {
+		angle = std::atan2(ydiff, xdiff);
+	} else {
+		angle = pseudoAtan2(ydiff, xdiff);
+	}
 	return angle;
 }
 
-Point RotatePoint(const Point& p, double angle)
+Point RotatePoint(const Point& p, float_t angle)
 {
 	int newx = static_cast<int>(p.x * std::cos(angle) - p.y * std::sin(angle));
 	int newy = static_cast<int>(p.x * std::sin(angle) + p.y * std::cos(angle));
@@ -40,7 +80,7 @@ Point RotatePoint(const Point& p, double angle)
 }
 
 /** Calculates distance between 2 points */
-unsigned int Distance(const Point &p, const Point &q)
+unsigned int Distance(const BasePoint& p, const BasePoint& q)
 {
 	long x = p.x - q.x;
 	long y = p.y - q.y;
@@ -48,7 +88,7 @@ unsigned int Distance(const Point &p, const Point &q)
 }
 
 /** Calculates squared distance between 2 points */
-unsigned int SquaredDistance(const Point &p, const Point &q)
+unsigned int SquaredDistance(const BasePoint& p, const BasePoint& q)
 {
 	long x = p.x - q.x;
 	long y = p.y - q.y;
@@ -57,13 +97,13 @@ unsigned int SquaredDistance(const Point &p, const Point &q)
 
 // returns twice the area of triangle a, b, c.
 // (can also be negative depending on orientation of a,b,c)
-int area2(const Point& a, const Point& b, const Point& c)
+int area2(const BasePoint& a, const BasePoint& b, const BasePoint& c)
 {
 	return (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
 }
 
 // return (c is to the left of a-b)
-bool left(const Point& a, const Point& b, const Point& c)
+bool left(const BasePoint& a, const BasePoint& b, const BasePoint& c)
 {
 	return (area2(a, b, c) > 0);
 }
@@ -82,19 +122,19 @@ bool collinear(const Point& a, const Point& b, const Point& c)
 bool intersectSegments(const Point& a, const Point& b, const Point& c, const Point& d, Point& s)
 {
 	if (collinear(a, b, c) || collinear(a, b, d) ||
-		collinear(c, d, a) || collinear(c, d, b))
+	    collinear(c, d, a) || collinear(c, d, b))
 		return false;
-	
+
 	if (!((left(a, b, c) != left(a, b, d)) &&
-		  (left(c, d, a) != left(c, d, b))))
+	      (left(c, d, a) != left(c, d, b))))
 		return false;
-	
+
 	int64_t A1 = area2(c, d, a);
 	int64_t A2 = area2(d, c, b);
-	
-	s.x = int((b.x*A1 + a.x*A2) / (A1 + A2));
-	s.y = int((b.y*A1 + a.y*A2) / (A1 + A2));
-	
+
+	s.x = int((b.x * A1 + a.x * A2) / (A1 + A2));
+	s.y = int((b.y * A1 + a.y * A2) / (A1 + A2));
+
 	return true;
 }
 
@@ -103,25 +143,24 @@ bool intersectSegmentScanline(const Point& a, const Point& b, int y, int& x)
 {
 	int y1 = a.y - y;
 	int y2 = b.y - y;
-	
+
 	if (y1 * y2 > 0) return false;
 	if (y1 == 0 && y2 == 0) return false;
-	
-	x = a.x + ((b.x - a.x)*y1)/(y1-y2);
+
+	x = a.x + ((b.x - a.x) * y1) / (y1 - y2);
 	return true;
 }
 
-std::vector<Point> PlotCircle(const Point& origin, uint16_t r, uint8_t octants) noexcept
+std::vector<BasePoint> PlotCircle(const BasePoint& origin, uint16_t r, uint8_t octants) noexcept
 {
 	// Uses the 2nd order Bresenham's Circle Algorithm: https://funloop.org/post/2021-03-15-bresenham-circle-drawing-algorithm.html
-	
-	std::vector<Point> points;
+
+	std::vector<BasePoint> points;
 	points.reserve(6 * r); // 6 is 2𝜋 rounded down
-	
-	auto GenOctants = [&origin, &points, octants](int x, int y) noexcept
-	{
+
+	auto GenOctants = [&origin, &points, octants](int x, int y) noexcept {
 		// points are emplaced in octant order
-		
+
 		if (octants & 1 << 0) {
 			points.emplace_back(origin + Point(y, x));
 		}
@@ -147,16 +186,16 @@ std::vector<Point> PlotCircle(const Point& origin, uint16_t r, uint8_t octants) 
 			points.emplace_back(origin + Point(-y, -x));
 		}
 	};
-	
+
 	int x = 0;
 	int y = r;
 	int fm = 1 - r;
 	int de = 3; // east vector
 	int dse = -2 * r + 5; // SE vector
-	
+
 	// do the middle row first
 	GenOctants(x, y);
-	
+
 	while (x < y) {
 		if (fm <= 0) {
 			fm += de;
@@ -165,30 +204,30 @@ std::vector<Point> PlotCircle(const Point& origin, uint16_t r, uint8_t octants) 
 			dse += 2;
 			--y;
 		}
-		
+
 		de += 2;
 		dse += 2;
 		++x;
-		
+
 		GenOctants(x, y);
 	}
-	
+
 	return points;
 }
 
-std::vector<Point> PlotEllipse(const Region& rect) noexcept
+std::vector<BasePoint> PlotEllipse(const Region& rect) noexcept
 {
 	if (rect.size.IsInvalid()) {
 		return {};
 	}
-	
+
 	if (rect.w == rect.h) {
 		return PlotCircle(rect.Center(), (rect.w / 2) - 1);
 	}
-	
-	Point p1 = rect.origin;
-	Point p2 = rect.Maximum() - Point(1, 1); // we must contain inside the rect, so subtract 1px
-	
+
+	BasePoint p1 = rect.origin;
+	BasePoint p2 = rect.Maximum() - Point(1, 1); // we must contain inside the rect, so subtract 1px
+
 	int a = p2.x - p1.x;
 	int b = p2.y - p1.y;
 	int b1 = b & 1; /* values of diameter */
@@ -196,21 +235,21 @@ std::vector<Point> PlotEllipse(const Region& rect) noexcept
 	long dy = 4 * (b1 + 1) * a * a; /* error increment */
 	long err = dx + dy + b1 * a * a;
 	long e2; /* error of 1.step */
-	
+
 	p1.y += (b + 1) / 2;
-	p2.y = p1.y - b1;   /* starting pixel */
+	p2.y = p1.y - b1; /* starting pixel */
 	a *= 8 * a;
 	b1 = 8 * b * b;
-	
-	std::vector<Point> points;
+
+	std::vector<BasePoint> points;
 	points.reserve(rect.size.Area());
 
 	do {
-		points.emplace_back(Point(p2.x, p1.y)); /*   I. Quadrant */
-		points.emplace_back(p1); 				 /*  II. Quadrant */
-		points.emplace_back(Point(p1.x, p2.y)); /* III. Quadrant */
-		points.emplace_back(p2); 				 /*  IV. Quadrant */
-		
+		points.emplace_back(p2.x, p1.y); /*   I. Quadrant */
+		points.emplace_back(p1); /*  II. Quadrant */
+		points.emplace_back(p1.x, p2.y); /* III. Quadrant */
+		points.emplace_back(p2); /*  IV. Quadrant */
+
 		e2 = 2 * err;
 		if (e2 <= dy) {
 			++p1.y;
@@ -223,14 +262,14 @@ std::vector<Point> PlotEllipse(const Region& rect) noexcept
 			err += dx += b1;
 		}
 	} while (p1.x <= p2.x);
-	
-	while (p1.y - p2.y < b) {  /* too early stop of flat ellipses a=1 */
-		points.emplace_back(Point(p1.x - 1, p1.y)); /* -> finish tip of ellipse */
-		points.emplace_back(Point(p2.x + 1, p1.y++));
-		points.emplace_back(Point(p1.x - 1, p2.y));
-		points.emplace_back(Point(p2.x + 1, p2.y--));
+
+	while (p1.y - p2.y < b) { /* too early stop of flat ellipses a=1 */
+		points.emplace_back(p1.x - 1, p1.y); /* -> finish tip of ellipse */
+		points.emplace_back(p2.x + 1, p1.y++);
+		points.emplace_back(p1.x - 1, p2.y);
+		points.emplace_back(p2.x + 1, p2.y--);
 	}
-	
+
 	return points;
 }
 

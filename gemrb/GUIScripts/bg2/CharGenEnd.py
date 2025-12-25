@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #
 # character generation end
+import BGCommon
 import GemRB
 import GameCheck
 import GUICommon
@@ -31,6 +32,9 @@ def OnLoad():
 	# Lay on hands, turn undead and backstab multiplier get set by the core
 	# set my character up
 	MyChar = GemRB.GetVar ("Slot")
+
+	#reputation
+	BGCommon.SetReputation ()
 
 	# don't reset most stats of imported chars
 	if GemRB.GetVar ("ImportedChar"):
@@ -98,7 +102,7 @@ def RunGame(MyChar):
 		GemRB.ChargeSpells (MyChar)
 
 	playmode = GemRB.GetVar ("PlayMode")
-	if playmode >=0:
+	if playmode is not None:
 		GemRB.SaveCharacter (MyChar, "gembak")
 		#LETS PLAY!!
 		import CharGenCommon, CommonWindow

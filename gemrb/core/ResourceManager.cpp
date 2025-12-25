@@ -21,10 +21,11 @@
 #include "ResourceManager.h"
 
 #include "Interface.h"
-#include "Logging/Logging.h"
 #include "PluginMgr.h"
 #include "Resource.h"
 #include "ResourceDesc.h"
+
+#include "Logging/Logging.h"
 
 namespace GemRB {
 
@@ -104,7 +105,7 @@ bool ResourceManager::AddSource(const path_t& path, const std::string& descripti
 	return true;
 }
 
-static void PrintPossibleFiles(std::string& buffer, StringView ResRef, const TypeID *type)
+static void PrintPossibleFiles(std::string& buffer, StringView ResRef, const TypeID* type)
 {
 	const std::vector<ResourceDesc>& types = PluginMgr::Get()->GetResourceDesc(type);
 	for (const auto& type2 : types) {
@@ -112,9 +113,10 @@ static void PrintPossibleFiles(std::string& buffer, StringView ResRef, const Typ
 	}
 }
 
-bool ResourceManager::Exists(const String& resource, SClass_ID type, bool silent) const {
+bool ResourceManager::Exists(const String& resource, SClass_ID type, bool silent) const
+{
 	auto mbString = MBStringFromString(resource);
-	auto mbResource = StringView{mbString};
+	auto mbResource = StringView { mbString };
 
 	return Exists(mbResource, type, silent);
 }
@@ -131,17 +133,17 @@ bool ResourceManager::Exists(StringView ResRef, SClass_ID type, bool silent) con
 	}
 	if (!silent) {
 		Log(WARNING, "ResourceManager", "'{}.{}' not found...",
-			ResRef, TypeExt(type));
+		    ResRef, TypeExt(type));
 	}
 	return false;
 }
 
-bool ResourceManager::Exists(StringView ResRef, const TypeID *type, bool silent) const
+bool ResourceManager::Exists(StringView ResRef, const TypeID* type, bool silent) const
 {
 	if (ResRef[0] == '\0')
 		return false;
 	// TODO: check various caches
-	const std::vector<ResourceDesc> &types = PluginMgr::Get()->GetResourceDesc(type);
+	const std::vector<ResourceDesc>& types = PluginMgr::Get()->GetResourceDesc(type);
 	for (const auto& type2 : types) {
 		for (const auto& path : searchPath) {
 			if (path->HasResource(ResRef, type2)) {
@@ -151,7 +153,7 @@ bool ResourceManager::Exists(StringView ResRef, const TypeID *type, bool silent)
 	}
 	if (!silent) {
 		std::string buffer = fmt::format("Couldn't find '{}'... Tried ", ResRef);
-		PrintPossibleFiles(buffer, ResRef,type);
+		PrintPossibleFiles(buffer, ResRef, type);
 		Log(WARNING, "ResourceManager", "{}", buffer);
 	}
 	return false;
@@ -162,7 +164,7 @@ DataStream* ResourceManager::GetResourceStream(StringView ResRef, SClass_ID type
 	if (ResRef.empty())
 		return nullptr;
 	for (const auto& path : searchPath) {
-		DataStream *ds = path->GetResource(ResRef, type);
+		DataStream* ds = path->GetResource(ResRef, type);
 		if (ds) {
 			if (!silent) {
 				Log(MESSAGE, "ResourceManager", "Found '{}.{}' in '{}'.", ResRef, TypeExt(type), path->GetDescription());
@@ -173,36 +175,35 @@ DataStream* ResourceManager::GetResourceStream(StringView ResRef, SClass_ID type
 	if (!silent) {
 		Log(ERROR, "ResourceManager", "Couldn't find '{}.{}'.", ResRef, TypeExt(type));
 	}
-	return NULL;
+	return nullptr;
 }
 
-ResourceHolder<Resource> ResourceManager::GetResource(StringView ResRef, const TypeID *type, bool silent, bool useCorrupt) const
+ResourceHolder<Resource> ResourceManager::GetResource(StringView ResRef, const TypeID* type, bool silent, ieWord prefferedType) const
 {
 	if (ResRef.empty())
 		return nullptr;
 	if (!silent) {
 		Log(MESSAGE, "ResourceManager", "Searching for '{}'...", ResRef);
 	}
-	const std::vector<ResourceDesc> &types = PluginMgr::Get()->GetResourceDesc(type);
-	for (const auto& type2 : types) {
+	const std::vector<ResourceDesc>& types = PluginMgr::Get()->GetResourceDesc(type);
+	std::vector<ResourceDesc> types2 = types;
+	if (prefferedType) {
+		// sort the preferred type to the front, so we check it first
+		std::sort(types2.begin(), types2.end(), [&prefferedType](auto& a, auto& b) { return (a.GetKeyType() == prefferedType ? true : (a.GetKeyType() < b.GetKeyType())); });
+	}
+
+	for (const auto& type2 : types2) {
 		for (const auto& path : searchPath) {
-			DataStream *str = path->GetResource(ResRef, type2);
-			if (!str && useCorrupt && core->UseCorruptedHack) {
-				// don't look at other paths if requested
-				core->UseCorruptedHack = false;
-				return NULL;
+			DataStream* str = path->GetResource(ResRef, type2);
+			if (!str) continue;
+
+			auto res = type2.Create(str);
+			if (!res) continue;
+			if (!silent) {
+				Log(MESSAGE, "ResourceManager", "Found '{}.{}' in '{}'.",
+				    ResRef, type2.GetExt(), path->GetDescription());
 			}
-			core->UseCorruptedHack = false;
-			if (str) {
-				auto res = type2.Create(str);
-				if (res) {
-					if (!silent) {
-						Log(MESSAGE, "ResourceManager", "Found '{}.{}' in '{}'.",
-							ResRef, type2.GetExt(), path->GetDescription());
-					}
-					return res;
-				}
-			}
+			return res;
 		}
 	}
 	if (!silent) {
@@ -210,7 +211,7 @@ ResourceHolder<Resource> ResourceManager::GetResource(StringView ResRef, const T
 		PrintPossibleFiles(buffer, ResRef, type);
 		Log(WARNING, "ResourceManager", "{}", buffer);
 	}
-	return NULL;
+	return nullptr;
 }
 
 }

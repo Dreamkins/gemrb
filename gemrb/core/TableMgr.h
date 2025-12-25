@@ -28,12 +28,13 @@
 #ifndef TABLEMGR_H
 #define TABLEMGR_H
 
-#include <memory>
-
 #include "globals.h"
 
-#include "Strings/StringView.h"
 #include "Plugin.h"
+
+#include "Strings/StringView.h"
+
+#include <memory>
 
 namespace GemRB {
 
@@ -58,8 +59,7 @@ public:
 	virtual index_t GetColNamesCount() const = 0;
 	/** Returns the actual number of Columns in a row */
 	virtual index_t GetColumnCount(index_t row = 0) const = 0;
-	/** Returns a pointer to a zero terminated 2da element,
-	 * 0,0 returns the default value, it may return NULL */
+	/** Returns a pointer to a zero terminated 2da element */
 	virtual const std::string& QueryField(index_t row, index_t column) const = 0;
 
 	/** Returns a pointer to a zero terminated 2da element,
@@ -68,19 +68,22 @@ public:
 	{
 		return QueryField(GetRowIndex(row), GetColumnIndex(column));
 	}
-	
-	template <typename RET_T, typename ROW_T, typename COL_T>
-	RET_T QueryFieldUnsigned(const ROW_T& row, const COL_T& column) const {
+
+	template<typename RET_T, typename ROW_T, typename COL_T>
+	RET_T QueryFieldUnsigned(const ROW_T& row, const COL_T& column) const
+	{
 		return strtounsigned<RET_T>(QueryField(row, column).c_str());
 	}
-	
-	template <typename RET_T, typename ROW_T, typename COL_T>
-	RET_T QueryFieldSigned(const ROW_T& row, const COL_T& column) const {
+
+	template<typename RET_T, typename ROW_T, typename COL_T>
+	RET_T QueryFieldSigned(const ROW_T& row, const COL_T& column) const
+	{
 		return strtosigned<RET_T>(QueryField(row, column).c_str());
 	}
-	
-	template <typename ROW_T, typename COL_T>
-	ieStrRef QueryFieldAsStrRef(const ROW_T& row, const COL_T& column) const {
+
+	template<typename ROW_T, typename COL_T>
+	ieStrRef QueryFieldAsStrRef(const ROW_T& row, const COL_T& column) const
+	{
 		auto field = QueryFieldUnsigned<ieDword>(row, column);
 		return static_cast<ieStrRef>(field);
 	}
@@ -104,4 +107,4 @@ using AutoTable = PluginHolder<TableMgr>;
 
 }
 
-#endif  // ! TABLEMGR_H
+#endif // ! TABLEMGR_H

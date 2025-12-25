@@ -20,6 +20,7 @@ import GemRB
 import GUICommon
 import GUICommonWindows
 import GUIClasses
+import PortraitWindow
 from GameCheck import MAX_PARTY_SIZE
 from GUIDefines import *
 
@@ -43,8 +44,8 @@ def OnLoad():
 	smallMTA.AddAlias("MsgSys", 0)
 	smallMTA.AddAlias("MTA_SM", 0, True)
 	smallMTA.SetFlags (IE_GUI_TEXTAREA_AUTOSCROLL|IE_GUI_TEXTAREA_HISTORY)
-	smallMTA.SetColor({'r' : 255, 'g' : 0, 'b' : 0}, TA_COLOR_OPTIONS)
-	smallMTA.SetColor({'r' : 255, 'g' : 255, 'b' : 255}, TA_COLOR_HOVER)
+	smallMTA.SetColor(ColorRed, TA_COLOR_OPTIONS)
+	smallMTA.SetColor(ColorWhite, TA_COLOR_HOVER)
 	smallID = smallMTA.ID
 	
 	sbar = OptionsWindow.GetControl(2)
@@ -53,7 +54,7 @@ def OnLoad():
 	# remove the cheat input textedit
 	OptionsWindow.RemoveSubview(OptionsWindow.GetControl(3))
 
-	ActionsWindow = GUICommonWindows.OpenPortraitWindow(0, WINDOW_BOTTOM|WINDOW_HCENTER)
+	ActionsWindow = PortraitWindow.OpenPortraitWindow(0, WINDOW_BOTTOM|WINDOW_HCENTER)
 	ActionsWindow.SetFlags(WF_BORDERLESS|IE_GUI_VIEW_IGNORE_EVENTS, OP_OR)
 	ActionsWindow.AddAlias("ACTWIN")
 	ActionsWindow.AddAlias("HIDE_CUT", 1)

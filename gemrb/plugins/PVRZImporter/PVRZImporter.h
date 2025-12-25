@@ -21,11 +21,11 @@
 #ifndef PVRZIMP_H
 #define PVRZIMP_H
 
+#include "ImageMgr.h"
+
 #include <array>
 #include <tuple>
 #include <vector>
-
-#include "ImageMgr.h"
 
 namespace GemRB {
 
@@ -44,7 +44,9 @@ public:
 	bool Import(DataStream* stream) override;
 	Holder<Sprite2D> GetSprite2D() override;
 	Holder<Sprite2D> GetSprite2D(Region&&) override;
-	int GetPalette(int colors, Color* pal) override;
+	int GetPalette(int colors, Palette& pal) override;
+
+	static uint16_t GetBlockPixelMask(const Region& region, const Region& grid, int x, int y);
 
 private:
 	std::tuple<uint16_t, uint16_t> extractPalette(size_t offset, std::array<uint8_t, 6>& colors) const;
@@ -53,8 +55,6 @@ private:
 
 	PVRZFormat format = PVRZFormat::UNSUPPORTED;
 	std::vector<uint8_t> data;
-
-	static uint16_t getBlockPixelMask(const Region& region, const Region& grid, int x, int y);
 };
 
 }

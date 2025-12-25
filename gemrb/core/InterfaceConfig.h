@@ -21,28 +21,28 @@
 #ifndef __GemRB__InterfaceConfig__
 #define __GemRB__InterfaceConfig__
 
+#include "exports.h"
+
+#include "Strings/StringMap.h"
+#include "System/VFS.h"
+
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "exports.h"
-#include "Strings/StringMap.h"
-#include "System/VFS.h"
-
 // This is changed by both cmake and AppVeyor (CmakeLists.txt and .appveyor.yml)
-#define VERSION_GEMRB "0.9.2-git"
+#define VERSION_GEMRB "0.9.4"
 
 #define GEMRB_STRING "GemRB v" VERSION_GEMRB
-#define PACKAGE "GemRB"
+#define PACKAGE      "GemRB"
 
 //the maximum supported game CD count
 #define MAX_CD 6
 
 namespace GemRB {
 
-class CoreInitializationException : public std::runtime_error
-{
+class CoreInitializationException : public std::runtime_error {
 public:
 	using std::runtime_error::runtime_error;
 };
@@ -94,35 +94,38 @@ struct CoreSettings {
 	int Bpp = 32;
 	bool DrawFPS = false;
 	int CapFPS = 0;
+	bool FullScreen = false;
 	bool SpriteFoW = false;
 	uint32_t debugMode = 0;
 	bool Logging = true;
 	int LogColor = -1; // -1 is to automatically determine
 	bool CheatFlag = false; /** Cheats enabled? */
 	int MaxPartySize = 6;
-	int GUIEnhancements = 0;
+	int GUIEnhancements = 23;
 
 	bool KeepCache = false;
 	bool MultipleQuickSaves = false;
+	bool UseAsLibrary = false;
 	// once GemRB own format is working well, this might be set to 0
 	int SaveAsOriginal = 1; // if true, saves files in compatible mode
 	std::string VideoDriverName = "sdl"; // consider deprecating? It's now a hidden option
 	std::string AudioDriverName = "openal";
 	std::string SkipPlugin;
 	std::string DelayPlugin;
-	
+
 	int DoubleClickDelay = 250;
 	uint32_t DebugFlags = 0;
 	uint32_t ActionRepeatDelay = 250;
 	int TouchInput = -1;
 	std::string SystemEncoding = "UTF-8";
+	std::string ScaleQuality = "best";
 
 	variables_t vars;
 };
 
 using InterfaceConfig = StringMap<std::string>;
 
-GEM_EXPORT CoreSettings LoadFromArgs(int argc, char *argv[]);
+GEM_EXPORT CoreSettings LoadFromArgs(int argc, char* argv[]);
 GEM_EXPORT CoreSettings LoadFromDictionary(InterfaceConfig);
 GEM_EXPORT InterfaceConfig LoadFromCFG(const path_t& file);
 GEM_EXPORT void SanityCheck(const char* ver = VERSION_GEMRB);

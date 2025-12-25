@@ -132,7 +132,7 @@ bool OverHeadMsg::Draw(int heightOffset, const Point& fallbackPos, int ownerType
 	tick_t delay = maxDelay;
 	if ((core->HasFeature(GFFlags::ONSCREEN_TEXT) || core->IsTurnBased()) && !scrollOffset.IsInvalid()) {
 		// empirically determined estimate to get the right speed and distance and 2px/tick
-		delay = 1800;
+		delay = 1800 * core->Time.ticksPerSec / core->Time.defaultTicksPerSec;
 	}
 
 	tick_t time = core->Time.Ticks2Ms(core->GetGame()->GetGameTimeReal());
@@ -169,6 +169,22 @@ bool OverHeadMsg::Draw(int heightOffset, const Point& fallbackPos, int ownerType
 		rgn.y -= maxScrollOffset - scrollOffset.y;
 		// rgn.h will be adjusted automatically, we don't need to worry about accidentally hiding other msgs
 		scrollOffset.y = maxScrollOffset + time / 4;
+	}
+
+	if (core->HasFeature(GFFlags::RULES_3ED)) {
+		// first draw a background layer for better contrast
+		Region rgnBG(rgn);
+
+		// how big will be the laid out text?
+		// make it a Font::Print flag bit in the future?
+		Font::StringSizeMetrics metrics { rgnBG.size, 0, 0, true };
+		Size stringSize = core->GetTextFont()->StringSize(text, &metrics);
+		rgnBG.size = stringSize;
+		rgnBG.ExpandAllSides(3);
+		// recenter if we shrunk
+		rgnBG.x += (200 - rgnBG.w) / 2 + 3;
+		static constexpr Color TranslucentBlack { 0x00, 0x00, 0x00, 0x9f };
+		VideoDriver->DrawRect(rgnBG, TranslucentBlack, true, BlitFlags::BLENDED);
 	}
 	core->GetTextFont()->Print(rgn, text, IE_FONT_ALIGN_CENTER | IE_FONT_ALIGN_TOP, fontColor);
 

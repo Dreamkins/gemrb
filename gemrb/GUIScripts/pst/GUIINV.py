@@ -63,6 +63,7 @@ def InitInventoryWindow (Window):
 	global AvSlotsTable
 
 	Window.AddAlias("WIN_INV")
+	Window.OnFocus(UpdateInventoryWindow)
 
 	AvSlotsTable = GemRB.LoadTable ('avslots')
 	Window.GetControl(0x1000003d).AddAlias("MsgSys", 1)
@@ -74,6 +75,8 @@ def InitInventoryWindow (Window):
 	SlotCount = GemRB.GetSlotType (-1)["Count"]
 	for slot in range (SlotCount):
 		SlotType = GemRB.GetSlotType (slot)
+		if SlotType["ID"] == -1:
+			continue
 		Button = Window.GetControl (SlotType["ID"])
 		if Button:
 			Button.OnMouseEnter (InventoryCommon.MouseEnterSlot)
@@ -140,14 +143,12 @@ def InitInventoryWindow (Window):
 
 	return
 
-def UpdateInventoryWindow (Window = None):
+def UpdateInventoryWindow (Window):
 	"""Redraws the inventory window and resets TopIndex."""
 
 	global SlotMap
 
-	if Window == None:
-		Window = GemRB.GetView("WIN_INV")
-
+	Window.OnClose(InventoryCommon.InventoryClosed)
 	GUICommonWindows.UpdateAnimation ()
 
 	pc = GemRB.GameGetSelectedPCSingle ()
@@ -169,10 +170,8 @@ def UpdateInventoryWindow (Window = None):
 	for i in range (46):
 		InventoryCommon.UpdateSlot (pc, i)
 
-ToggleInventoryWindow = GUICommonWindows.CreateTopWinLoader(3, "GUIINV", GUICommonWindows.ToggleWindow, InitInventoryWindow, UpdateInventoryWindow, WINDOW_TOP|WINDOW_HCENTER)
-OpenInventoryWindow = GUICommonWindows.CreateTopWinLoader(3, "GUIINV", GUICommonWindows.OpenWindowOnce, InitInventoryWindow, UpdateInventoryWindow, WINDOW_TOP|WINDOW_HCENTER)
-
-InventoryCommon.UpdateInventoryWindow = UpdateInventoryWindow
+ToggleInventoryWindow = GUICommonWindows.CreateTopWinLoader(3, "GUIINV", GUICommonWindows.ToggleWindow, InitInventoryWindow, UpdateInventoryWindow)
+OpenInventoryWindow = GUICommonWindows.CreateTopWinLoader(3, "GUIINV", GUICommonWindows.OpenWindowOnce, InitInventoryWindow, UpdateInventoryWindow)
 
 def RefreshInventoryWindow (Window):
 	"""Partial redraw without resetting TopIndex."""
@@ -262,13 +261,7 @@ def RefreshInventoryWindow (Window):
 			Button.OnDoublePress (None)
 	return
 
-def DefaultWeapon ():
-	pc = GemRB.GameGetFirstSelectedActor ()
-	GemRB.SetEquippedQuickSlot (pc, 1000, -1)
-	UpdateInventoryWindow ()
-	return
-
-def OnAutoEquip ():
+def OnAutoEquip (btn):
 	if not GemRB.IsDraggingItem ():
 		return
 
@@ -281,7 +274,7 @@ def OnAutoEquip ():
 	if ret == 2 and item and (item['ItemResRef'] == "dustrobe"):
 		GemRB.SetGlobal("APPEARANCE","GLOBAL",2)
 
-	UpdateInventoryWindow ()
+	UpdateInventoryWindow (btn.Window)
 	return
 
 ###################################################

@@ -36,8 +36,11 @@ def InitInventoryWindow (Window):
 	"""Opens the inventory window."""
 
 	Window.AddAlias("WIN_INV")
+	Window.OnFocus(UpdateInventoryWindow)
+
 	# info label, game paused, etc
 	if GameCheck.IsBG2EE ():
+		# text area instead of label
 		Feedback = Window.GetControl (64)
 	else:
 		Feedback = Window.GetControl (0x1000003f)
@@ -110,12 +113,10 @@ def InitInventoryWindow (Window):
 
 	return
 
-def UpdateInventoryWindow (Window = None):
+def UpdateInventoryWindow (Window):
 	"""Redraws the inventory window and resets TopIndex."""
 
-	if Window == None:
-		Window = GemRB.GetView("WIN_INV")
-
+	Window.OnClose(InventoryCommon.InventoryClosed)
 	pc = GemRB.GameGetSelectedPCSingle ()
 	Container = GemRB.GetContainer (pc, 1)
 	ScrollBar = Window.GetControl (66)
@@ -129,10 +130,8 @@ def UpdateInventoryWindow (Window = None):
 		InventoryCommon.UpdateSlot (pc, i)
 	return
 
-ToggleInventoryWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIINV", GUICommonWindows.ToggleWindow, InitInventoryWindow, UpdateInventoryWindow, GUICommonWindows.DefaultWinPos, True)
-OpenInventoryWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIINV", GUICommonWindows.OpenWindowOnce, InitInventoryWindow, UpdateInventoryWindow, GUICommonWindows.DefaultWinPos, True)
-
-InventoryCommon.UpdateInventoryWindow = UpdateInventoryWindow
+ToggleInventoryWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIINV", GUICommonWindows.ToggleWindow, InitInventoryWindow, UpdateInventoryWindow, True)
+OpenInventoryWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIINV", GUICommonWindows.OpenWindowOnce, InitInventoryWindow, UpdateInventoryWindow, True)
 
 def RefreshInventoryWindow (Window):
 	"""Partial redraw without resetting TopIndex."""

@@ -115,12 +115,9 @@ so we can improve our process and documentation!
 ## Axioms of Style
 
 1. When in doubt, follow the style of the existing function or file.
-   - When creating a new file, follow the style of existing files, pe. Game.h/.cpp.
-     - Do not forget to include the license header.
-2. Code indentation is done with single tabulators.
-3. Spaces around operators (foo += bar;).
-4. Try to avoid creating very long lines. There is no set maximum.
-5. Sort includes by type (module, project, system) and alphabetically.
+2. Clang-format is enforced as a pre-commit hook. It's best if you
+configure your editor to run it for you. If you need to do it manually,
+check out `git clang-format`.
 
 
 ## Useful links
@@ -154,12 +151,22 @@ to display diffs of included binary files (spells and other overrides).
 
 - `make test` will run the core test suite if you built with googletest installed
 
+- `git blame` ignoring reformatting commits
+
+The `.git-blame-ignore-revs` specifies which commits git should ignore when
+finding the last time a line was changed. Many tools use it by default,
+except git itself, so you need to run:
+
+   git config --add blame.ignoreRevsFile .git-blame-ignore-revs
+
+If you're using cmake, this has been done for you.
+
 
 ## Version tracking
 
 1. Split your changes (commits) into well-rounded units of logic (`git commit -p` can help).
-2. Read the commit diff to verify you're commiting what you think. That indentation matches
-   and that no extraneous changes are included (eg. random style changes from bad IDE settings).
+2. Read the commit diff to verify you're commiting what you think and no extraneous changes
+   are included.
 3. Each commit should compile and run. You can do quick fixups with `git commit --amend -p`.
 4. Commit messages should be descriptive (why is more important than what, include
    area/creature/script names if possible).
@@ -209,9 +216,10 @@ You can check what we're working towards in the current release by reading the
 NEWS file and, as far as bugtracker backlog goes, by looking at the version's
 [milestone](https://github.com/gemrb/gemrb/milestones).
 
-The plan for 0.9.3 is to work on iwd2 completability, annoying pst oddities,
-deal with some postponed issues, and whatever piques the contributor's fancy.
+The plan for 0.9.5 is to work on polishing, annoying pst oddities, maybe getting
+bg2ee support out of experimental stage, deal with some postponed issues, and
+whatever piques the contributor's fancy.
 
-We're looking for ninjas to help with GLESv2 support (no hw, see
-[#938](https://github.com/gemrb/gemrb/issues/938)) and a full-fledged installer
-for windows [#612](https://github.com/gemrb/gemrb/issues/612).
+We're looking for ninjas to help with python porting, a SDL_ttf backend,
+GLESv2 support (no hw, see [#938](https://github.com/gemrb/gemrb/issues/938)) and
+a full-fledged installer for windows [#612](https://github.com/gemrb/gemrb/issues/612).

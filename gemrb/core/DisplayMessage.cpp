@@ -30,7 +30,7 @@
 
 namespace GemRB {
 
-GEM_EXPORT DisplayMessage * displaymsg = nullptr;
+GEM_EXPORT DisplayMessage* displaymsg = nullptr;
 
 static const auto DisplayFormatName = FMT_STRING(u"[color={:08X}]{} - [/color][p][color={:08X}]{}[/color][/p]");
 static const auto DisplayFormatAction = FMT_STRING(u"[color={:08X}]{} - [/color][p][color={:08X}]{} {}[/color][/p]");
@@ -149,7 +149,7 @@ DisplayMessage::DisplayMessage()
 
 void DisplayMessage::DisplayMarkupString(String Text) const
 {
-	TextArea *ta = core->GetMessageTextArea();
+	TextArea* ta = core->GetMessageTextArea();
 	if (ta)
 		ta->AppendText(std::move(Text));
 }
@@ -159,22 +159,25 @@ void DisplayMessage::DisplayString(const String& text) const
 	DisplayMarkupString(fmt::format(DisplayFormatSimple, text));
 }
 
-Color DisplayMessage::GetSpeakerColor(String& name, const Scriptable *&speaker) const
+Color DisplayMessage::GetSpeakerColor(String& name, const Scriptable*& speaker) const
 {
-	if(!speaker) {
+	if (!speaker) {
 		name = u"";
 		return {};
 	}
 
-	Color speaker_color {0x80, 0, 0, 0xff};
+	Color speaker_color { 0x80, 0, 0, 0xff };
 	// NOTE: name color was hardcoded to a limited list in the originals;
 	// the 1PP mod tackled this restriction by altering the exe to use a bigger list.
-	// We just generate a colour by looking at the existing palette instead.
+	// We used to generate a colour by looking at the existing palette instead.
+	// That proved to be inconvenient in-game when many characters are stoneskinned and all get the same color;
+	// also dynamic name colors do not have any real use, they just add confusion.
+	// Current implementation is the same as the original: use the character's major color.
 	switch (speaker->Type) {
 		case ST_ACTOR:
 			name = Scriptable::As<Actor>(speaker)->GetDefaultName();
 			{
-				auto pal16 = core->GetPalette16(((const Actor *) speaker)->GetStat(IE_MAJOR_COLOR));
+				auto pal16 = core->GetPalette16(((const Actor*) speaker)->GetBase(IE_MAJOR_COLOR));
 				// cmleat4 from dark horizons sets all the colors to pitch black, so work around too dark results
 				if (pal16[4].r + pal16[4].g + pal16[4].b < 75) {
 					pal16[4].r = 75;
@@ -187,14 +190,14 @@ Color DisplayMessage::GetSpeakerColor(String& name, const Scriptable *&speaker) 
 		case ST_TRIGGER:
 		case ST_PROXIMITY:
 		case ST_TRAVEL:
-			name = core->GetString( speaker->DialogName );
+			name = core->GetString(speaker->DialogName);
 			speaker_color = Color(0xc0, 0xc0, 0xc0, 0xff);
 			break;
 		default:
 			name = u"";
 			break;
 	}
-	
+
 	return speaker_color;
 }
 
@@ -206,23 +209,27 @@ void DisplayMessage::DisplayConstantString(HCStrings stridx, GUIColors color, Sc
 	DisplayString(std::move(text), GetColor(color), target);
 }
 
-void DisplayMessage::DisplayString(ieStrRef stridx, const Color &color, STRING_FLAGS flags) const
+void DisplayMessage::DisplayString(ieStrRef stridx, const Color& color, STRING_FLAGS flags) const
 {
 	if (stridx == ieStrRef::INVALID) return;
 	DisplayString(core->GetString(stridx, flags), color, nullptr);
 }
 
-void DisplayMessage::DisplayString(String text, const Color &color, Scriptable *target) const
+void DisplayMessage::DisplayString(String text, const Color& color, Scriptable* target) const
 {
-	const TextArea* ta = core->GetMessageTextArea();
+	TextArea* ta = core->GetMessageTextArea();
 	if (ta) {
 		DisplayMarkupString(fmt::format(DisplayFormat, color.Packed(), text));
 	}
-	
-	Label *l = core->GetMessageLabel();
+
+	Label* l = core->GetMessageLabel();
 	if (l) {
 		l->SetColors(color, ColorBlack);
 		l->SetText(std::move(text));
+	} else if (core->HasFeature(GFFlags::HAS_EE_EFFECTS)) {
+		// ees have a text area instead
+		ta = core->GetMessageTextArea(1);
+		if (ta) ta->SetText(fmt::format(DisplayFormat, color.Packed(), text));
 	}
 
 	if (target && l == nullptr && ta == nullptr) {
@@ -262,7 +269,7 @@ void DisplayMessage::DisplayString(ieStrRef stridx, GUIColors color, STRING_FLAG
 	DisplayString(stridx, GetColor(color), flags);
 }
 
-void DisplayMessage::DisplayString(const String& text, GUIColors color, Scriptable *target) const
+void DisplayMessage::DisplayString(const String& text, GUIColors color, Scriptable* target) const
 {
 	DisplayString(text, GetColor(color), target);
 }
@@ -300,7 +307,7 @@ void DisplayMessage::DisplayConstantStringNameString(HCStrings stridx, GUIColors
 void DisplayMessage::DisplayConstantStringName(HCStrings stridx, const Color& color, const Scriptable* speaker) const
 {
 	if (stridx > HCStrings::count) return;
-	if(!speaker) return;
+	if (!speaker) return;
 
 	String text = core->GetString(SRefs.Get(stridx, speaker), STRING_FLAGS::SOUND | STRING_FLAGS::SPEECH);
 	DisplayStringName(std::move(text), color, speaker);
@@ -317,7 +324,7 @@ void DisplayMessage::DisplayConstantStringName(HCStrings stridx, GUIColors color
 void DisplayMessage::DisplayConstantStringNameValue(HCStrings stridx, GUIColors color, const Scriptable* speaker, int value) const
 {
 	if (stridx > HCStrings::count) return;
-	if(!speaker) return;
+	if (!speaker) return;
 	String fmt = core->GetString(SRefs.Get(stridx, speaker), STRING_FLAGS::SOUND | STRING_FLAGS::SPEECH | STRING_FLAGS::RESOLVE_TAGS);
 	DisplayStringName(fmt::format(fmt, value), GetColor(color), speaker);
 }
@@ -338,14 +345,14 @@ void DisplayMessage::DisplayConstantStringAction(HCStrings stridx, GUIColors col
 	DisplayMarkupString(fmt::format(DisplayFormatAction, attacker_color.Packed(), name1, used_color.Packed(), text, name2));
 }
 
-void DisplayMessage::DisplayStringName(ieStrRef str, const Color &color, const Scriptable *speaker, STRING_FLAGS flags) const
+void DisplayMessage::DisplayStringName(ieStrRef str, const Color& color, const Scriptable* speaker, STRING_FLAGS flags) const
 {
 	if (str == ieStrRef::INVALID) return;
 
 	DisplayStringName(core->GetString(str, flags), color, speaker);
 }
 
-void DisplayMessage::DisplayStringName(String text, const Color &color, const Scriptable *speaker) const
+void DisplayMessage::DisplayStringName(String text, const Color& color, const Scriptable* speaker) const
 {
 	if (!text.length() || !text.compare(u" ")) return;
 
@@ -359,12 +366,12 @@ void DisplayMessage::DisplayStringName(String text, const Color &color, const Sc
 	}
 }
 
-void DisplayMessage::DisplayStringName(ieStrRef stridx, GUIColors color, const Scriptable *speaker, STRING_FLAGS flags) const
+void DisplayMessage::DisplayStringName(ieStrRef stridx, GUIColors color, const Scriptable* speaker, STRING_FLAGS flags) const
 {
 	DisplayStringName(stridx, GetColor(color), speaker, flags);
 }
 
-void DisplayMessage::DisplayStringName(String text, GUIColors color, const Scriptable *speaker) const
+void DisplayMessage::DisplayStringName(String text, GUIColors color, const Scriptable* speaker) const
 {
 	DisplayStringName(std::move(text), GetColor(color), speaker);
 }
@@ -391,7 +398,7 @@ void DisplayMessage::DisplayMsgCentered(HCStrings strIdx, int type, GUIColors co
 	if (!core->HasFeedback(type)) return;
 
 	if (core->HasFeature(GFFlags::ONSCREEN_TEXT)) {
-		core->GetGameControl()->SetDisplayText(strIdx, 30);
+		core->GetGameControl()->SetDisplayText(strIdx, 120);
 	} else {
 		DisplayConstantString(strIdx, color);
 	}

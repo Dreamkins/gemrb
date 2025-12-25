@@ -40,6 +40,11 @@ settings in the engine configuration file below. A full install is recommended.
 Disable audio completely, regardless of supported audio plugins.
 
 .TP
+.BI \-f
+Start in full screen. Try this if the game window suffers from bad aspect ratio. Otherwise
+just switch to your preference in the game's video options.
+
+.TP
 .BI \-c " FILE"
 Use the specified configuration file
 .IR FILE " instead"
@@ -107,6 +112,7 @@ Specify language used in the game data.
 The value is a bitfield. Set it to 1 to enable a few GUI enhancements, mostly in BG2.
 Add or set to 2 to try to autoidentify items on transfer (if the character has enough lore).
 Add or set 4 if you want to skip the item description window when opening bags.
+Add or set 16 if you want scrolls for spells the pc does not know yet highlighted.
 Enabled by default. Add or set 8 if you want the game to stop mouse scrolling the area at
 its edges when the window loses focus.
 
@@ -147,8 +153,9 @@ Game window height (in pixels).
 Color depth of the game window (in bits per pixel).
 
 .TP
-.BR Fullscreen =(0|1)
-Whether the game should run in fullscreen mode.
+.BR ScaleQuality =(best|linear|nearest)
+Use the specified quality for the texture scaling filter. The default is
+.IR best .
 
 .TP
 .BR CapFPS =(-1|0|n)
@@ -483,6 +490,11 @@ If set to
 .IR 1 ,
 original aspect ratio is preserved while game area is scaled to native PS Vita resolution. It is enabled by default.
 
+.TP
+.BR UseAsLibrary =INT
+If set to non-zero, disables some engine features to facilitate independent
+use of GemRB libraries. The default is 0.
+
 .\"###################################################
 .SH FILES
 .PD 0
@@ -509,7 +521,7 @@ directory with Python scripts providing GUI setup and interaction. The files
 are sorted into directories for specific games.
 
 .TP
-.B $XDG_CONFIG_PATH/gemrb/
+.B $XDG_CONFIG_HOME/gemrb/
 user's own configuration files.
 .PD
 

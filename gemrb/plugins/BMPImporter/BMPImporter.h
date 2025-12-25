@@ -34,6 +34,7 @@ private:
 	/*, ColorsUsed, ColorsImportant*/
 	ieWord Planes = 0;
 	ieWord BitCount = 0;
+	bool hasAlpha = false;
 
 	//COLORTABLE
 	ieDword NumColors = 0;
@@ -44,6 +45,7 @@ private:
 
 	//OTHER
 	unsigned int PaddedRowLength = 0;
+
 public:
 	BMPImporter() noexcept = default;
 	BMPImporter(const BMPImporter&) = delete;
@@ -52,11 +54,11 @@ public:
 	bool Import(DataStream* stream) override;
 	Holder<Sprite2D> GetSprite2D() override;
 	Holder<Sprite2D> GetSprite2D(Region&&) override { return {}; }
-	int GetPalette(int colors, Color* pal) override;
+	int GetPalette(int colors, Palette& pal) override;
 
 private:
-	void Read8To8(const void *rpixels);
-	void Read4To8(const void *rpixels);
+	void Read8To8(const void* rpixels);
+	void Read4To8(const void* rpixels);
 };
 
 }

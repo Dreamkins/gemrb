@@ -2,6 +2,11 @@
 *
           AT_1      AT_2       AT_3       AT_4       TYPE       SPACE      PALETTE    SIZE
 0x0100    SPCHUNKS  SPCHUNKS   SPCHUNKS   SPCHUNKS   13         0          0          *
+0x0200    SPBLOOD   SPBLOOD    SPBLOOD    SPBLOOD    13         0          1          *
+0x0210    SPBLOOD   SPBLOOD    SPBLOOD    SPBLOOD    13         0          1          *
+0x0220    SPBLOOD   SPBLOOD    SPBLOOD    SPBLOOD    13         0          1          *
+0x0230    SPBLOOD   SPBLOOD    SPBLOOD    SPBLOOD    13         0          1          *
+0x0240    SPBLOOD   SPBLOOD    SPBLOOD    SPBLOOD    13         0          1          *
 0x0300    SPSMPUFF  SPSMPUFF   SPSMPUFF   SPSMPUFF   13         0          0          *
 0x0400    SKLH      SKLH       SKLH       SKLH       13         0          1          *
 0x0410    GLPHWRDH  GLPHWRDH   GLPHWRDH   GLPHWRDH   13         0          1          *
@@ -141,7 +146,7 @@
 0x7402    MDOG      MDOG       MDOG       MDOG       2          2          MO         *
 0x7500    MDOP      MDOP       MDOP       MDOP       3          2          1          *
 0x7501    MDOP      MDOP       MDOP       MDOP       3          2          GR         *
-0x7600    METT      METT       METT       METT       2          2          1          *
+0x7600    METT      METT       METT       METT       14         2          1          *
 0x7701    MGHL      MGHL       MGHL       MGHL       2          2          1          *
 0x7702    MGHL      MGHL       MGHL       MGHL       2          2          RE         *
 0x7703    MGHL      MGHL       MGHL       MGHL       2          2          GA         *
@@ -257,7 +262,7 @@
 0xD400    ABIRG1    ABIRG1     ABIRG1     ABIRG1     7          0          1          *
 0xE000    MBET      MBET       MBET       MBET       16         2          1          *
 0xE010    MBBM      MBBM       MBBM       MBBM       16         2          1          *
-0xE020    MBBR      MBBR       MBBR       MBBR       9          2          1          *
+0xE020    MBBR      MBBR       MBBR       MBBR       16         2          1          *
 0xE030    MBFI      MBFI       MBFI       MBFI       9          2          1          *
 0xE040    MBRH      MBRH       MBRH       MBRH       9          5          1          *
 0xE050    MREM      MREM       MREM       MREM       16         4          1          *
@@ -325,7 +330,7 @@
 0xE780    MBA5      MBA5       MBA5       MBA5       9          2          1          *
 0xE790    MBA6      MBA6       MBA6       MBA6       9          2          1          *
 0xE7A0    MBAI      MBAI       MBAI       MBAI       9          2          1          *
-0xE7AC    MBAI      MBAI       MBAI       MBAI       9          4          1          *
+0xE7AC    MBAI      MBAI       MBAI       MBAI       9          1          1          *
 0xE7B0    MBOA      MBOA       MBOA       MBOA       9          2          1          *
 0xE7C0    MABW      MABW       MABW       MABW       9          2          1          *
 0xE7D0    MMAL      MMAL       MMAL       MMAL       9          2          1          *
@@ -341,7 +346,7 @@
 0xE870    MNO2      MNO2       MNO2       MNO2       9          2          1          *
 0xE880    MNO3      MNO3       MNO3       MNO3       9          2          1          *
 0xE890    MLI3      MLI3       MLI3       MLI3       9          2          1          *
-0xE8A0    MYU3      MYU3       MYU3       MYU3       9          2          1          *
+0xE8A0    MYU3      MYU3       MYU3       MYU3       16         2          1          *
 0xE8B0    MYUH      MYUH       MYUH       MYUH       9          2          1          *
 0xE8C0    MBUG      MBUG       MBUG       MBUG       9          2          1          *
 0xE8D0    MNOS      MNOS       MNOS       MNOS       9          2          1          *
@@ -354,7 +359,7 @@
 0xE920    MGHO      MGHO       MGHO       MGHO       9          2          1          *
 0xEA00    MSHR      MSHR       MSHR       MSHR       9          2          1          *
 0xEA10    MSH1      MSH1       MSH1       MSH1       16         2          1          *
-0xEA20    MCRD      MCRD       MCRD       MCRD       9          2          1          *
+0xEA20    MCRD      MCRD       MCRD       MCRD       16         2          1          *
 0xEB00    MSKT      MSKT       MSKT       MSKT       9          2          1          *
 0xEB00    MANI      MANI       MANI       MANI       9          3          1          *
 0xEB10    MSKA      MSKA       MSKA       MSKA       9          2          1          *
@@ -382,9 +387,9 @@
 0xEC50    MDH2      MDH2       MDH2       MDH2       9          2          1          *
 0xED00    MYU1      MYU1       MYU1       MYU1       9          2          1          *
 0xED09    MCOR      MCOR       MCOR       MCOR       9          2          1          *
-0xED10    MYU2      MYU2       MYU2       MYU2       9          2          1          *
+0xED10    MYU2      MYU2       MYU2       MYU2       16         2          1          *
 0xED19    MGLA      MGLA       MGLA       MGLA       9          2          1          *
-0xED20    MYU3      MYU3       MYU3       MYU3       9          2          1          *
+0xED20    MYU3      MYU3       MYU3       MYU3       16         2          1          *
 0xED20    MLEM      MLEM       MLEM       MLEM       9          2          1          *
 0xEE00    MWEB      MWEB       MWEB       MWEB       9          2          1          *
 0xEE10    MWRA      MWRA       MWRA       MWRA       9          2          1          *
@@ -405,7 +410,7 @@
 0xF010    MSKT      MSKT       MSKT       MSKT       9          2          1          *
 0xF020    MWI4      MWI4       MWI4       MWI4       9          2          1          *
 0xF100    MYU1      MYU1       MYU1       MYU1       9          2          1          *
-0xF110    MYU2      MYU2       MYU2       MYU2       9          2          1          *
+0xF110    MYU2      MYU2       MYU2       MYU2       16         2          1          *
 0xF200    MLIZ      MLIZ       MLIZ       MLIZ       9          2          1          *
 0xF210    MLI2      MLI2       MLI2       MLI2       9          2          1          *
 0xF300    MGFI      MGFI       MGFI       MGFI       9          4          1          *

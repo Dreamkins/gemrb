@@ -29,6 +29,7 @@
 #include "PluginMgr.h"
 #include "RNG.h"
 #include "TableMgr.h"
+
 #include "GameScript/GameScript.h"
 
 #include <cassert>
@@ -43,18 +44,7 @@ static std::vector<ResRef> snglist; //IE_IWD2_SPELL_SONG
 static std::vector<ResRef> shplist; //IE_IWD2_SPELL_SHAPE
 static const ResRef EmptyResRef;
 
-struct LevelAndKit
-{
-	unsigned int level;
-	unsigned int kit;
-	
-	LevelAndKit(unsigned int level, unsigned int kit) noexcept
-	: level(level), kit(kit)
-	{}
-};
-
-class SpellEntry
-{
+class SpellEntry {
 public:
 	const ResRef& GetSpell() const;
 	const ResRef& FindSpell(unsigned int level, unsigned int kit) const;
@@ -62,9 +52,10 @@ public:
 	bool Equals(const ResRef& spl) const;
 	void SetSpell(const ResRef& spl);
 	void AddLevel(unsigned int level, unsigned int kit);
+
 private:
 	ResRef spell;
-	std::vector<LevelAndKit> levels;
+	std::unordered_map<unsigned int, unsigned int> kitAndLevel;
 };
 
 const ResRef& SpellEntry::GetSpell() const
@@ -74,22 +65,22 @@ const ResRef& SpellEntry::GetSpell() const
 
 const ResRef& SpellEntry::FindSpell(unsigned int level, unsigned int kit) const
 {
-	for (const auto& entry : levels) {
-		if (entry.kit == kit && entry.level == level) {
-			return spell;
-		}
+	const auto it = kitAndLevel.find(kit);
+	if (it == kitAndLevel.cend()) {
+		return EmptyResRef;
 	}
-	return EmptyResRef;
+
+	return it->second == level ? spell : EmptyResRef;
 }
 
 int SpellEntry::FindSpell(unsigned int kit) const
 {
-	for (const auto& entry : levels) {
-		if (entry.kit == kit) {
-			return entry.level;
-		}
+	const auto it = kitAndLevel.find(kit);
+	if (it == kitAndLevel.cend()) {
+		return -1;
 	}
-	return -1;
+
+	return it->second;
 }
 
 static int FindSpell(const ResRef& spellref, std::vector<SpellEntry*>& list)
@@ -113,21 +104,14 @@ void SpellEntry::SetSpell(const ResRef& spl)
 	spell = spl;
 }
 
-void SpellEntry::AddLevel(unsigned int level,unsigned int kit)
+void SpellEntry::AddLevel(unsigned int level, unsigned int kit)
 {
-	if(!level) {
+	if (!level) {
 		return;
 	}
 
 	level--; // convert to 0-based for internal use
-	for (const auto& entry : levels) {
-		if (entry.kit == kit && entry.level == level) {
-			Log(WARNING, "CREImporter", "Skipping duplicate spell list table entry for: {}", spell);
-			return;
-		}
-	}
-	
-	levels.emplace_back(level, kit);
+	kitAndLevel[kit] = level;
 }
 
 static int IsInnate(const ResRef& name)
@@ -167,14 +151,13 @@ static std::vector<SpellEntry*> splList;
 static std::vector<SpellEntry*> domList;
 static std::vector<SpellEntry*> magList;
 
-static int IsDomain(const ResRef& name, unsigned short &level, unsigned int kit)
+static int IsDomain(const ResRef& name, unsigned short& level, unsigned int kit)
 {
 	size_t splCount = splList.size();
 	for (size_t i = 0; i < splCount; i++) {
 		if (domList[i] && domList[i]->Equals(name)) {
 			int lev = domList[i]->FindSpell(kit);
-			if (lev == -1) return -1;
-			level = static_cast<unsigned short>(lev);
+			if (lev == -1 || lev != level) return -1;
 			return static_cast<int>(i);
 		}
 	}
@@ -192,16 +175,15 @@ static int IsDomain(const ResRef& name, unsigned short &level, unsigned int kit)
 	return -1;
 }*/
 
-ieWord CREImporter::FindSpellType(const ResRef& name, unsigned short &level, unsigned int clsMask, unsigned int kit) const
+ieWord CREImporter::FindSpellType(const ResRef& name, unsigned short& level, unsigned int clsMask, unsigned int kit) const
 {
-	level = 0;
-	if (IsSong(name)>=0) return IE_IWD2_SPELL_SONG;
-	if (IsShape(name)>=0) return IE_IWD2_SPELL_SHAPE;
-	if (IsInnate(name)>=0) return IE_IWD2_SPELL_INNATE;
-// there is no gui page for specialists spells, so let's skip them here
-// otherwise their overlap causes bards and sorcerers to have their spells
-// on the wizard page
-//	if (IsSpecial(name, level, kit)>=0) return IE_IWD2_SPELL_WIZARD;
+	if (IsSong(name) >= 0) return IE_IWD2_SPELL_SONG;
+	if (IsShape(name) >= 0) return IE_IWD2_SPELL_SHAPE;
+	if (IsInnate(name) >= 0) return IE_IWD2_SPELL_INNATE;
+	// there is no gui page for specialists spells, so let's skip them here
+	// otherwise their overlap causes bards and sorcerers to have their spells
+	// on the wizard page
+	//	if (IsSpecial(name, level, kit)>=0) return IE_IWD2_SPELL_WIZARD;
 
 	// strict domain spell check, so we don't steal the spells from other books
 	// still needs to happen first or the laxer check below can misclassify
@@ -211,6 +193,7 @@ ieWord CREImporter::FindSpellType(const ResRef& name, unsigned short &level, uns
 	if (IsDomain(name, level, kit2) >= 0) return IE_IWD2_SPELL_DOMAIN;
 
 	// try harder for the rest
+	level = 0;
 	for (const auto& spell : splList) {
 		if (!spell || !spell->Equals(name)) {
 			continue;
@@ -238,31 +221,30 @@ ieWord CREImporter::FindSpellType(const ResRef& name, unsigned short &level, uns
 
 static int ResolveSpellName(const ResRef& name, int level, ieIWD2SpellType type)
 {
-	if (level>=MAX_SPELL_LEVEL) {
+	if (level >= MAX_SPELL_LEVEL) {
 		return -1;
 	}
 
 	int ret;
 	size_t splCount = splList.size();
-	switch(type)
-	{
-	case IE_IWD2_SPELL_INNATE:
-		ret = IsInnate(name);
-		if (ret != -1) return ret;
-		break;
-	case IE_IWD2_SPELL_SONG:
-		ret = IsSong(name);
-		if (ret != -1) return ret;
-		break;
-	case IE_IWD2_SPELL_SHAPE:
-		ret = IsShape(name);
-		if (ret != -1) return ret;
-		break;
-	case IE_IWD2_SPELL_DOMAIN:
-	default:
-		for (size_t i = 0; i < splCount; i++) {
-			if (splList[i] && splList[i]->Equals(name)) return static_cast<int>(i);
-		}
+	switch (type) {
+		case IE_IWD2_SPELL_INNATE:
+			ret = IsInnate(name);
+			if (ret != -1) return ret;
+			break;
+		case IE_IWD2_SPELL_SONG:
+			ret = IsSong(name);
+			if (ret != -1) return ret;
+			break;
+		case IE_IWD2_SPELL_SHAPE:
+			ret = IsShape(name);
+			if (ret != -1) return ret;
+			break;
+		case IE_IWD2_SPELL_DOMAIN:
+		default:
+			for (size_t i = 0; i < splCount; i++) {
+				if (splList[i] && splList[i]->Equals(name)) return static_cast<int>(i);
+			}
 	}
 	return -1;
 }
@@ -294,46 +276,46 @@ static const ResRef& ResolveSpellIndex(int index, int level, ieIWD2SpellType typ
 
 	const SpellEntry* entry;
 	switch (type) {
-	case IE_IWD2_SPELL_INNATE:
-		return innlist[index];
-	case IE_IWD2_SPELL_SONG:
-		return snglist[index];
-	case IE_IWD2_SPELL_SHAPE:
-		return shplist[index];
-	case IE_IWD2_SPELL_DOMAIN:
-		// translate the actual kit to a column index to make them comparable
-		// luckily they are in order
-		kit = static_cast<int>(std::log2(kit / 0x8000)); // 0x8000 is the first cleric kit
-		entry = domList[index];
-		if (entry) {
-			const ResRef& ret = entry->FindSpell(level, kit);
-			if (!ret.IsEmpty()) {
-				return ret;
+		case IE_IWD2_SPELL_INNATE:
+			return innlist[index];
+		case IE_IWD2_SPELL_SONG:
+			return snglist[index];
+		case IE_IWD2_SPELL_SHAPE:
+			return shplist[index];
+		case IE_IWD2_SPELL_DOMAIN:
+			// translate the actual kit to a column index to make them comparable
+			// luckily they are in order
+			kit = static_cast<int>(std::log2(kit / 0x8000)); // 0x8000 is the first cleric kit
+			entry = domList[index];
+			if (entry) {
+				const ResRef& ret = entry->FindSpell(level, kit);
+				if (!ret.IsEmpty()) {
+					return ret;
+				}
 			}
-		}
-		// sigh, retry with wizard spells, since the table does not cover everything npcs have
-		kit = -1;
-		type = IE_IWD2_SPELL_WIZARD;
-		break;
-	case IE_IWD2_SPELL_WIZARD:
-		if (index >= static_cast<int>(splList.size())) {
+			// sigh, retry with wizard spells, since the table does not cover everything npcs have
+			kit = -1;
+			type = IE_IWD2_SPELL_WIZARD;
 			break;
-		}
-		// translate the actual kit to a column index to make them comparable
-		kit = static_cast<int>(std::log2(kit / 0x40)); // 0x40 is the first mage kit
-		//if it is a specialist spell, return it now
-		entry = magList[index];
-		if (entry) {
-			const ResRef& ret = entry->FindSpell(level, kit);
-			if (!ret.IsEmpty()) {
-				return ret;
+		case IE_IWD2_SPELL_WIZARD:
+			if (index >= static_cast<int>(splList.size())) {
+				break;
 			}
-		}
-		//fall through
-	default:
-		kit = -1;
-		//comes later
-		break;
+			// translate the actual kit to a column index to make them comparable
+			kit = static_cast<int>(std::log2(kit / 0x40)); // 0x40 is the first mage kit
+			//if it is a specialist spell, return it now
+			entry = magList[index];
+			if (entry) {
+				const ResRef& ret = entry->FindSpell(level, kit);
+				if (!ret.IsEmpty()) {
+					return ret;
+				}
+			}
+			//fall through
+		default:
+			kit = -1;
+			//comes later
+			break;
 	}
 
 	// type matches the table columns (0-bard to 6-wizard)
@@ -416,22 +398,30 @@ static void GetKitSpell(const ResRef& tableRef, std::vector<SpellEntry*>& list)
 	}
 	TableMgr::index_t index;
 	for (TableMgr::index_t i = 0; i < count; ++i) {
+		ResRef spellRef = tab->QueryField(i, lastCol);
+
 		if (indexlist) {
 			index = i;
 		} else {
-			// find the correct index in listspll.2da
-			ResRef spellRef = tab->QueryField(i, lastCol);
 			// the table has disabled spells in it and they all have the first two chars replaced by '*'
 			if (IsStar(spellRef)) {
 				continue;
 			}
+			// find the correct index in listspll.2da
 			index = FindSpell(spellRef, splList);
-			assert (index != TableMgr::npos);
+			assert(index != TableMgr::npos);
 		}
-		list[index] = new SpellEntry;
-		list[index]->SetSpell(tab->QueryField(i, lastCol));
+
+		// IWD2 listdomn has SPWI903 twice
+		auto&& listItem = list[index];
+		if (listItem == nullptr) {
+			listItem = new SpellEntry;
+			listItem->SetSpell(spellRef);
+		}
+
 		for (TableMgr::index_t col = 0; col < lastCol; ++col) {
-			list[index]->AddLevel(tab->QueryFieldSigned<int>(i, col), col);
+			auto level = tab->QueryFieldSigned<int>(i, col);
+			listItem->AddLevel(level, col);
 		}
 	}
 }
@@ -460,9 +450,9 @@ CREImporter::CREImporter(void)
 bool CREImporter::Import(DataStream* str)
 {
 	char Signature[8];
-	str->Read( Signature, 8 );
+	str->Read(Signature, 8);
 	IsCharacter = false;
-	if (strncmp( Signature, "CHR ",4) == 0) {
+	if (strncmp(Signature, "CHR ", 4) == 0) {
 		IsCharacter = true;
 		//skips chr signature, reads cre signature
 		if (!SeekCreHeader(Signature)) {
@@ -471,23 +461,23 @@ bool CREImporter::Import(DataStream* str)
 	} else {
 		CREOffset = 0;
 	}
-	if (strncmp( Signature, "CRE V1.0", 8 ) == 0) {
+	if (strncmp(Signature, "CRE V1.0", 8) == 0) {
 		CREVersion = CREVersion::V1_0;
 		return true;
 	}
-	if (strncmp( Signature, "CRE V1.2", 8 ) == 0) {
+	if (strncmp(Signature, "CRE V1.2", 8) == 0) {
 		CREVersion = CREVersion::V1_2;
 		return true;
 	}
-	if (strncmp( Signature, "CRE V2.2", 8 ) == 0) {
+	if (strncmp(Signature, "CRE V2.2", 8) == 0) {
 		CREVersion = CREVersion::V2_2;
 		return true;
 	}
-	if (strncmp( Signature, "CRE V9.0", 8 ) == 0) {
+	if (strncmp(Signature, "CRE V9.0", 8) == 0) {
 		CREVersion = CREVersion::V9_0;
 		return true;
 	}
-	if (strncmp( Signature, "CRE V0.0", 8 ) == 0) {
+	if (strncmp(Signature, "CRE V0.0", 8) == 0) {
 		CREVersion = CREVersion::GemRB;
 		return true;
 	}
@@ -500,63 +490,63 @@ void CREImporter::SetupSlotCounts()
 {
 	switch (CREVersion) {
 		case CREVersion::V1_2: // pst
-			QWPCount=4;
-			QSPCount=3;
-			QITCount=5;
+			QWPCount = 4;
+			QSPCount = 3;
+			QITCount = 5;
 			break;
 		case CREVersion::GemRB: // own
-			QWPCount=8;
-			QSPCount=9;
-			QITCount=5;
+			QWPCount = 8;
+			QSPCount = 9;
+			QITCount = 5;
 			break;
 		case CREVersion::V2_2: // iwd2
-			QWPCount=8;
-			QSPCount=9;
-			QITCount=3;
+			QWPCount = 8;
+			QSPCount = 9;
+			QITCount = 3;
 			break;
 		default: //others
-			QWPCount=4;
-			QSPCount=3;
-			QITCount=3;
+			QWPCount = 4;
+			QSPCount = 3;
+			QITCount = 3;
 			break;
 	}
 }
 
-void CREImporter::WriteChrHeader(DataStream *stream, const Actor *act)
+void CREImporter::WriteChrHeader(DataStream* stream, const Actor* act)
 {
 	char Signature[8];
 	ieDword CRESize;
 	ieDword hdrSize = 0;
 
-	CRESize = GetStoredFileSize (act);
+	CRESize = GetStoredFileSize(act);
 	switch (CREVersion) {
 		case CREVersion::V9_0: // iwd/HoW
-			memcpy(Signature, "CHR V1.0",8);
+			memcpy(Signature, "CHR V1.0", 8);
 			hdrSize = 0x64; //headersize
 			TotSCEFF = 1;
 			break;
 		case CREVersion::V1_0: // bg1
-			memcpy(Signature, "CHR V1.0",8);
+			memcpy(Signature, "CHR V1.0", 8);
 			hdrSize = 0x64; //headersize
 			TotSCEFF = 0;
 			break;
 		case CREVersion::V1_1: // bg2 (fake)
-			memcpy(Signature, "CHR V2.0",8);
+			memcpy(Signature, "CHR V2.0", 8);
 			hdrSize = 0x64; //headersize
 			TotSCEFF = 1;
 			break;
 		case CREVersion::V1_2: // pst
-			memcpy(Signature, "CHR V1.2",8);
+			memcpy(Signature, "CHR V1.2", 8);
 			hdrSize = 0x68; //headersize
 			TotSCEFF = 0;
 			break;
 		case CREVersion::V2_2: // iwd2
-			memcpy(Signature, "CHR V2.2",8);
+			memcpy(Signature, "CHR V2.2", 8);
 			hdrSize = 0x21c; //headersize
 			TotSCEFF = 1;
 			break;
 		case CREVersion::GemRB: // own format
-			memcpy(Signature, "CHR V0.0",8);
+			memcpy(Signature, "CHR V0.0", 8);
 			hdrSize = 0x1dc; //headersize (iwd2-9x8+8)
 			TotSCEFF = 1;
 			break;
@@ -564,11 +554,11 @@ void CREImporter::WriteChrHeader(DataStream *stream, const Actor *act)
 			Log(ERROR, "CREImporter", "Unknown CHR version!");
 			return;
 	}
-	stream->Write( Signature, 8);
+	stream->Write(Signature, 8);
 	std::string tmpstr = TLKStringFromString(act->GetShortName());
 	stream->WriteVariable(ieVariable(tmpstr));
 	stream->WriteDword(hdrSize); //cre offset (chr header size)
-	stream->WriteDword(CRESize);  //cre size
+	stream->WriteDword(CRESize); //cre size
 
 	SetupSlotCounts();
 	for (int i = 0; i < QWPCount; i++) {
@@ -578,10 +568,10 @@ void CREImporter::WriteChrHeader(DataStream *stream, const Actor *act)
 		stream->WriteWord(act->PCStats->QuickWeaponHeaders[i]);
 	}
 	for (int i = 0; i < QSPCount; i++) {
-		stream->WriteResRef (act->PCStats->QuickSpells[i]);
+		stream->WriteResRef(act->PCStats->QuickSpells[i]);
 	}
 	//This is 9 for IWD2 and GemRB
-	if (QSPCount==9) {
+	if (QSPCount == 9) {
 		//NOTE: the gemrb internal format stores
 		//0xff or 0xfe in case of innates and bardsongs
 		for (ieByte qbyte : act->PCStats->QuickSpellBookType) {
@@ -600,45 +590,45 @@ void CREImporter::WriteChrHeader(DataStream *stream, const Actor *act)
 		stream->WriteWord(act->PCStats->QuickItemHeaders[i]);
 	}
 	switch (CREVersion) {
-	case CREVersion::V2_2:
-		//gemrb format doesn't save these redundantly
-		for (int i = 0; i < QSPCount; i++) {
-			if (act->PCStats->QuickSpellBookType[i] == 0xff) {
-				stream->WriteResRef (act->PCStats->QuickSpells[i]);
-			} else {
-				stream->WriteFilling(8);
+		case CREVersion::V2_2:
+			//gemrb format doesn't save these redundantly
+			for (int i = 0; i < QSPCount; i++) {
+				if (act->PCStats->QuickSpellBookType[i] == 0xff) {
+					stream->WriteResRef(act->PCStats->QuickSpells[i]);
+				} else {
+					stream->WriteFilling(8);
+				}
 			}
-		}
-		for (int i = 0; i < QSPCount; i++) {
-			if (act->PCStats->QuickSpellBookType[i] == 0xfe) {
-				stream->WriteResRef (act->PCStats->QuickSpells[i]);
-			} else {
-				stream->WriteFilling(8);
+			for (int i = 0; i < QSPCount; i++) {
+				if (act->PCStats->QuickSpellBookType[i] == 0xfe) {
+					stream->WriteResRef(act->PCStats->QuickSpells[i]);
+				} else {
+					stream->WriteFilling(8);
+				}
 			}
-		}
-		//fallthrough
-	case CREVersion::GemRB:
-		for (int i = 0; i < QSPCount; i++) {
-			stream->WriteDword(act->PCStats->QSlots[i+3]);
-		}
-		stream->WriteFilling(26);
-		{
-			auto soundFolder = TLKStringFromString(act->PCStats->SoundFolder);
-			stream->WriteStringLC(std::move(soundFolder), ieVariable::Size);
-		}
-		stream->WriteResRef(act->PCStats->SoundSet);
-		for (const auto& setting : act->PCStats->ExtraSettings) {
-			stream->WriteDword(setting);
-		}
-		//Reserved
-		stream->WriteFilling(64);
-		break;
-	default:
-		break;
+			//fallthrough
+		case CREVersion::GemRB:
+			for (int i = 0; i < QSPCount; i++) {
+				stream->WriteDword(act->PCStats->QSlots[i + 3]);
+			}
+			stream->WriteFilling(26);
+			{
+				auto soundFolder = TLKStringFromString(act->PCStats->SoundFolder);
+				stream->WriteStringLC(std::move(soundFolder), ieVariable::Size);
+			}
+			stream->WriteResRef(act->PCStats->SoundSet);
+			for (const auto& setting : act->PCStats->ExtraSettings) {
+				stream->WriteDword(setting);
+			}
+			//Reserved
+			stream->WriteFilling(64);
+			break;
+		default:
+			break;
 	}
 }
 
-void CREImporter::ReadChrHeader(Actor *act)
+void CREImporter::ReadChrHeader(Actor* act)
 {
 	ieVariable name;
 	char Signature[8];
@@ -646,7 +636,7 @@ void CREImporter::ReadChrHeader(Actor *act)
 
 	act->CreateStats();
 	str->Rewind();
-	str->Read (Signature, 8);
+	str->Read(Signature, 8);
 	str->ReadVariable(name);
 	if (name) {
 		act->SetName(StringFromTLK(name), 0); //setting longname
@@ -661,9 +651,9 @@ void CREImporter::ReadChrHeader(Actor *act)
 		str->ReadScalar(act->PCStats->QuickWeaponHeaders[i]);
 	}
 	for (int i = 0; i < QSPCount; i++) {
-		str->ReadResRef (act->PCStats->QuickSpells[i]);
+		str->ReadResRef(act->PCStats->QuickSpells[i]);
 	}
-	if (QSPCount==9) {
+	if (QSPCount == 9) {
 		str->Read(act->PCStats->QuickSpellBookType.data(), 9);
 		str->Seek(1, GEM_CURRENT_POS); // null terminator
 	}
@@ -677,55 +667,55 @@ void CREImporter::ReadChrHeader(Actor *act)
 	ResRef spell;
 	//here comes the version specific read
 	switch (CREVersion) {
-	case CREVersion::V2_2:
-		//gemrb format doesn't save these redundantly
-		// quick innates and quick songs
-		for (int i = 0; i < QSPCount; i++) {
-			str->ReadResRef(spell);
-			// there's a fixed number of buttons, so we can save some space by storing both types in the same field
-			if (!spell.IsEmpty()) {
-				act->PCStats->QuickSpellBookType[i] = 0xff;
-				act->PCStats->QuickSpells[i] = spell;
+		case CREVersion::V2_2:
+			//gemrb format doesn't save these redundantly
+			// quick innates and quick songs
+			for (int i = 0; i < QSPCount; i++) {
+				str->ReadResRef(spell);
+				// there's a fixed number of buttons, so we can save some space by storing both types in the same field
+				if (!spell.IsEmpty()) {
+					act->PCStats->QuickSpellBookType[i] = 0xff;
+					act->PCStats->QuickSpells[i] = spell;
+				}
 			}
-		}
-		for (int i = 0; i < QSPCount; i++) {
-			str->ReadResRef(spell);
-			if (!spell.IsEmpty()) {
-				act->PCStats->QuickSpellBookType[i] = 0xfe;
-				act->PCStats->QuickSpells[i] = spell;
+			for (int i = 0; i < QSPCount; i++) {
+				str->ReadResRef(spell);
+				if (!spell.IsEmpty()) {
+					act->PCStats->QuickSpellBookType[i] = 0xfe;
+					act->PCStats->QuickSpells[i] = spell;
+				}
 			}
-		}
-		//fallthrough
-	case CREVersion::GemRB:
-		for (int i = 0; i < QSPCount; i++) {
-			ieDword tmpDword;
-			str->ReadDword(tmpDword);
-			act->PCStats->QSlots[i+3] = (ieByte) tmpDword;
-		}
-		str->Seek(26, GEM_CURRENT_POS);
-		{
-			ieVariable soundFolder;
-			str->ReadVariable(soundFolder);
-			act->PCStats->SoundFolder = StringFromTLK(soundFolder);
-		}
-		str->ReadResRef(act->PCStats->SoundSet);
-		for (auto& setting : act->PCStats->ExtraSettings) {
-			str->ReadDword(setting);
-		}
-		//Reserved
-		str->Seek(64, GEM_CURRENT_POS);
-		break;
-	default:
-		break;
+			//fallthrough
+		case CREVersion::GemRB:
+			for (int i = 0; i < QSPCount; i++) {
+				ieDword tmpDword;
+				str->ReadDword(tmpDword);
+				act->PCStats->QSlots[i + 3] = (ieByte) tmpDword;
+			}
+			str->Seek(26, GEM_CURRENT_POS);
+			{
+				ieVariable soundFolder;
+				str->ReadVariable(soundFolder);
+				act->PCStats->SoundFolder = StringFromTLK(soundFolder);
+			}
+			str->ReadResRef(act->PCStats->SoundSet);
+			for (auto& setting : act->PCStats->ExtraSettings) {
+				str->ReadDword(setting);
+			}
+			//Reserved
+			str->Seek(64, GEM_CURRENT_POS);
+			break;
+		default:
+			break;
 	}
 }
 
-bool CREImporter::SeekCreHeader(char *Signature)
+bool CREImporter::SeekCreHeader(char* Signature)
 {
 	str->Seek(32, GEM_CURRENT_POS);
 	str->ReadDword(CREOffset);
 	str->Seek(CREOffset, GEM_STREAM_START);
-	str->Read( Signature, 8);
+	str->Read(Signature, 8);
 	return true;
 }
 
@@ -733,7 +723,7 @@ CREMemorizedSpell* CREImporter::GetMemorizedSpell()
 {
 	CREMemorizedSpell* spl = new CREMemorizedSpell();
 
-	str->ReadResRef( spl->SpellResRef );
+	str->ReadResRef(spl->SpellResRef);
 	str->ReadDword(spl->Flags); // was split into flags word and two alignment bytes
 
 	return spl;
@@ -750,14 +740,14 @@ CREKnownSpell* CREImporter::GetKnownSpell()
 	return spl;
 }
 
-void CREImporter::ReadScript(Actor *act, int ScriptLevel)
+void CREImporter::ReadScript(Actor* act, int ScriptLevel)
 {
 	ResRef aScript;
 	str->ReadResRef(aScript);
 	act->SetScript(aScript, ScriptLevel, act->InParty != 0);
 }
 
-CRESpellMemorization* CREImporter::GetSpellMemorization(Actor *act)
+CRESpellMemorization* CREImporter::GetSpellMemorization(Actor* act)
 {
 	ieWord Level, Type, Number, Number2;
 
@@ -776,7 +766,7 @@ CRESpellMemorization* CREImporter::GetSpellMemorization(Actor *act)
 	return spl;
 }
 
-void CREImporter::SetupColor(ieDword &stat) const
+void CREImporter::SetupColor(ieDword& stat) const
 {
 	static TableMgr::index_t RandColor = 1;
 	if (RandColor == 0) return;
@@ -817,7 +807,7 @@ void CREImporter::SetupColor(ieDword &stat) const
 	stat = colors->second[RAND<ieDword>(ieDword(0), RandRows - 1)];
 }
 
-void CREImporter::ReadDialog(Actor *act)
+void CREImporter::ReadDialog(Actor* act)
 {
 	ResRef Dialog;
 	str->ReadResRef(Dialog);
@@ -834,7 +824,7 @@ Actor* CREImporter::GetActor(unsigned char is_in_party)
 	act->InParty = is_in_party;
 	str->ReadStrRef(act->LongStrRef);
 	//Beetle name in IWD needs the allow zero flag
-	String poi = core->GetString( act->LongStrRef, STRING_FLAGS::ALLOW_ZERO );
+	String poi = core->GetString(act->LongStrRef, STRING_FLAGS::ALLOW_ZERO);
 	act->SetName(std::move(poi), 1); //setting longname
 	str->ReadStrRef(act->ShortStrRef);
 	if (act->ShortStrRef == (ieStrRef) -1) {
@@ -851,25 +841,25 @@ Actor* CREImporter::GetActor(unsigned char is_in_party)
 	str->ReadDword(act->BaseStats[IE_STATE_ID]);
 	ieWordSigned tmps;
 	str->ReadScalar(tmps);
-	act->BaseStats[IE_HITPOINTS]=(ieDwordSigned)tmps;
+	act->BaseStats[IE_HITPOINTS] = (ieDwordSigned) tmps;
 	if (tmps <= 0 && ((ieDwordSigned) act->BaseStats[IE_XPVALUE]) < 0) {
 		act->BaseStats[IE_STATE_ID] |= STATE_DEAD;
 	}
 	str->ReadScalar<Actor::stat_t, ieWord>(act->BaseStats[IE_MAXHITPOINTS]);
-	str->ReadDword(act->BaseStats[IE_ANIMATION_ID]);//animID is a dword
+	str->ReadDword(act->BaseStats[IE_ANIMATION_ID]); //animID is a dword
 	ieByte tmp2[7];
-	str->Read( tmp2, 7);
-	for (int i=0;i<7;i++) {
+	str->Read(tmp2, 7);
+	for (int i = 0; i < 7; i++) {
 		ieDword t = tmp2[i];
 		// apply RANDCOLR.2DA transformation
 		SetupColor(t);
 		t |= t << 8;
 		t |= t << 16;
-		act->BaseStats[IE_COLORS+i]=t;
+		act->BaseStats[IE_COLORS + i] = t;
 	}
 
-	str->Read( &TotSCEFF, 1 );
-	if (CREVersion== CREVersion::V1_0 && TotSCEFF) {
+	str->Read(&TotSCEFF, 1);
+	if (CREVersion == CREVersion::V1_0 && TotSCEFF) {
 		CREVersion = CREVersion::V1_1;
 	}
 	// saving in original version requires the original version
@@ -877,17 +867,17 @@ Actor* CREImporter::GetActor(unsigned char is_in_party)
 	if (core->config.SaveAsOriginal) {
 		act->creVersion = CREVersion;
 	}
-	str->ReadResRef( act->SmallPortrait );
+	str->ReadResRef(act->SmallPortrait);
 	if (act->SmallPortrait.IsEmpty()) {
 		act->SmallPortrait = "NONE";
 	}
-	str->ReadResRef( act->LargePortrait );
+	str->ReadResRef(act->LargePortrait);
 	if (act->LargePortrait.IsEmpty()) {
 		act->LargePortrait = "NONE";
 	}
 
 	size_t inventorySize;
-	switch(CREVersion) {
+	switch (CREVersion) {
 		case CREVersion::GemRB:
 			inventorySize = GetActorGemRB(act);
 			break;
@@ -915,8 +905,8 @@ Actor* CREImporter::GetActor(unsigned char is_in_party)
 	}
 
 	// Read saved effects
-	if (core->IsAvailable(IE_EFF_CLASS_ID) ) {
-		ReadEffects( act );
+	if (core->IsAvailable(IE_EFF_CLASS_ID)) {
+		ReadEffects(act);
 	} else {
 		Log(ERROR, "CREImporter", "Effect importer is unavailable!");
 	}
@@ -941,7 +931,7 @@ Actor* CREImporter::GetActor(unsigned char is_in_party)
 	return act;
 }
 
-void CREImporter::GetActorPST(Actor *act)
+void CREImporter::GetActorPST(Actor* act)
 {
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_REPUTATION]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_HIDEINSHADOWS]);
@@ -993,7 +983,7 @@ void CREImporter::GetActorPST(Actor *act)
 	}
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_TRACKING]);
 	//scriptname of tracked creature (according to IE dev info)
-	str->Seek( 32, GEM_CURRENT_POS );
+	str->Seek(32, GEM_CURRENT_POS);
 	for (auto& ref : act->StrRefs) {
 		str->ReadStrRef(ref);
 	}
@@ -1022,7 +1012,7 @@ void CREImporter::GetActorPST(Actor *act)
 	ReadScript(act, SCR_GENERAL);
 	ReadScript(act, SCR_DEFAULT);
 
-	str->Seek( 36, GEM_CURRENT_POS );
+	str->Seek(36, GEM_CURRENT_POS);
 	//the overlays are not fully decoded yet
 	//they are a kind of effect block (like our vvclist)
 	// NOTE: rendered obsolete by our implementation of pst fx_overlay
@@ -1053,7 +1043,7 @@ void CREImporter::GetActorPST(Actor *act)
 		str->ReadScalar<Actor::stat_t, ieWord>(act->BaseStats[IE_COLORS + i]);
 	}
 	act->BaseStats[IE_COLORCOUNT] = colorCount;
-	str->Read(act->pstColorBytes, 10); // color location in IESDP, sort of a palette index and flags
+	str->Read(act->ignoredFields.pstColorBytes, 10); // color location in IESDP, sort of a palette index and flags
 	str->Seek(21, GEM_CURRENT_POS);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_SPECIES]); // offset: 0x311
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_TEAM]);
@@ -1064,9 +1054,9 @@ void CREImporter::GetActorPST(Actor *act)
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_CLASS]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_SPECIFIC]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_SEX]);
-	str->Seek( 5, GEM_CURRENT_POS );
+	str->Seek(5, GEM_CURRENT_POS);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_ALIGNMENT]);
-	str->Seek( 4, GEM_CURRENT_POS );
+	str->Seek(4, GEM_CURRENT_POS);
 	ieVariable scriptname;
 	str->ReadVariable(scriptname);
 	act->SetScriptName(scriptname);
@@ -1126,7 +1116,7 @@ void CREImporter::ReadInventory(Actor* act, size_t slotCount)
 			//20 is the size of CREItem on disc (8+2+3x2+4)
 			str->Seek(ItemsOffset + index * 20 + CREOffset, GEM_STREAM_START);
 			//the core allocates this item data
-			CREItem *item = core->ReadItem(str);
+			CREItem* item = core->ReadItem(str);
 			int Slot = core->QuerySlot((unsigned int) i);
 			if (item) {
 				act->inventory.SetSlotItem(item, Slot);
@@ -1143,11 +1133,9 @@ void CREImporter::ReadInventory(Actor* act, size_t slotCount)
 		// some equipping effects require everything to be set up, which may not be the case on first load
 		if (core->GetGame()) act->inventory.EquipBestWeapon(EQUIP_MELEE);
 	}
-
-	indices.clear();
 }
 
-void CREImporter::ReadSpellbook(Actor *act)
+void CREImporter::ReadSpellbook(Actor* act)
 {
 	// Reading spellbook
 	std::vector<CREKnownSpell*> knownSpells;
@@ -1195,7 +1183,7 @@ void CREImporter::ReadSpellbook(Actor *act)
 	for (auto knownSpell : knownSpells) {
 		if (knownSpell) {
 			Log(WARNING, "CREImporter", "Dangling known spell in creature: {}!",
-				knownSpell->SpellResRef);
+			    knownSpell->SpellResRef);
 			delete knownSpell;
 		}
 	}
@@ -1204,23 +1192,23 @@ void CREImporter::ReadSpellbook(Actor *act)
 	for (auto memorizedSpell : memorizedSpells) {
 		if (memorizedSpell) {
 			Log(WARNING, "CREImporter", "Dangling spell in creature: {}!",
-				memorizedSpell->SpellResRef);
+			    memorizedSpell->SpellResRef);
 			delete memorizedSpell;
 		}
 	}
 	memorizedSpells.clear();
 }
 
-void CREImporter::ReadEffects(Actor *act)
+void CREImporter::ReadEffects(Actor* act)
 {
-	str->Seek( EffectsOffset+CREOffset, GEM_STREAM_START );
+	str->Seek(EffectsOffset + CREOffset, GEM_STREAM_START);
 
 	for (unsigned int i = 0; i < EffectsCount; i++) {
 		act->fxqueue.AddEffect(GetEffect());
 	}
 }
 
-Effect *CREImporter::GetEffect()
+Effect* CREImporter::GetEffect()
 {
 	PluginHolder<EffectMgr> eM = MakePluginHolder<EffectMgr>(IE_EFF_CLASS_ID);
 
@@ -1284,7 +1272,7 @@ size_t CREImporter::GetActorGemRB(Actor* act)
 	return 0;
 }
 
-void CREImporter::GetActorBG(Actor *act)
+void CREImporter::GetActorBG(Actor* act)
 {
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_REPUTATION]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_HIDEINSHADOWS]);
@@ -1298,12 +1286,12 @@ void CREImporter::GetActorBG(Actor *act)
 	str->ReadScalar<Actor::stat_t, ieWordSigned>(act->BaseStats[IE_ACPIERCINGMOD]);
 	str->ReadScalar<Actor::stat_t, ieWordSigned>(act->BaseStats[IE_ACSLASHINGMOD]);
 	ieByteSigned tmpByte;
-	str->Read( &tmpByte, 1 );
+	str->Read(&tmpByte, 1);
 	act->ToHit.SetBase(tmpByte);
-	str->Read( &tmpByte, 1 );
+	str->Read(&tmpByte, 1);
 	tmpWord = tmpByte * 2;
-	if (tmpWord>10) tmpWord-=11;
-	act->BaseStats[IE_NUMBEROFATTACKS]=(ieByte) tmpWord;
+	if (tmpWord > 10) tmpWord -= 11;
+	act->BaseStats[IE_NUMBEROFATTACKS] = (ieByte) tmpWord;
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_SAVEVSDEATH]);
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_SAVEVSWANDS]);
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_SAVEVSPOLY]);
@@ -1331,11 +1319,11 @@ void CREImporter::GetActorBG(Actor *act)
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_INTOXICATION]);
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_LUCK]);
 	for (int i = 0; i < 21; i++) {
-		str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_PROFICIENCYBASTARDSWORD+i]);
+		str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_PROFICIENCYBASTARDSWORD + i]);
 	}
 
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_TRACKING]);
-	str->Seek( 32, GEM_CURRENT_POS );
+	str->Seek(32, GEM_CURRENT_POS);
 	for (auto& ref : act->StrRefs) {
 		str->ReadStrRef(ref);
 	}
@@ -1398,7 +1386,7 @@ void CREImporter::GetActorBG(Actor *act)
 	ReadDialog(act);
 }
 
-void CREImporter::GetIWD2Spellpage(Actor *act, ieIWD2SpellType type, int level, int count)
+void CREImporter::GetIWD2Spellpage(Actor* act, ieIWD2SpellType type, int level, int count)
 {
 	ieDword spellindex;
 	ieDword totalcount;
@@ -1407,18 +1395,19 @@ void CREImporter::GetIWD2Spellpage(Actor *act, ieIWD2SpellType type, int level, 
 	int i = count;
 	CRESpellMemorization* sm = act->spellbook.GetSpellMemorization(type, level);
 	assert(sm && sm->SlotCount == 0 && sm->SlotCountWithBonus == 0); // unused
-	while(i--) {
+	while (i--) {
 		str->ReadDword(spellindex);
 		str->ReadDword(totalcount);
 		str->ReadDword(memocount);
 		str->Seek(4, GEM_CURRENT_POS);
 		const ResRef& tmp = ResolveSpellIndex(spellindex, level, type, act->BaseStats[IE_KIT]);
 		if (tmp.IsEmpty()) {
-			error("CREImporter", "Unresolved spell index: {} level:{}, type: {}",
-				  spellindex, level + 1, type);
+			Log(ERROR, "CREImporter", "Unresolved spell index: {} level:{}, type: {}",
+			    spellindex, level + 1, type);
+			continue;
 		}
 
-		CREKnownSpell *known = new CREKnownSpell;
+		CREKnownSpell* known = new CREKnownSpell;
 		known->Level = static_cast<ieWord>(level);
 		known->Type = type;
 		known->SpellResRef = tmp;
@@ -1430,13 +1419,13 @@ void CREImporter::GetIWD2Spellpage(Actor *act, ieIWD2SpellType type, int level, 
 				Log(ERROR, "CREImporter", "More spells still known than memorised.");
 				break;
 			}
-			CREMemorizedSpell *memory = new CREMemorizedSpell;
+			CREMemorizedSpell* memory = new CREMemorizedSpell;
 			memory->Flags = 1;
 			memory->SpellResRef = tmp;
 			sm->memorized_spells.push_back(memory);
 		}
-		while(totalcount--) {
-			CREMemorizedSpell *memory = new CREMemorizedSpell;
+		while (totalcount--) {
+			CREMemorizedSpell* memory = new CREMemorizedSpell;
 			memory->Flags = 0;
 			memory->SpellResRef = tmp;
 			sm->memorized_spells.push_back(memory);
@@ -1459,7 +1448,7 @@ void CREImporter::GetIWD2Spellpage(Actor *act, ieIWD2SpellType type, int level, 
 	}
 }
 
-void CREImporter::GetActorIWD2(Actor *act)
+void CREImporter::GetActorIWD2(Actor* act)
 {
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_REPUTATION]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_HIDEINSHADOWS]);
@@ -1467,16 +1456,16 @@ void CREImporter::GetActorIWD2(Actor *act)
 	ieWordSigned tmpWord;
 	str->ReadScalar(tmpWord);
 	act->AC.SetNatural(tmpWord);
-	
+
 	str->ReadScalar<Actor::stat_t, ieWordSigned>(act->BaseStats[IE_ACCRUSHINGMOD]);
 	str->ReadScalar<Actor::stat_t, ieWordSigned>(act->BaseStats[IE_ACMISSILEMOD]);
 	str->ReadScalar<Actor::stat_t, ieWordSigned>(act->BaseStats[IE_ACPIERCINGMOD]);
 	str->ReadScalar<Actor::stat_t, ieWordSigned>(act->BaseStats[IE_ACSLASHINGMOD]);
-	
+
 	ieByteSigned tmpByte;
 	str->ReadScalar(tmpByte);
-	act->ToHit.SetBase(tmpByte);//Unknown in CRE V2.2
-	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_NUMBEROFATTACKS]); //Unknown in CRE V2.2
+	act->ToHit.SetBase(tmpByte);
+	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_NUMBEROFATTACKS]);
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_SAVEVSDEATH]); //Fortitude Save in V2.2
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_SAVEVSWANDS]); //Reflex Save in V2.2
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_SAVEVSPOLY]); // will Save in V2.2
@@ -1492,11 +1481,12 @@ void CREImporter::GetActorIWD2(Actor *act)
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_RESISTPIERCING]);
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_RESISTMISSILE]);
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_MAGICDAMAGERESISTANCE]);
-	str->Seek( 4, GEM_CURRENT_POS );
+	str->Seek(4, GEM_CURRENT_POS);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_FATIGUE]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_INTOXICATION]);
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_LUCK]);
-	str->Seek( 34, GEM_CURRENT_POS ); //unknowns
+	// 1 byte turn undead — we recalculate anyway
+	str->Seek(34, GEM_CURRENT_POS); //unknowns
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_CLASSLEVELSUM]); //total levels
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_LEVELBARBARIAN]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_LEVELBARD]);
@@ -1509,23 +1499,24 @@ void CREImporter::GetActorIWD2(Actor *act)
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_LEVELTHIEF]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_LEVELSORCERER]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_LEVELMAGE]);
-	str->Seek( 22, GEM_CURRENT_POS ); //levels for classes
+	str->Seek(22, GEM_CURRENT_POS); //levels for classes
 	for (int i = 0; i < 64; i++) {
 		str->ReadStrRef(act->StrRefs[i]);
 	}
-	ReadScript( act, SCR_SPECIFICS);
-	ReadScript( act, SCR_AREA);
-	str->Seek( 4, GEM_CURRENT_POS );
+	ReadScript(act, SCR_SPECIFICS);
+	ReadScript(act, SCR_AREA);
+	// 1 byte enchantment level?
+	str->Seek(4, GEM_CURRENT_POS);
 	str->ReadDword(act->BaseStats[IE_FEATS1]);
 	str->ReadDword(act->BaseStats[IE_FEATS2]);
 	str->ReadDword(act->BaseStats[IE_FEATS3]);
-	str->Seek( 12, GEM_CURRENT_POS );
+	str->Seek(12, GEM_CURRENT_POS);
 	//proficiencies
 	for (int i = 0; i < 26; i++) {
 		str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_PROFICIENCYBASTARDSWORD + i]);
 	}
 	//skills
-	str->Seek( 38, GEM_CURRENT_POS );
+	str->Seek(38, GEM_CURRENT_POS);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_ALCHEMY]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_ANIMALS]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_BLUFF]);
@@ -1542,7 +1533,7 @@ void CREImporter::GetActorIWD2(Actor *act)
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_SPELLCRAFT]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_MAGICDEVICE]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_TRACKING]);
-	str->Seek( 50, GEM_CURRENT_POS );
+	str->Seek(50, GEM_CURRENT_POS);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_CR]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_HATEDRACE]);
 	//we got 7 more hated races
@@ -1552,7 +1543,7 @@ void CREImporter::GetActorIWD2(Actor *act)
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_SUBRACE]);
 	//skipping 2 bytes, one is SEX (could use it for sounds)
 	str->ReadScalar(tmpWord);
-	
+
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_STR]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_INT]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_WIS]);
@@ -1561,10 +1552,9 @@ void CREImporter::GetActorIWD2(Actor *act)
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_CHR]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_MORALE]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_MORALEBREAK]);
-	//HatedRace is a list of races, so this is skipped here
-	str->Seek(1, GEM_CURRENT_POS);
-	//act->BaseStats[IE_HATEDRACE]=tmpByte;
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_MORALERECOVERYTIME]);
+	act->BaseStats[IE_MORALERECOVERYTIME] *= 60; // guess since IWD2 uses 1 here
+	str->Seek(1, GEM_CURRENT_POS);
 	//No KIT word order magic for IWD2
 	str->ReadDword(act->BaseStats[IE_KIT]);
 	ReadScript(act, SCR_OVERRIDE);
@@ -1574,9 +1564,9 @@ void CREImporter::GetActorIWD2(Actor *act)
 	ReadScript(act, SCR_DEFAULT);
 	//new scripting flags, one on each byte
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_AVATARREMOVAL]); //hidden
-	str->Read( &act->SetDeathVar, 1); //set death variable
-	str->Read( &act->IncKillCount, 1); //increase kill count
-	str->Read( &act->UnknownField, 1);
+	str->Read(&act->SetDeathVar, 1); //set death variable
+	str->Read(&act->IncKillCount, 1); //increase kill count
+	str->Read(&act->ignoredFields.unknownIWDByte1, 1);
 	for (int i = 0; i < 5; i++) {
 		str->ReadScalar<Actor::stat_t, ieWord>(act->BaseStats[IE_INTERNAL_0 + i]);
 	}
@@ -1585,28 +1575,28 @@ void CREImporter::GetActorIWD2(Actor *act)
 	act->KillVar = MakeVariable(KillVar);
 	str->ReadVariable(KillVar);
 	act->IncKillVar = MakeVariable(KillVar);
-	str->Seek( 2, GEM_CURRENT_POS);
+	str->Seek(2, GEM_CURRENT_POS);
 	str->ReadScalar<Actor::stat_t, ieWord>(act->BaseStats[IE_SAVEDXPOS]);
 	str->ReadScalar<Actor::stat_t, ieWord>(act->BaseStats[IE_SAVEDYPOS]);
 	str->ReadScalar<Actor::stat_t, ieWord>(act->BaseStats[IE_SAVEDFACE]);
 
-	str->Seek( 15, GEM_CURRENT_POS );
+	str->Seek(15, GEM_CURRENT_POS);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_TRANSLUCENT]);
 	str->ReadScalar(tmpByte); //fade speed
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_SPECFLAGS]); //spec. flags
 	str->ReadScalar(tmpByte); //invisible
 	str->ReadScalar(tmpWord); //unknown
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_UNUSED_SKILLPTS]); //unused skill points
-	str->Seek( 124, GEM_CURRENT_POS );
+	str->Seek(124, GEM_CURRENT_POS);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_EA]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_GENERAL]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_RACE]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_CLASS]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_SPECIFIC]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_SEX]);
-	str->Seek( 5, GEM_CURRENT_POS ); // object.ids references that we don't save
+	str->Seek(5, GEM_CURRENT_POS); // object.ids references that we don't save
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_ALIGNMENT]);
-	str->Seek( 4, GEM_CURRENT_POS );
+	str->Seek(4, GEM_CURRENT_POS);
 	ieVariable scriptname;
 	str->ReadVariable(scriptname);
 	act->SetScriptName(scriptname);
@@ -1619,22 +1609,22 @@ void CREImporter::GetActorIWD2(Actor *act)
 	MemorizedSpellsCount = 0;
 	// skipping class (probably redundant), class mask (calculated)
 	str->Seek(6, GEM_CURRENT_POS);
-	ieDword ClassSpellOffsets[8*9];
+	ieDword ClassSpellOffsets[8 * 9];
 
 	//spellbook spells
 	for (int i = 0; i < 7 * 9; i++) {
 		str->ReadDword(ClassSpellOffsets[i]);
 	}
-	ieDword ClassSpellCounts[8*9];
+	ieDword ClassSpellCounts[8 * 9];
 	for (int i = 0; i < 7 * 9; i++) {
 		str->ReadDword(ClassSpellCounts[i]);
 	}
 
 	//domain spells
-	for (int i = 7*9; i < 8 * 9; i++) {
+	for (int i = 7 * 9; i < 8 * 9; i++) {
 		str->ReadDword(ClassSpellOffsets[i]);
 	}
-	for (int i = 7*9; i < 8 * 9; i++) {
+	for (int i = 7 * 9; i < 8 * 9; i++) {
 		str->ReadDword(ClassSpellCounts[i]);
 	}
 
@@ -1657,23 +1647,23 @@ void CREImporter::GetActorIWD2(Actor *act)
 	ReadDialog(act);
 
 	for (int i = 0; i < 8; i++) {
-		for(int lev=0;lev<9;lev++) {
+		for (int lev = 0; lev < 9; lev++) {
 			//if everything is alright, then seeking is not needed
-			assert(str->GetPos() == CREOffset+ClassSpellOffsets[i*9+lev]);
-			GetIWD2Spellpage(act, (ieIWD2SpellType) i, lev, ClassSpellCounts[i*9+lev]);
+			assert(str->GetPos() == CREOffset + ClassSpellOffsets[i * 9 + lev]);
+			GetIWD2Spellpage(act, (ieIWD2SpellType) i, lev, ClassSpellCounts[i * 9 + lev]);
 		}
 	}
-	str->Seek(CREOffset+InnateOffset, GEM_STREAM_START);
+	str->Seek(CREOffset + InnateOffset, GEM_STREAM_START);
 	GetIWD2Spellpage(act, IE_IWD2_SPELL_INNATE, 0, InnateCount);
 
-	str->Seek(CREOffset+SongOffset, GEM_STREAM_START);
+	str->Seek(CREOffset + SongOffset, GEM_STREAM_START);
 	GetIWD2Spellpage(act, IE_IWD2_SPELL_SONG, 0, SongCount);
 
-	str->Seek(CREOffset+ShapeOffset, GEM_STREAM_START);
+	str->Seek(CREOffset + ShapeOffset, GEM_STREAM_START);
 	GetIWD2Spellpage(act, IE_IWD2_SPELL_SHAPE, 0, ShapeCount);
 }
 
-void CREImporter::GetActorIWD1(Actor *act) //9.0
+void CREImporter::GetActorIWD1(Actor* act) //9.0
 {
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_REPUTATION]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_HIDEINSHADOWS]);
@@ -1688,12 +1678,12 @@ void CREImporter::GetActorIWD1(Actor *act) //9.0
 	str->ReadScalar<Actor::stat_t, ieWordSigned>(act->BaseStats[IE_ACSLASHINGMOD]);
 
 	ieByteSigned tmpByte;
-	str->Read( &tmpByte, 1 );
+	str->Read(&tmpByte, 1);
 	act->ToHit.SetBase(tmpByte);
-	str->Read( &tmpByte, 1 );
+	str->Read(&tmpByte, 1);
 	tmpByte = tmpByte * 2;
-	if (tmpByte>10) tmpByte-=11;
-	act->BaseStats[IE_NUMBEROFATTACKS]=tmpByte;
+	if (tmpByte > 10) tmpByte -= 11;
+	act->BaseStats[IE_NUMBEROFATTACKS] = tmpByte;
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_SAVEVSDEATH]);
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_SAVEVSWANDS]);
 	str->ReadScalar<Actor::stat_t, ieByteSigned>(act->BaseStats[IE_SAVEVSPOLY]);
@@ -1724,7 +1714,7 @@ void CREImporter::GetActorIWD1(Actor *act) //9.0
 		str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_PROFICIENCYBASTARDSWORD + i]);
 	}
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_TRACKING]);
-	str->Seek( 32, GEM_CURRENT_POS );
+	str->Seek(32, GEM_CURRENT_POS);
 	for (auto& ref : act->StrRefs) {
 		str->ReadStrRef(ref);
 	}
@@ -1754,13 +1744,13 @@ void CREImporter::GetActorIWD1(Actor *act) //9.0
 	ReadScript(act, SCR_GENERAL);
 	ReadScript(act, SCR_DEFAULT);
 	//new scripting flags, one on each byte
-	str->Read( &tmpByte, 1); //hidden
+	str->Read(&tmpByte, 1); //hidden
 	if (tmpByte) {
-		act->BaseStats[IE_AVATARREMOVAL]=tmpByte;
+		act->BaseStats[IE_AVATARREMOVAL] = tmpByte;
 	}
-	str->Read( &act->SetDeathVar, 1); //set death variable
-	str->Read( &act->IncKillCount, 1); //increase kill count
-	str->Read( &act->UnknownField, 1);
+	str->Read(&act->SetDeathVar, 1); //set death variable
+	str->Read(&act->IncKillCount, 1); //increase kill count
+	str->Read(&act->ignoredFields.unknownIWDByte1, 1);
 	for (int i = 0; i < 5; i++) {
 		str->ReadScalar<Actor::stat_t, ieWord>(act->BaseStats[IE_INTERNAL_0 + i]);
 	}
@@ -1769,20 +1759,20 @@ void CREImporter::GetActorIWD1(Actor *act) //9.0
 	act->KillVar = MakeVariable(KillVar);
 	str->ReadVariable(KillVar);
 	act->IncKillVar = MakeVariable(KillVar);
-	str->Seek( 2, GEM_CURRENT_POS);
+	str->Seek(2, GEM_CURRENT_POS);
 	str->ReadScalar<Actor::stat_t, ieWord>(act->BaseStats[IE_SAVEDXPOS]);
 	str->ReadScalar<Actor::stat_t, ieWord>(act->BaseStats[IE_SAVEDYPOS]);
 	str->ReadScalar<Actor::stat_t, ieWord>(act->BaseStats[IE_SAVEDFACE]);
-	str->Seek( 18, GEM_CURRENT_POS );
+	str->Seek(18, GEM_CURRENT_POS);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_EA]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_GENERAL]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_RACE]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_CLASS]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_SPECIFIC]);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_SEX]);
-	str->Seek( 5, GEM_CURRENT_POS );
+	str->Seek(5, GEM_CURRENT_POS);
 	str->ReadScalar<Actor::stat_t, ieByte>(act->BaseStats[IE_ALIGNMENT]);
-	str->Seek( 4, GEM_CURRENT_POS );
+	str->Seek(4, GEM_CURRENT_POS);
 	ieVariable scriptname;
 	str->ReadVariable(scriptname);
 	act->SetScriptName(scriptname);
@@ -1803,7 +1793,7 @@ void CREImporter::GetActorIWD1(Actor *act) //9.0
 	ReadDialog(act);
 }
 
-int CREImporter::GetStoredFileSize(const Actor *actor)
+int CREImporter::GetStoredFileSize(const Actor* actor)
 {
 	int headersize;
 	unsigned int Inventory_Size;
@@ -1813,13 +1803,13 @@ int CREImporter::GetStoredFileSize(const Actor *actor)
 		case CREVersion::GemRB:
 			headersize = 0x2d4;
 			//minus fist
-			Inventory_Size=actor->inventory.GetSlotCount()-1;
+			Inventory_Size = actor->inventory.GetSlotCount() - 1;
 			TotSCEFF = 1;
 			break;
 		case CREVersion::V1_1: // totsc/bg2/tob (still V1.0, but large effects)
 		case CREVersion::V1_0: // bg1
 			headersize = 0x2d4;
-			Inventory_Size=38;
+			Inventory_Size = 38;
 			//we should know it is bg1
 			if (actor->creVersion == CREVersion::V1_1) {
 				TotSCEFF = 1;
@@ -1829,17 +1819,17 @@ int CREImporter::GetStoredFileSize(const Actor *actor)
 			break;
 		case CREVersion::V1_2: // pst
 			headersize = 0x378;
-			Inventory_Size=46;
+			Inventory_Size = 46;
 			TotSCEFF = 0;
 			break;
-		case CREVersion::V2_2:// iwd2
+		case CREVersion::V2_2: // iwd2
 			headersize = 0x62e; // with offsets
-			Inventory_Size=50;
+			Inventory_Size = 50;
 			TotSCEFF = 1;
 			break;
-		case CREVersion::V9_0:// iwd
+		case CREVersion::V9_0: // iwd
 			headersize = 0x33c;
-			Inventory_Size=38;
+			Inventory_Size = 38;
 			TotSCEFF = 1;
 			break;
 		default:
@@ -1854,12 +1844,12 @@ int CREImporter::GetStoredFileSize(const Actor *actor)
 			}
 		}
 		for (int level = 0; level < 9; level++) {
-			headersize += GetIWD2SpellpageSize(actor, IE_IWD2_SPELL_DOMAIN, level)*16+8;
+			headersize += GetIWD2SpellpageSize(actor, IE_IWD2_SPELL_DOMAIN, level) * 16 + 8;
 		}
 		for (int type = IE_IWD2_SPELL_INNATE; type < NUM_IWD2_SPELLTYPES; type++) {
-			headersize += GetIWD2SpellpageSize(actor, (ieIWD2SpellType) type, 0)*16+8;
+			headersize += GetIWD2SpellpageSize(actor, (ieIWD2SpellType) type, 0) * 16 + 8;
 		}
-	} else {//others
+	} else { //others
 		//adding known spells
 		KnownSpellsCount = actor->spellbook.GetTotalKnownSpellsCount();
 		headersize += KnownSpellsCount * 12;
@@ -1882,8 +1872,8 @@ int CREImporter::GetStoredFileSize(const Actor *actor)
 	//counting items (calculating item storage)
 	ItemsCount = 0;
 	for (unsigned int i = 0; i < Inventory_Size; i++) {
-		unsigned int j = core->QuerySlot(i+1);
-		const CREItem *it = actor->inventory.GetSlotItem(j);
+		unsigned int j = core->QuerySlot(i + 1);
+		const CREItem* it = actor->inventory.GetSlotItem(j);
 		if (it) {
 			ItemsCount++;
 		}
@@ -1895,7 +1885,7 @@ int CREImporter::GetStoredFileSize(const Actor *actor)
 	EffectsCount = actor->fxqueue.GetSavedEffectsCount();
 	VariablesCount = static_cast<ieDword>(actor->locals.size());
 	if (VariablesCount) {
-		TotSCEFF=1;
+		TotSCEFF = 1;
 	}
 	if (TotSCEFF) {
 		headersize += (VariablesCount + EffectsCount) * 264;
@@ -1907,15 +1897,15 @@ int CREImporter::GetStoredFileSize(const Actor *actor)
 	return headersize;
 }
 
-int CREImporter::PutInventory(DataStream *stream, const Actor *actor, unsigned int size) const
+int CREImporter::PutInventory(DataStream* stream, const Actor* actor, unsigned int size) const
 {
 	ieWord ItemCount = 0;
 	std::vector<ieWord> indices(size, -1);
 
 	for (unsigned int i = 0; i < size; i++) {
 		//ignore first element, getinventorysize makes space for fist
-		unsigned int j = core->QuerySlot(i+1);
-		const CREItem *it = actor->inventory.GetSlotItem(j);
+		unsigned int j = core->QuerySlot(i + 1);
+		const CREItem* it = actor->inventory.GetSlotItem(j);
 		if (it) {
 			indices[i] = ItemCount++;
 		}
@@ -1927,12 +1917,12 @@ int CREImporter::PutInventory(DataStream *stream, const Actor *actor, unsigned i
 
 	for (unsigned int i = 0; i < size; i++) {
 		//ignore first element, getinventorysize makes space for fist
-		unsigned int j = core->QuerySlot(i+1);
-		const CREItem *it = actor->inventory.GetSlotItem(j);
+		unsigned int j = core->QuerySlot(i + 1);
+		const CREItem* it = actor->inventory.GetSlotItem(j);
 		if (!it) {
 			continue;
 		}
-		stream->WriteResRef( it->ItemResRef);
+		stream->WriteResRef(it->ItemResRef);
 		stream->WriteWord(it->Expired);
 		stream->WriteWord(it->Usages[0]);
 		stream->WriteWord(it->Usages[1]);
@@ -1940,10 +1930,10 @@ int CREImporter::PutInventory(DataStream *stream, const Actor *actor, unsigned i
 		ieDword tmpDword = it->Flags;
 		//IWD uses this bit differently
 		if (core->HasFeature(GFFlags::MAGICBIT)) {
-			if (it->Flags&IE_INV_ITEM_MAGICAL) {
-				tmpDword|=IE_INV_ITEM_UNDROPPABLE;
+			if (it->Flags & IE_INV_ITEM_MAGICAL) {
+				tmpDword |= IE_INV_ITEM_UNDROPPABLE;
 			} else {
-				tmpDword&=~IE_INV_ITEM_UNDROPPABLE;
+				tmpDword &= ~IE_INV_ITEM_UNDROPPABLE;
 			}
 		}
 		stream->WriteDword(tmpDword);
@@ -1951,16 +1941,16 @@ int CREImporter::PutInventory(DataStream *stream, const Actor *actor, unsigned i
 	return 0;
 }
 
-int CREImporter::PutHeader(DataStream *stream, const Actor *actor) const
+int CREImporter::PutHeader(DataStream* stream, const Actor* actor) const
 {
 	char Signature[8];
 
-	memcpy( Signature, "CRE V0.0", 8);
-	Signature[5]+=CREVersion/10;
+	memcpy(Signature, "CRE V0.0", 8);
+	Signature[5] += CREVersion / 10;
 	if (actor->creVersion != CREVersion::V1_1) {
-		Signature[7]+=CREVersion%10;
+		Signature[7] += CREVersion % 10;
 	}
-	stream->Write( Signature, 8);
+	stream->Write(Signature, 8);
 	stream->WriteStrRef(actor->LongStrRef);
 	stream->WriteStrRef(actor->ShortStrRef);
 	stream->WriteDword(actor->BaseStats[IE_MC_FLAGS]);
@@ -1976,13 +1966,13 @@ int CREImporter::PutHeader(DataStream *stream, const Actor *actor) const
 	stream->WriteScalar<Actor::stat_t, ieWord>(actor->BaseStats[IE_MAXHITPOINTS]);
 	stream->WriteDword(actor->BaseStats[IE_ANIMATION_ID]);
 	for (int i = 0; i < 7; i++) {
-		Signature[i] = (char) actor->BaseStats[IE_COLORS+i];
+		Signature[i] = (char) actor->BaseStats[IE_COLORS + i];
 	}
 	//old effect type
 	Signature[7] = TotSCEFF;
-	stream->Write( Signature, 8);
-	stream->WriteResRef( actor->SmallPortrait);
-	stream->WriteResRef( actor->LargePortrait);
+	stream->Write(Signature, 8);
+	stream->WriteResRef(actor->SmallPortrait);
+	stream->WriteResRef(actor->LargePortrait);
 	stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_REPUTATION]);
 	stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_HIDEINSHADOWS]);
 	//from here it differs, slightly
@@ -1997,18 +1987,30 @@ int CREImporter::PutHeader(DataStream *stream, const Actor *actor) const
 	stream->WriteScalar<Actor::stat_t, ieWord>(actor->BaseStats[IE_ACPIERCINGMOD]);
 	stream->WriteScalar<Actor::stat_t, ieWord>(actor->BaseStats[IE_ACSLASHINGMOD]);
 	stream->WriteScalar<int, ieByte>(actor->ToHit.GetBase());
+
 	ieByte tmpByte = static_cast<ieByte>(actor->BaseStats[IE_NUMBEROFATTACKS]);
+	if (actor->creVersion != CREVersion::V2_2 && actor->InParty && actor->HasPlayerClass()) {
+		// not setting to 2 just in case they got a permanent APR change applied
+		ieDword wl;
+		tmpByte -= 2 * actor->IsDualWielding() + actor->GetStyleExtraAPR(wl);
+		if (tmpByte != 2) {
+			Log(DEBUG, "CREImporter", "Detected creature '{}' with uncommon APR: {}", fmt::WideToChar { actor->GetName() }, tmpByte / 2);
+		}
+	}
+
 	if (actor->creVersion == CREVersion::V2_2) {
-		stream->Write( &tmpByte, 1);
+		stream->Write(&tmpByte, 1);
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_SAVEFORTITUDE]);
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_SAVEREFLEX]);
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_SAVEWILL]);
 	} else {
 		if (actor->creVersion != CREVersion::GemRB) {
-			if (tmpByte&1) tmpByte = tmpByte/2+6;
-			else tmpByte /=2;
+			if (tmpByte & 1)
+				tmpByte = tmpByte / 2 + 6;
+			else
+				tmpByte /= 2;
 		}
-		stream->Write( &tmpByte, 1);
+		stream->Write(&tmpByte, 1);
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_SAVEVSDEATH]);
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_SAVEVSWANDS]);
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_SAVEVSPOLY]);
@@ -2028,7 +2030,7 @@ int CREImporter::PutHeader(DataStream *stream, const Actor *actor) const
 	stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_RESISTMISSILE]);
 	if (actor->creVersion == CREVersion::V2_2) {
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_MAGICDAMAGERESISTANCE]);
-		stream->Write( Signature, 4);
+		stream->Write(Signature, 4);
 	} else {
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_DETECTILLUSIONS]);
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_SETTRAPS]);
@@ -2066,8 +2068,8 @@ int CREImporter::PutHeader(DataStream *stream, const Actor *actor) const
 		for (int i = 0; i < 64; i++) {
 			stream->WriteStrRef(actor->StrRefs[i]);
 		}
-		stream->WriteResRef( actor->GetScript(SCR_AREA) );
-		stream->WriteResRef( actor->GetScript(SCR_RESERVED) );
+		stream->WriteResRef(actor->GetScript(SCR_AREA));
+		stream->WriteResRef(actor->GetScript(SCR_RESERVED));
 		//unknowns before feats
 		stream->WriteFilling(4);
 		//feats
@@ -2129,16 +2131,18 @@ int CREImporter::PutHeader(DataStream *stream, const Actor *actor) const
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_CHR]);
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_MORALE]);
 		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_MORALEBREAK]);
-		stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_MORALERECOVERYTIME]);
+		tmpByte = actor->BaseStats[IE_MORALERECOVERYTIME];
+		tmpByte /= 60;
+		stream->WriteScalar<Actor::stat_t, ieByte>(tmpByte);
 		// unknown byte
 		stream->WriteFilling(1);
 		// no kit word order magic for iwd2
 		stream->WriteDword(actor->BaseStats[IE_KIT]);
-		stream->WriteResRef( actor->GetScript(SCR_OVERRIDE) );
-		stream->WriteResRef( actor->GetScript(SCR_CLASS) );
-		stream->WriteResRef( actor->GetScript(SCR_RACE) );
-		stream->WriteResRef( actor->GetScript(SCR_GENERAL) );
-		stream->WriteResRef( actor->GetScript(SCR_DEFAULT) );
+		stream->WriteResRef(actor->GetScript(SCR_OVERRIDE));
+		stream->WriteResRef(actor->GetScript(SCR_CLASS));
+		stream->WriteResRef(actor->GetScript(SCR_RACE));
+		stream->WriteResRef(actor->GetScript(SCR_GENERAL));
+		stream->WriteResRef(actor->GetScript(SCR_DEFAULT));
 	} else {
 		for (int i = 0; i < 21; i++) {
 			stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_PROFICIENCYBASTARDSWORD + i]);
@@ -2168,17 +2172,17 @@ int CREImporter::PutHeader(DataStream *stream, const Actor *actor) const
 		ieDword tmpDword = ((actor->BaseStats[IE_KIT] & 0xffff) << 16) +
 			((actor->BaseStats[IE_KIT] & 0xffff0000) >> 16);
 		stream->WriteDword(tmpDword);
-		stream->WriteResRef( actor->GetScript(SCR_OVERRIDE) );
-		stream->WriteResRef( actor->GetScript(SCR_CLASS) );
-		stream->WriteResRef( actor->GetScript(SCR_RACE) );
-		stream->WriteResRef( actor->GetScript(SCR_GENERAL) );
-		stream->WriteResRef( actor->GetScript(SCR_DEFAULT) );
+		stream->WriteResRef(actor->GetScript(SCR_OVERRIDE));
+		stream->WriteResRef(actor->GetScript(SCR_CLASS));
+		stream->WriteResRef(actor->GetScript(SCR_RACE));
+		stream->WriteResRef(actor->GetScript(SCR_GENERAL));
+		stream->WriteResRef(actor->GetScript(SCR_DEFAULT));
 	}
 	//now follows the fuzzy part in separate putactor... functions
 	return 0;
 }
 
-int CREImporter::PutActorGemRB(DataStream *stream, const Actor *actor, ieDword InvSize) const
+int CREImporter::PutActorGemRB(DataStream* stream, const Actor* actor, ieDword InvSize) const
 {
 	//similar in all engines
 	stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_EA]);
@@ -2194,7 +2198,7 @@ int CREImporter::PutActorGemRB(DataStream *stream, const Actor *actor, ieDword I
 	return 0;
 }
 
-int CREImporter::PutActorBG(DataStream *stream, const Actor *actor) const
+int CREImporter::PutActorBG(DataStream* stream, const Actor* actor) const
 {
 	//similar in all engines
 	stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_EA]);
@@ -2210,7 +2214,7 @@ int CREImporter::PutActorBG(DataStream *stream, const Actor *actor) const
 	return 0;
 }
 
-int CREImporter::PutActorPST(DataStream *stream, const Actor *actor) const
+int CREImporter::PutActorPST(DataStream* stream, const Actor* actor) const
 {
 	stream->WriteFilling(44); //11*4 totally unknown
 	stream->WriteDword(actor->BaseStats[IE_XP_MAGE]);
@@ -2229,7 +2233,7 @@ int CREImporter::PutActorPST(DataStream *stream, const Actor *actor) const
 	for (int i = 0; i < 7; i++) {
 		stream->WriteScalar<Actor::stat_t, ieWord>(actor->BaseStats[IE_COLORS + i]);
 	}
-	stream->Write(actor->pstColorBytes, 10);
+	stream->Write(actor->ignoredFields.pstColorBytes, 10);
 	stream->WriteFilling(21);
 	stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_SPECIES]);
 	stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_TEAM]);
@@ -2248,12 +2252,12 @@ int CREImporter::PutActorPST(DataStream *stream, const Actor *actor) const
 	return 0;
 }
 
-int CREImporter::PutActorIWD1(DataStream *stream, const Actor *actor) const
+int CREImporter::PutActorIWD1(DataStream* stream, const Actor* actor) const
 {
 	stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_AVATARREMOVAL]);
-	stream->Write( &actor->SetDeathVar, 1);
-	stream->Write( &actor->IncKillCount, 1);
-	stream->Write( &actor->UnknownField, 1); //unknown
+	stream->Write(&actor->SetDeathVar, 1);
+	stream->Write(&actor->IncKillCount, 1);
+	stream->Write(&actor->ignoredFields.unknownIWDByte1, 1);
 	for (int i = 0; i < 5; i++) {
 		stream->WriteScalar<Actor::stat_t, ieWord>(actor->BaseStats[IE_INTERNAL_0 + i]);
 	}
@@ -2278,12 +2282,12 @@ int CREImporter::PutActorIWD1(DataStream *stream, const Actor *actor) const
 	return 0;
 }
 
-int CREImporter::PutActorIWD2(DataStream *stream, const Actor *actor) const
+int CREImporter::PutActorIWD2(DataStream* stream, const Actor* actor) const
 {
 	stream->WriteScalar<Actor::stat_t, ieByte>(actor->BaseStats[IE_AVATARREMOVAL]);
 	stream->WriteScalar(actor->SetDeathVar);
 	stream->WriteScalar(actor->IncKillCount);
-	stream->WriteScalar(actor->UnknownField); //unknown
+	stream->WriteScalar(actor->ignoredFields.unknownIWDByte1);
 	for (int i = 0; i < 5; i++) {
 		stream->WriteScalar<Actor::stat_t, ieWord>(actor->BaseStats[IE_INTERNAL_0 + i]);
 	}
@@ -2317,15 +2321,16 @@ int CREImporter::PutActorIWD2(DataStream *stream, const Actor *actor) const
 	return 0;
 }
 
-int CREImporter::PutKnownSpells(DataStream *stream, const Actor *actor) const
+int CREImporter::PutKnownSpells(DataStream* stream, const Actor* actor) const
 {
-	int type=actor->spellbook.GetTypes();
-	for (int i=0;i<type;i++) {
+	int type = actor->spellbook.GetTypes();
+	for (int i = 0; i < type; i++) {
 		unsigned int level = actor->spellbook.GetSpellLevelCount(i);
-		for (unsigned int j=0;j<level;j++) {
+		for (unsigned int j = 0; j < level; j++) {
 			unsigned int count = actor->spellbook.GetKnownSpellsCount(i, j);
-			for (int k=count-1;k>=0;k--) {
-				const CREKnownSpell *ck = actor->spellbook.GetKnownSpell(i, j, k);
+			if (!count) continue;
+			for (int k = count - 1; k >= 0; k--) {
+				const CREKnownSpell* ck = actor->spellbook.GetKnownSpell(i, j, k);
 				assert(ck);
 				stream->WriteResRef(ck->SpellResRef);
 				stream->WriteWord(ck->Level);
@@ -2336,12 +2341,12 @@ int CREImporter::PutKnownSpells(DataStream *stream, const Actor *actor) const
 	return 0;
 }
 
-int CREImporter::PutSpellPages(DataStream *stream, const Actor *actor) const
+int CREImporter::PutSpellPages(DataStream* stream, const Actor* actor) const
 {
 	ieDword SpellIndex = 0;
 
-	int type=actor->spellbook.GetTypes();
-	for (int i=0;i<type;i++) {
+	int type = actor->spellbook.GetTypes();
+	for (int i = 0; i < type; i++) {
 		unsigned int level = actor->spellbook.GetSpellLevelCount(i);
 		for (ieWord j = 0; j < level; ++j) {
 			stream->WriteScalar(j);
@@ -2351,7 +2356,7 @@ int CREImporter::PutSpellPages(DataStream *stream, const Actor *actor) const
 			stream->WriteScalar<int, ieWord>(tmp);
 			stream->WriteScalar<int, ieWord>(i);
 			stream->WriteDword(SpellIndex);
-			ieDword tmpDword = actor->spellbook.GetMemorizedSpellsCount(i,j, false);
+			ieDword tmpDword = actor->spellbook.GetMemorizedSpellsCount(i, j, false);
 			stream->WriteDword(tmpDword);
 			SpellIndex += tmpDword;
 		}
@@ -2359,17 +2364,17 @@ int CREImporter::PutSpellPages(DataStream *stream, const Actor *actor) const
 	return 0;
 }
 
-int CREImporter::PutMemorizedSpells(DataStream *stream, const Actor *actor) const
+int CREImporter::PutMemorizedSpells(DataStream* stream, const Actor* actor) const
 {
-	int type=actor->spellbook.GetTypes();
-	for (int i=0;i<type;i++) {
+	int type = actor->spellbook.GetTypes();
+	for (int i = 0; i < type; i++) {
 		unsigned int level = actor->spellbook.GetSpellLevelCount(i);
-		for (unsigned int j=0;j<level;j++) {
-			unsigned int count = actor->spellbook.GetMemorizedSpellsCount(i,j, false);
-			for (unsigned int k=0;k<count;k++) {
-				const CREMemorizedSpell *cm = actor->spellbook.GetMemorizedSpell(i, j, k);
+		for (unsigned int j = 0; j < level; j++) {
+			unsigned int count = actor->spellbook.GetMemorizedSpellsCount(i, j, false);
+			for (unsigned int k = 0; k < count; k++) {
+				const CREMemorizedSpell* cm = actor->spellbook.GetMemorizedSpell(i, j, k);
 				assert(cm);
-				stream->WriteResRef( cm->SpellResRef);
+				stream->WriteResRef(cm->SpellResRef);
 				stream->WriteDword(cm->Flags);
 			}
 		}
@@ -2377,16 +2382,16 @@ int CREImporter::PutMemorizedSpells(DataStream *stream, const Actor *actor) cons
 	return 0;
 }
 
-int CREImporter::PutEffects( DataStream *stream, const Actor *actor) const
+int CREImporter::PutEffects(DataStream* stream, const Actor* actor) const
 {
 	PluginHolder<EffectMgr> eM = MakePluginHolder<EffectMgr>(IE_EFF_CLASS_ID);
 	assert(eM != nullptr);
 
 	auto f = actor->fxqueue.GetFirstEffect();
-	for(unsigned int i=0;i<EffectsCount;i++) {
-		const Effect *fx = actor->fxqueue.GetNextSavedEffect(f);
+	for (unsigned int i = 0; i < EffectsCount; i++) {
+		const Effect* fx = actor->fxqueue.GetNextSavedEffect(f);
 
-		assert(fx!=NULL);
+		assert(fx != NULL);
 
 		if (TotSCEFF) {
 			eM->PutEffectV2(stream, fx);
@@ -2414,7 +2419,7 @@ int CREImporter::PutEffects( DataStream *stream, const Actor *actor) const
 }
 
 //add as effect!
-int CREImporter::PutVariables(DataStream *stream, const Actor *actor) const
+int CREImporter::PutVariables(DataStream* stream, const Actor* actor) const
 {
 	ieDword value;
 	ieDword tmpDword;
@@ -2442,12 +2447,12 @@ int CREImporter::PutVariables(DataStream *stream, const Actor *actor) const
 }
 
 //Don't forget to add 8 for the totals/bonus fields
-ieDword CREImporter::GetIWD2SpellpageSize(const Actor *actor, ieIWD2SpellType type, int level) const
+ieDword CREImporter::GetIWD2SpellpageSize(const Actor* actor, ieIWD2SpellType type, int level) const
 {
 	return actor->spellbook.GetKnownSpellsCount(type, level);
 }
 
-int CREImporter::PutIWD2Spellpage(DataStream *stream, const Actor *actor, ieIWD2SpellType type, int level) const
+int CREImporter::PutIWD2Spellpage(DataStream* stream, const Actor* actor, ieIWD2SpellType type, int level) const
 {
 	ieDword max, known;
 
@@ -2473,7 +2478,7 @@ int CREImporter::PutIWD2Spellpage(DataStream *stream, const Actor *actor, ieIWD2
 }
 
 /* this function expects GetStoredFileSize to be called before */
-int CREImporter::PutActor(DataStream *stream, const Actor *actor, bool chr)
+int CREImporter::PutActor(DataStream* stream, const Actor* actor, bool chr)
 {
 	int ret;
 
@@ -2483,13 +2488,13 @@ int CREImporter::PutActor(DataStream *stream, const Actor *actor, bool chr)
 
 	IsCharacter = chr;
 	if (chr) {
-		WriteChrHeader( stream, actor );
+		WriteChrHeader(stream, actor);
 	}
-	assert(TotSCEFF==0 || TotSCEFF==1);
+	assert(TotSCEFF == 0 || TotSCEFF == 1);
 
 	CREOffset = static_cast<ieDword>(stream->GetPos()); // for asserts
 
-	ret = PutHeader( stream, actor);
+	ret = PutHeader(stream, actor);
 	if (ret) {
 		return ret;
 	}
@@ -2499,24 +2504,24 @@ int CREImporter::PutActor(DataStream *stream, const Actor *actor, bool chr)
 	switch (CREVersion) {
 		case CREVersion::GemRB:
 			//don't add fist
-			Inventory_Size=(ieDword) actor->inventory.GetSlotCount()-1;
+			Inventory_Size = (ieDword) actor->inventory.GetSlotCount() - 1;
 			ret = PutActorGemRB(stream, actor, Inventory_Size);
 			break;
 		case CREVersion::V1_2:
-			Inventory_Size=46;
+			Inventory_Size = 46;
 			ret = PutActorPST(stream, actor);
 			break;
 		case CREVersion::V1_1:
 		case CREVersion::V1_0: // bg1/bg2
-			Inventory_Size=38;
+			Inventory_Size = 38;
 			ret = PutActorBG(stream, actor);
 			break;
 		case CREVersion::V2_2:
-			Inventory_Size=50;
+			Inventory_Size = 50;
 			ret = PutActorIWD2(stream, actor);
 			break;
 		case CREVersion::V9_0:
-			Inventory_Size=38;
+			Inventory_Size = 38;
 			ret = PutActorIWD1(stream, actor);
 			break;
 		default:
@@ -2531,30 +2536,32 @@ int CREImporter::PutActor(DataStream *stream, const Actor *actor, bool chr)
 		int type, level;
 		ieDword tmpDword = 0;
 		//class spells
-		for (type=IE_IWD2_SPELL_BARD;type<IE_IWD2_SPELL_DOMAIN;type++) for(level=0;level<9;level++) {
-			tmpDword = GetIWD2SpellpageSize(actor, (ieIWD2SpellType) type, level);
-			stream->WriteDword(KnownSpellsOffset);
-			KnownSpellsOffset+=tmpDword*16+8;
-		}
-		for (type=IE_IWD2_SPELL_BARD;type<IE_IWD2_SPELL_DOMAIN;type++) for(level=0;level<9;level++) {
-			tmpDword = GetIWD2SpellpageSize(actor, (ieIWD2SpellType) type, level);
-			stream->WriteDword(tmpDword);
-		}
+		for (type = IE_IWD2_SPELL_BARD; type < IE_IWD2_SPELL_DOMAIN; type++)
+			for (level = 0; level < 9; level++) {
+				tmpDword = GetIWD2SpellpageSize(actor, (ieIWD2SpellType) type, level);
+				stream->WriteDword(KnownSpellsOffset);
+				KnownSpellsOffset += tmpDword * 16 + 8;
+			}
+		for (type = IE_IWD2_SPELL_BARD; type < IE_IWD2_SPELL_DOMAIN; type++)
+			for (level = 0; level < 9; level++) {
+				tmpDword = GetIWD2SpellpageSize(actor, (ieIWD2SpellType) type, level);
+				stream->WriteDword(tmpDword);
+			}
 		//domain spells
-		for (level=0;level<9;level++) {
+		for (level = 0; level < 9; level++) {
 			tmpDword = GetIWD2SpellpageSize(actor, IE_IWD2_SPELL_DOMAIN, level);
 			stream->WriteDword(KnownSpellsOffset);
-			KnownSpellsOffset+=tmpDword*16+8;
+			KnownSpellsOffset += tmpDword * 16 + 8;
 		}
-		for (level=0;level<9;level++) {
+		for (level = 0; level < 9; level++) {
 			tmpDword = GetIWD2SpellpageSize(actor, IE_IWD2_SPELL_DOMAIN, level);
 			stream->WriteDword(tmpDword);
 		}
 		//innates, shapes, songs
-		for (type=IE_IWD2_SPELL_INNATE;type<NUM_IWD2_SPELLTYPES;type++) {
+		for (type = IE_IWD2_SPELL_INNATE; type < NUM_IWD2_SPELLTYPES; type++) {
 			tmpDword = GetIWD2SpellpageSize(actor, (ieIWD2SpellType) type, 0);
 			stream->WriteDword(KnownSpellsOffset);
-			KnownSpellsOffset+=tmpDword*16+8;
+			KnownSpellsOffset += tmpDword * 16 + 8;
 			stream->WriteDword(tmpDword);
 		}
 	} else {
@@ -2570,52 +2577,54 @@ int CREImporter::PutActor(DataStream *stream, const Actor *actor, bool chr)
 	stream->WriteDword(ItemsCount);
 	stream->WriteDword(EffectsOffset);
 	stream->WriteDword(EffectsCount + VariablesCount);
-	stream->WriteResRef( actor->GetDialog(false) );
+	stream->WriteResRef(actor->GetDialog(false));
 	//spells, spellbook etc
 
 	if (actor->creVersion == CREVersion::V2_2) {
 		int type, level;
 
 		//writing out spell page headers
-		for (type=IE_IWD2_SPELL_BARD;type<IE_IWD2_SPELL_DOMAIN;type++) for(level=0;level<9;level++) {
-			PutIWD2Spellpage(stream, actor, (ieIWD2SpellType) type, level);
+		for (type = IE_IWD2_SPELL_BARD; type < IE_IWD2_SPELL_DOMAIN; type++) {
+			for (level = 0; level < 9; level++) {
+				PutIWD2Spellpage(stream, actor, (ieIWD2SpellType) type, level);
+			}
 		}
 
 		//writing out domain page headers
-		for (level=0;level<9;level++) {
+		for (level = 0; level < 9; level++) {
 			PutIWD2Spellpage(stream, actor, IE_IWD2_SPELL_DOMAIN, level);
 		}
 
 		//innates, shapes, songs
-		for (type = IE_IWD2_SPELL_INNATE; type<NUM_IWD2_SPELLTYPES; type ++) {
+		for (type = IE_IWD2_SPELL_INNATE; type < NUM_IWD2_SPELLTYPES; type++) {
 			PutIWD2Spellpage(stream, actor, (ieIWD2SpellType) type, 0);
 		}
 	} else {
-		assert(stream->GetPos() == CREOffset+KnownSpellsOffset);
-		ret = PutKnownSpells( stream, actor);
+		assert(stream->GetPos() == CREOffset + KnownSpellsOffset);
+		ret = PutKnownSpells(stream, actor);
 		if (ret) {
 			return ret;
 		}
-		assert(stream->GetPos() == CREOffset+SpellMemorizationOffset);
-		ret = PutSpellPages( stream, actor);
+		assert(stream->GetPos() == CREOffset + SpellMemorizationOffset);
+		ret = PutSpellPages(stream, actor);
 		if (ret) {
 			return ret;
 		}
-		assert(stream->GetPos() == CREOffset+MemorizedSpellsOffset);
-		ret = PutMemorizedSpells( stream, actor);
+		assert(stream->GetPos() == CREOffset + MemorizedSpellsOffset);
+		ret = PutMemorizedSpells(stream, actor);
 		if (ret) {
 			return ret;
 		}
 	}
 
 	//items and inventory slots
-	assert(stream->GetPos() == CREOffset+ItemSlotsOffset);
-	ret = PutInventory( stream, actor, Inventory_Size);
+	assert(stream->GetPos() == CREOffset + ItemSlotsOffset);
+	ret = PutInventory(stream, actor, Inventory_Size);
 	if (ret) {
 		return ret;
 	}
 
-	assert(stream->GetPos() == CREOffset+EffectsOffset);
+	assert(stream->GetPos() == CREOffset + EffectsOffset);
 	ret = PutEffects(stream, actor);
 	if (ret) {
 		return ret;

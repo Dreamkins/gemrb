@@ -22,14 +22,60 @@
 
 namespace GemRB {
 
-bool Point::operator==(const Point& pnt) const noexcept
+bool BasePoint::operator==(const BasePoint& pnt) const noexcept
 {
 	return (x == pnt.x) && (y == pnt.y);
 }
 
-bool Point::operator!=(const Point& pnt) const noexcept
+bool BasePoint::operator!=(const BasePoint& pnt) const noexcept
 {
 	return !(*this == pnt);
+}
+
+BasePoint BasePoint::operator-(const BasePoint& p) const noexcept
+{
+	return BasePoint(x - p.x, y - p.y);
+}
+
+BasePoint BasePoint::operator+(const BasePoint& p) const noexcept
+{
+	return BasePoint(x + p.x, y + p.y);
+}
+
+BasePoint::BasePoint(int x, int y) noexcept
+{
+	this->x = x;
+	this->y = y;
+}
+
+bool BasePoint::IsZero() const noexcept
+{
+	return (x == 0) && (y == 0);
+}
+
+bool BasePoint::IsInvalid() const noexcept
+{
+	return (x == -1) && (y == -1);
+}
+
+bool BasePoint::IsWithinRadius(int r, const BasePoint& p) const noexcept
+{
+	BasePoint d = operator-(p);
+	// sqrt is slow, just check a^2 + b^2 = c^2 <= r^2
+	return (d.x * d.x) + (d.y * d.y) <= r * r;
+}
+
+bool BasePoint::IsWithinEllipse(int r, const BasePoint& p, int a, int b) const noexcept
+{
+	BasePoint d = operator-(p);
+
+	// check ellipse bbox first
+	if (d.x < -r * a || d.x > r * a) return false;
+	if (d.y < -r * b || d.y > r * b) return false;
+
+	// then compare with calculated ellipse distance
+	int ar = b * b * d.x * d.x + a * a * d.y * d.y;
+	return ar <= a * a * b * b * r * r;
 }
 
 Point Point::operator+(const Point& p) const noexcept
@@ -63,27 +109,14 @@ Point& Point::operator/(int div) noexcept
 	return *this;
 }
 
-Point::Point(int x, int y) noexcept
+SearchmapPoint SearchmapPoint::operator+(const SearchmapPoint& p) const noexcept
 {
-	this->x = x;
-	this->y = y;
+	return SearchmapPoint(x + p.x, y + p.y);
 }
 
-bool Point::IsZero() const noexcept
+SearchmapPoint SearchmapPoint::operator*(int n) const noexcept
 {
-	return (x == 0) && (y == 0);
-}
-
-bool Point::IsInvalid() const noexcept
-{
-	return (x == -1) && (y == -1);
-}
-
-bool Point::isWithinRadius(int r, const Point& p) const noexcept
-{
-	Point d = operator-(p);
-	// sqrt is slow, just check a^2 + b^2 = c^2 <= r^2
-	return (d.x * d.x) + (d.y * d.y) <= r * r;
+	return SearchmapPoint(x * n, y * n);
 }
 
 Size::Size(int w, int h) noexcept
@@ -94,7 +127,7 @@ Size::Size(int w, int h) noexcept
 
 bool Size::operator==(const Size& size) const noexcept
 {
-	return (w == size.w &&  h == size.h);
+	return (w == size.w && h == size.h);
 }
 
 bool Size::operator!=(const Size& size) const noexcept
@@ -120,17 +153,17 @@ Region::Region(int x, int y, int w, int h) noexcept
 	this->h = h;
 }
 
-Region::Region(const Point &p, const Size& s) noexcept
+Region::Region(const Point& p, const Size& s) noexcept
 {
 	origin = p;
 	size = s;
 }
 
-Region::Region(const Region &r) noexcept
-: origin(r.origin), size(r.size)
+Region::Region(const Region& r) noexcept
+	: origin(r.origin), size(r.size)
 {}
 
-Region& Region::operator=(const Region &rhs) noexcept
+Region& Region::operator=(const Region& rhs) noexcept
 {
 	if (&rhs != this) {
 		origin = rhs.origin;
@@ -139,7 +172,7 @@ Region& Region::operator=(const Region &rhs) noexcept
 	return *this;
 }
 
-bool Region::PointInside(const Point &p) const noexcept
+bool Region::PointInside(const Point& p) const noexcept
 {
 	if ((p.x < x) || (p.x >= (x + w))) {
 		return false;
@@ -163,16 +196,16 @@ bool Region::RectInside(const Region& r) const noexcept
 
 bool Region::IntersectsRegion(const Region& rgn) const noexcept
 {
-	if (x >= ( rgn.x + rgn.w )) {
+	if (x >= (rgn.x + rgn.w)) {
 		return false; // entirely to the right of rgn
 	}
-	if (( x + w ) <= rgn.x) {
+	if ((x + w) <= rgn.x) {
 		return false; // entirely to the left of rgn
 	}
-	if (y >= ( rgn.y + rgn.h )) {
+	if (y >= (rgn.y + rgn.h)) {
 		return false; // entirely below rgn
 	}
-	if (( y + h ) <= rgn.y) {
+	if ((y + h) <= rgn.y) {
 		return false; // entirely above rgn
 	}
 	return true;
@@ -193,11 +226,11 @@ Point Region::Intercept(const Point& p) const noexcept
 	const Point& mid = Center();
 	const Point& min = origin;
 	const Point& max = Maximum();
-	
+
 	if (p.x == mid.x) return Point(p.x, (p.y < min.y) ? min.y : max.y); // vert line
 	if (p.y == mid.y) return Point((p.x < min.x) ? min.x : max.x, p.y); // horiz line
 
-	float m = float(mid.y - p.y) / float(mid.x - p.x);
+	float_t m = float_t(mid.y - p.y) / float_t(mid.x - p.x);
 
 	if (p.x <= mid.x) { // check "left" side
 		int newY = m * (min.x - p.x) + p.y;
@@ -208,7 +241,7 @@ Point Region::Intercept(const Point& p) const noexcept
 		int newY = m * (max.x - p.x) + p.y;
 		if (min.y <= newY && newY <= max.y) return Point(max.x, newY);
 	}
-	
+
 	if (p.y <= mid.y) { // check "top" side
 		int newX = (min.y - p.y) / m + p.x;
 		if (min.x <= newX && newX <= max.x) return Point(newX, min.y);
@@ -218,7 +251,7 @@ Point Region::Intercept(const Point& p) const noexcept
 		int newX = (max.y - p.y) / m + p.x;
 		if (min.x <= newX && newX <= max.x) return Point(newX, max.y);
 	}
-	
+
 	assert(p == mid || PointInside(p));
 	return p;
 }
@@ -231,7 +264,7 @@ void Region::ExpandToPoint(const Point& p) noexcept
 	} else if (p.x > x + w) {
 		w = p.x - x;
 	}
-	
+
 	if (p.y < y) {
 		h += y - p.y;
 		y = p.y;

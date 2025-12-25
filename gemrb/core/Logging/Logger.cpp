@@ -36,7 +36,7 @@ const EnumArray<LogLevel, LOG_FMT> Logger::LevelFormat {
 const LOG_FMT Logger::MSG_STYLE = fmt::fg(fmt::color::ghost_white);
 
 Logger::Logger(std::deque<WriterPtr> writers)
-: writers(std::move(writers))
+	: writers(std::move(writers))
 {}
 
 Logger::~Logger()
@@ -81,6 +81,9 @@ void Logger::ProcessMessages(QueueType queue)
 		}
 		queue.pop_front();
 	}
+	for (const auto& writer : writers) {
+		writer->Flush();
+	}
 }
 
 void Logger::LogMsg(LogLevel level, const char* owner, const char* message, LOG_FMT fmt)
@@ -95,11 +98,21 @@ void Logger::LogMsg(LogMessage&& msg)
 		std::lock_guard<std::mutex> l(writerLock);
 		for (const auto& writer : writers) {
 			writer->WriteLogMessage(msg);
+			writer->Flush();
 		}
 	} else {
 		std::lock_guard<std::mutex> l(queueLock);
 		messageQueue.push_back(std::move(msg));
 		cv.notify_all();
+	}
+}
+
+void Logger::Flush()
+{
+	cv.notify_all();
+	std::lock_guard<std::mutex> l(writerLock);
+	for (const auto& writer : writers) {
+		writer->Flush();
 	}
 }
 

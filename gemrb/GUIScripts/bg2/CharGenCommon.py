@@ -30,12 +30,12 @@ CharGenWindow = 0
 TextAreaControl = 0
 PortraitName = ""
 
-def PositionCharGenWin(window, offset = 0):
+def PositionCharGenWin(window, yOffset = 0, xOffset = 0):
 	global CharGenWindow
 	
 	CGFrame = CharGenWindow.GetFrame()
 	WFrame = window.GetFrame()
-	window.SetPos(CGFrame['x'], offset + CGFrame['y'] + (CGFrame['h'] - WFrame['h']))
+	window.SetPos(CGFrame['x'] + xOffset, yOffset + CGFrame['y'] + (CGFrame['h'] - WFrame['h']))
 
 
 def DisplayOverview(step):
@@ -99,7 +99,7 @@ def DisplayOverview(step):
 
 	AcceptButton = CharGenWindow.GetControl (8)
 	playmode = GemRB.GetVar ("PlayMode")
-	if playmode>=0:
+	if playmode is not None:
 		AcceptButton.SetText (11962)
 	else:
 		AcceptButton.SetText (13956)

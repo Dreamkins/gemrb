@@ -21,8 +21,8 @@ import sys
 
 def usage(msg):
   print("Error:", msg)
-  print("Usage:", sys.argv[0], 'filename APPEND|APPEND_COL "$|value1  [$|value2] ... [$|valueN]"')
-  print("Passing $ will result in an empty cell. Use it for the first two entries when appending columns, so you don't break the 2da signature or default value")
+  print("\nUsage:", sys.argv[0], 'filename APPEND|APPEND_COL "$|value1  [$|value2] ... [$|valueN]" [-r]\n')
+  print("Passing $ will result in an empty cell. Use it for the first two entries when appending columns,\nso you don't break the 2da signature or default value. Passing -r at the end will right-align cells.")
   print()
   print("Example:")
   print("python extend2da.py gemrb/override/bg1/classes.2da APPEND 'HACKER 1 3 0 0 0 0 0 0 0 0 0 0 0 0 0 0'")
@@ -34,7 +34,7 @@ def readAndGetMaxLength(f):
   maxL = i = 0
   for line in f:
     lines.append(line.rstrip())
-    if len(lines[i]) > maxL:
+    if len(lines[i]) > maxL and chr(line[0]) != "#":
       maxL = len(lines[i])
     i = i + 1
   return maxL
@@ -46,11 +46,17 @@ def appendCol(f, max):
   f.truncate()
   i = 0
   for cell in data:
-    if cell == "$":
+    if i == 2:
+      colName = cell
+
+    if cell == "$" or lines[i] == b"" or chr(lines[i][0]) == "#":
       f.write(lines[i] + b"\n")
       i = i + 1
       continue
+
     padding = max - len(lines[i]) + 2 # 2 spaces as field separator
+    if i > 2 and "-r" in flags:
+      padding = padding  + (len(colName) - len(cell)) # right-align
     f.write(lines[i] + (" "*padding + cell + "\n").encode('ascii'))
 
     i = i + 1
@@ -109,6 +115,7 @@ if len(sys.argv) < 4:
 filename = sys.argv[1]
 mode = sys.argv[2].upper() # APPEND / APPEND_COL
 data = sys.argv[3:][0].split()
+flags = sys.argv[4] if len(sys.argv) > 4 else ""
 
 if mode != "APPEND" and mode != "APPEND_COL":
   usage("invalid mode parameter")
@@ -125,6 +132,6 @@ with open(filename, 'r+b') as f:
     appendRow(f)
 
 # tests
-# python2 extend2da.py gemrb/override/bg1/classes.2da APPEND_COL "$ $ BOGOSITY 0 0 0 00 0 0 0 0 0 0 0 0 0 0 2 3 4 7"
-# python2 extend2da.py gemrb/override/bg1/classes.2da APPEND "HACKER 1 3 0 0 0 00 0 0 0 0 0 0 0 0 0 0 "
+# python admin/extend2da.py gemrb/unhardcoded/bg1/classes.2da APPEND_COL "$ $ BOGOSITY 0 0 0 00 0 0 0 0 0 0 0 0 0 0 2 3 4 7"
+# python admin/extend2da.py gemrb/unhardcoded/bg1/classes.2da APPEND "HACKER 1 3 0 0 0 00 0 0 0 0 0 0 0 0 0 0 0 0"
 

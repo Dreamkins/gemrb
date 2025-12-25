@@ -30,26 +30,26 @@ public:
 	NullSound(void);
 	~NullSound(void) override;
 	bool Init(void) override;
-	Holder<SoundHandle> Play(StringView ResRef, unsigned int channel,
-		const Point&, unsigned int flags = 0, tick_t *length = nullptr) override;
+	Holder<SoundHandle> Play(StringView ResRef, SFXChannel channel,
+				 const Point&, unsigned int flags = 0, tick_t* length = nullptr) override;
 	int CreateStream(ResourceHolder<SoundMgr>) override;
 	bool Play() override;
 	bool Stop() override;
 	bool Pause() override;
 	bool Resume() override;
 	bool CanPlay() override;
-	void ResetMusics() override;
+	void ResetMusics() final;
 	void UpdateListenerPos(const Point&) override;
 	Point GetListenerPos() override;
 	void UpdateVolume(unsigned int) override {}
 
 	int SetupNewStream(int x, int y, int z, ieWord gain, bool point, int ambientRange) override;
-	tick_t QueueAmbient(int stream, const ResRef& sound) override;
+	tick_t QueueAmbient(int stream, const ResRef& sound, bool ambient) override;
 	bool ReleaseStream(int stream, bool hardstop) override;
 	void SetAmbientStreamVolume(int stream, int gain) override;
 	void SetAmbientStreamPitch(int stream, int pitch) override;
 	void QueueBuffer(int stream, unsigned short bits, int channels,
-				short* memory, int size, int samplerate) override;
+			 short* memory, int size, int samplerate) override;
 
 private:
 	Point pos;

@@ -37,7 +37,7 @@ DefaultScrollbars = {
 
 def CreateScrollbarARGs(bam = None):
 	bamframes = list(range(6))
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		bamframes = [0,1,2,3,5,4]
 	elif GameCheck.IsBG1():
 		bamframes = [0,1,2,3,6,7]
@@ -100,7 +100,7 @@ class GView:
 	'Focus': _GemRB.View_Focus
 	}
 
-	__slots__ = ['SCRIPT_GROUP', 'Flags']
+	__slots__ = ['SCRIPT_GROUP', 'Flags', 'Window']
 	
 	def __eq__(self, rhs):
 		if rhs == None:
@@ -199,7 +199,6 @@ class GView:
 class GWindow(GView, Scrollable):
 	methods = {
 		'SetupEquipmentIcons': _GemRB.Window_SetupEquipmentIcons,
-		'SetupControls': _GemRB.Window_SetupControls,
 		'Focus': _GemRB.Window_Focus,
 		'ShowModal': _GemRB.Window_ShowModal,
 		'SetAction': _GemRB.Window_SetAction
@@ -212,8 +211,13 @@ class GWindow(GView, Scrollable):
 			view = self.GetControl (view)
 		RemoveView (view, True)
 
-	def GetControl(self, newID):
-		return GetView(self, newID)
+	def GetControl(self, cid):
+		if cid is not None and cid < 0: # FIXME: some GUIScript functions are still returning -1 instead of None
+			raise RuntimeError("Called with negative control ID: {}".format(cid))
+		elif cid is not None and cid >= 0:
+			return GetView(self, cid)
+		else:
+			return None
 
 	def AliasControls (self, map):
 		for alias, cid in map.items():
@@ -241,6 +245,15 @@ class GWindow(GView, Scrollable):
 	def Close(self, *args):
 		RemoveView(self, False)
 
+	def OnClose(self, handler):
+		self.SetAction(handler, ACTION_WINDOW_CLOSED)
+
+	def OnFocus(self, handler):
+		self.SetAction(handler, ACTION_WINDOW_FOCUS_GAINED)
+		
+	def OnUnFocus(self, handler):
+		self.SetAction(handler, ACTION_WINDOW_FOCUS_LOST)
+
 class GControl(GView):
 	methods = {
 		'SetVarAssoc': _GemRB.Control_SetVarAssoc,
@@ -249,6 +262,7 @@ class GControl(GView):
 		'SetAction': _GemRB.Control_SetAction,
 		'SetActionInterval': _GemRB.Control_SetActionInterval,
 		'SetColor': _GemRB.Control_SetColor,
+		'SetFont': _GemRB.Control_SetFont,
 		'SetStatus': _GemRB.Control_SetStatus,
 		'SetValue': _GemRB.Control_SetValue
 	}
@@ -280,9 +294,7 @@ class GControl(GView):
 		self.SetAction(handler, IE_ACT_VALUE_CHANGE)
 
 class GLabel(GControl):
-	methods = {
-		'SetFont': _GemRB.Label_SetFont,
-	}
+	pass
 
 class GTextArea(GControl, Scrollable):
 	methods = {
@@ -292,7 +304,6 @@ class GTextArea(GControl, Scrollable):
 	__slots__ = ['DefaultText']
 
 	def ListResources(self, what, opts=0):
-		_GemRB.Control_SetColor(self, ColorWhitish, TA_COLOR_OPTIONS)
 		return _GemRB.TextArea_ListResources(self, what, opts)
 
 	def Clear(self):
@@ -328,7 +339,6 @@ class GButton(GControl):
 		'SetOverlay': _GemRB.Button_SetOverlay,
 		'SetBorder': _GemRB.Button_SetBorder,
 		'EnableBorder': _GemRB.Button_EnableBorder,
-		'SetFont': _GemRB.Button_SetFont,
 		'SetHotKey': _GemRB.Button_SetHotKey,
 		'SetAnchor': _GemRB.Button_SetAnchor,
 		'SetPushOffset': _GemRB.Button_SetPushOffset,
@@ -336,12 +346,14 @@ class GButton(GControl):
 		'SetPictureClipping': _GemRB.Button_SetPictureClipping,
 		'SetPicture': _GemRB.Button_SetPicture,
 		'SetPLT': _GemRB.Button_SetPLT,
-		'SetBAM': _GemRB.Button_SetBAM,
 		'SetSpellIcon': _GemRB.Button_SetSpellIcon,
 		'SetItemIcon': _GemRB.Button_SetItemIcon,
 		'SetActionIcon': _GemRB.Button_SetActionIcon,
 		'SetAnimation': _GemRB.Button_SetAnimation,
 	}
+	
+	def SetBAM(self, resref, cycle, frame, pal = -1):
+		return self.SetPicture(GemRB.GetSprite(resref, pal, cycle, frame))
 
 	def MakeDefault(self, glob=False):
 		# return key
@@ -360,6 +372,9 @@ class GButton(GControl):
 		frame = self.GetFrame()
 		frame["x"] = frame["y"] = 0
 		return self.CreateSubview(btnid, IE_GUI_BUTTON, frame)
+		
+	def OnAnimEnd(self, handler):
+		self.SetAction(handler, IE_ACT_CUSTOM)
 
 class GWorldMap(GControl, Scrollable):
 	methods = {

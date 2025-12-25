@@ -78,31 +78,28 @@ def InitMapWindow (Window):
 
 	# World Map
 	def OpenWorldMap():
-		GemRB.SetVar("Travel", -1)
-		OpenTravelWindow()
+		OpenTravelWindow(None)
 
 	Button = Window.GetControl (1)
 	Button.OnPress (OpenWorldMap)
 
-	# Hide or Show mapnotes
-	if HasMapNotes ():
-		Button = Window.GetControl (3)
-		Button.SetFlags (IE_GUI_BUTTON_CHECKBOX, OP_OR)
-		# Is this an option?
-		Button.SetVarAssoc ("ShowMapNotes", IE_GUI_MAP_VIEW_NOTES)
-
-		Label = Window.GetControl (0x10000003)
-		Label.SetText ("")
+	Label = Window.GetControl (0x10000003)
 
 	# Map Control
-	if GameCheck.IsBG2() or GameCheck.IsIWD2():
+	if Label:
+		Label.SetText ("")
 		Map = Window.ReplaceSubview(2, IE_GUI_MAP, Label)
 	else:
 		Map = Window.ReplaceSubview(2, IE_GUI_MAP)
 
 	Map.SetAction(Window.Close, IE_ACT_MOUSE_PRESS, GEM_MB_ACTION, 0, 2)
 
+	# Hide or Show mapnotes
 	if HasMapNotes ():
+		Button = Window.GetControl (3)
+		Button.SetFlags (IE_GUI_BUTTON_CHECKBOX, OP_OR)
+		Button.SetVarAssoc ("ShowMapNotes", IE_GUI_MAP_VIEW_NOTES)
+
 		Map.SetVarAssoc ("ShowMapNotes", IE_GUI_MAP_VIEW_NOTES)
 		Map.OnRightPress (AddNoteWindow)
 		Map.SetStatus (IE_GUI_MAP_VIEW_NOTES)
@@ -116,7 +113,7 @@ def InitWorldMapWindow (Window):
 
 	Window.SetFlags(WF_ALPHA_CHANNEL, OP_NAND)
 
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		WorldMapControl = Window.ReplaceSubview (4, IE_GUI_WORLDMAP, "floattxt", "WMDAG")
 	elif GameCheck.IsBG1():
 		cnormal = {'r' : 0, 'g' : 0, 'b' : 0, 'a' : 0xff}
@@ -126,7 +123,6 @@ def InitWorldMapWindow (Window):
 	else:
 		WorldMapControl = Window.ReplaceSubview (4, IE_GUI_WORLDMAP, "infofont", "WMDAG")
 
-	WorldMapControl.SetVarAssoc("Travel", GemRB.GetVar("Travel"))
 	WorldMapControl.OnPress (GUIMACommon.MoveToNewArea)
 	WorldMapControl.SetAction(ChangeTooltip, IE_ACT_MOUSE_ENTER)
 	# center on current area
@@ -143,7 +139,7 @@ def InitWorldMapWindow (Window):
 		Button.OnPress (MapS)
 		Button.SetActionInterval (200)
 
-	if GameCheck.IsBG2():
+	if GameCheck.IsBG2OrEE ():
 		#northwest
 		Button = Window.GetControl (8)
 		Button.OnPress (MapNW)
@@ -178,27 +174,29 @@ def InitWorldMapWindow (Window):
 		Button = Window.GetControl (14)
 		Button.OnPress (MapSE)
 		Button.SetActionInterval (200)
-
+		
 	# Done
 	Button = Window.GetControl (0)
-	if GemRB.GetVar ("Travel") == -1:
-		Button.SetState (IE_GUI_BUTTON_ENABLED)
-		Button.OnPress (OpenMapWindow)
-	else:
-		Button.SetState (IE_GUI_BUTTON_DISABLED)
-
-	Button.SetHotKey('m')
-
+	Button.SetState (IE_GUI_BUTTON_ENABLED)
+	Button.OnPress (lambda: OpenMapWindow ())
 	return
 
 ToggleMapWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIMAP", GUICommonWindows.ToggleWindow, InitMapWindow)
 OpenMapWindow = GUICommonWindows.CreateTopWinLoader(2, "GUIMAP", GUICommonWindows.OpenWindowOnce, InitMapWindow)
 
 WMWID = 2 if GameCheck.IsIWD2 () else 0
-OpenTravelWindow = GUICommonWindows.CreateTopWinLoader(WMWID, "GUIWMAP", GUICommonWindows.OpenWindowOnce, InitWorldMapWindow)
+OpenTravelMapWindow = GUICommonWindows.CreateTopWinLoader(WMWID, "GUIWMAP", GUICommonWindows.OpenWindowOnce, InitWorldMapWindow)
+
+def OpenTravelWindow(Travel):
+	Window = OpenTravelMapWindow()
+	WorldMapControl.SetVarAssoc("Travel", Travel)
+	
+	if Travel is not None:
+		Button = Window.GetControl (0)
+		Button.SetState (IE_GUI_BUTTON_DISABLED)
 
 def HasMapNotes ():
-	return GameCheck.IsBG2() or GameCheck.IsIWD2() or GameCheck.IsPST()
+	return GameCheck.IsBG2OrEE () or GameCheck.IsIWD2 () or GameCheck.IsPST ()
 
 def AddNoteWindow ():
 	global NoteLabel, MapWindow
