@@ -213,7 +213,7 @@ void TurnBasedCombatManager::EndTurn()
 
 		// delayed attack
 		if (actor->GetStance() != IE_ANI_DIE && actor->GetStance() != IE_ANI_TWITCH && actor->GetStance() != IE_ANI_SLEEP &&
-			!(actor->Immobile() || (actor->Modified[IE_STATE_ID] & (STATE_CANTMOVE | STATE_PANIC))) && HasMainAction() && !actor->AuraCooldown &&
+			!(actor->Immobile() || (actor->Modified[IE_STATE_ID] & (STATE_CANTMOVE | STATE_PANIC))) && HasMainAction() &&
 			!GetCurrentTurnBasedSlot().delayaction && currentTurnBasedSlot < initiatives[currentTurnBasedList].size() - 1) {
 			InitiativeSlot delayedSlot = GetCurrentTurnBasedSlot();
 			delayedSlot.delayaction = true;
@@ -388,7 +388,7 @@ void TurnBasedCombatManager::UpdateTurnBased()
 							if (initiatives[list][idx].actor != opportunist) {
 								continue;
 							}
-							if (initiatives[list][idx].haveaction && !initiatives[list][idx].actor->AuraCooldown) {
+							if (initiatives[list][idx].haveaction) {
 								Actor* target = game->GetActorByGlobalID(opportunity);
 								if (target) {
 									unsigned int weaponRange = opportunist->GetWeaponRange(false);
