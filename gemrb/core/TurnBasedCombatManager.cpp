@@ -529,10 +529,10 @@ bool TurnBasedCombatManager::UseMainAction()
 	if (!IsTurnBased() || !currentTurnBasedActor) {
 		return true;
 	}
-	// If quick slot item is pending, use free action instead
+	// If quick slot item is pending, skip this action (already paid by free action)
 	if (quickSlotItemPending) {
 		quickSlotItemPending = false;
-		return UseFreeAction();
+		return true;
 	}
 	InitiativeSlot& slot = GetCurrentTurnBasedSlot();
 	if (slot.haveaction) {

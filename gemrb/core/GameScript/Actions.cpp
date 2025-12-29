@@ -6095,28 +6095,20 @@ void GameScript::Hide(Scriptable* Sender, Action* /*parameters*/)
 		return;
 	}
 
-	// TBC: check action availability first
+	// TBC: spend action before attempting hide
 	if (core->IsTurnBased()) {
 		if (actor->GetThiefLevel() > 0) {
-			if (!core->tbcManager.HasFreeAction()) {
+			if (!core->tbcManager.UseFreeAction()) {
 				return;
 			}
 		} else {
-			if (!core->tbcManager.HasMainAction()) {
+			if (!core->tbcManager.UseMainAction()) {
 				return;
 			}
 		}
 	}
 
 	if (actor->TryToHide()) {
-		// TBC: rogues use free action, others use main action
-		if (core->IsTurnBased()) {
-			if (actor->GetThiefLevel() > 0) {
-				core->tbcManager.UseFreeAction();
-			} else {
-				core->tbcManager.UseMainAction();
-			}
-		}
 		actor->SetModal(Modal::Stealth);
 	}
 	//TODO: expiry isn't instant (skill based transition?)
@@ -7009,18 +7001,18 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 				}
 			}
 		}
-		if (isQuickSlot && itemSpeed == 0) {
-			// Quick slot with no casting time = set pending flag, free action will be used when the triggered action runs
-			if (!core->tbcManager.HasFreeAction()) {
+		if (isQuickSlot) {
+			// Quick slot = free action
+			if (!core->tbcManager.UseFreeAction()) {
 				return;
 			}
+			// Skip next UseMainAction call from the triggered spell
 			core->tbcManager.quickSlotItemPending = true;
 		} else {
-			// Inventory or item with casting time = main action
-			if (!core->tbcManager.HasMainAction()) {
+			// Inventory = main action
+			if (!core->tbcManager.UseMainAction()) {
 				return;
 			}
-			core->tbcManager.UseMainAction();
 		}
 	}
 
@@ -7094,18 +7086,18 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 				}
 			}
 		}
-		if (isQuickSlot && itemSpeed == 0) {
-			// Quick slot with no casting time = set pending flag, free action will be used when the triggered action runs
-			if (!core->tbcManager.HasFreeAction()) {
+		if (isQuickSlot) {
+			// Quick slot = free action
+			if (!core->tbcManager.UseFreeAction()) {
 				return;
 			}
+			// Skip next UseMainAction call from the triggered spell
 			core->tbcManager.quickSlotItemPending = true;
 		} else {
-			// Inventory or item with casting time = main action
-			if (!core->tbcManager.HasMainAction()) {
+			// Inventory = main action
+			if (!core->tbcManager.UseMainAction()) {
 				return;
 			}
-			core->tbcManager.UseMainAction();
 		}
 	}
 
