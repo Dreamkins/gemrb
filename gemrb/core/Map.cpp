@@ -1754,7 +1754,7 @@ void Map::DrawTBCPanel() const
 				int squaresY = slotY + SLOT_HEIGHT + STATUS_INDICATOR_OFFSET - STATUS_INDICATOR_SIZE;
 
 				// Action available indicator (green square)
-				bool hasAction = core->tbcManager.HasMainAction() && !actor->AuraCooldown;
+				bool hasAction = core->tbcManager.HasMainAction();
 				Region actionRect(squaresStartX - 1, squaresY, STATUS_INDICATOR_SIZE, STATUS_INDICATOR_SIZE);
 				VideoDriver->DrawRect(actionRect, COLOR_ACTION_AVAILABLE, hasAction, BlitFlags::BLENDED);
 
