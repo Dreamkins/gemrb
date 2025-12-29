@@ -6095,17 +6095,26 @@ void GameScript::Hide(Scriptable* Sender, Action* /*parameters*/)
 		return;
 	}
 
+	// TBC: check action availability first
+	if (core->IsTurnBased()) {
+		if (actor->GetThiefLevel() > 0) {
+			if (!core->tbcManager.HasFreeAction()) {
+				return;
+			}
+		} else {
+			if (!core->tbcManager.HasMainAction()) {
+				return;
+			}
+		}
+	}
+
 	if (actor->TryToHide()) {
 		// TBC: rogues use free action, others use main action
 		if (core->IsTurnBased()) {
 			if (actor->GetThiefLevel() > 0) {
-				if (!core->tbcManager.UseFreeAction()) {
-					return;
-				}
+				core->tbcManager.UseFreeAction();
 			} else {
-				if (!core->tbcManager.UseMainAction()) {
-					return;
-				}
+				core->tbcManager.UseMainAction();
 			}
 		}
 		actor->SetModal(Modal::Stealth);
@@ -6971,6 +6980,7 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 			return;
 		}
 	}
+	int itemSpeed = hh->Speed;
 	gamedata->FreeItem(itm, itemres, false);
 
 	float_t angle = AngleFromPoints(Sender->Pos, tar->Pos);
@@ -6999,7 +7009,7 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 				}
 			}
 		}
-		if (isQuickSlot && hh->Speed == 0) {
+		if (isQuickSlot && itemSpeed == 0) {
 			// Quick slot with no casting time = set pending flag, free action will be used when the triggered action runs
 			if (!core->tbcManager.HasFreeAction()) {
 				return;
