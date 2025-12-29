@@ -508,9 +508,7 @@ bool TurnBasedCombatManager::HasMainAction() const
 		return true;
 	}
 	auto* self = const_cast<TurnBasedCombatManager*>(this);
-	bool result = self->GetCurrentTurnBasedSlot().haveaction;
-	Log(MESSAGE, "TBC", "HasMainAction: list={}, slot={}, result={}", currentTurnBasedList, currentTurnBasedSlot, result);
-	return result;
+	return self->GetCurrentTurnBasedSlot().haveaction;
 }
 
 bool TurnBasedCombatManager::UseFreeAction()
@@ -528,24 +526,19 @@ bool TurnBasedCombatManager::UseFreeAction()
 
 bool TurnBasedCombatManager::UseMainAction()
 {
-	Log(MESSAGE, "TBC", "UseMainAction ENTRY, IsTurnBased={}, currentActor={}", IsTurnBased(), (void*)currentTurnBasedActor);
 	if (!IsTurnBased() || !currentTurnBasedActor) {
 		return true;
 	}
-	Log(MESSAGE, "TBC", "UseMainAction called, quickSlotItemPending={}", quickSlotItemPending);
 	// If quick slot item is pending, use free action instead of main
 	if (quickSlotItemPending) {
 		quickSlotItemPending = false;
-		Log(MESSAGE, "TBC", "UseMainAction: converting to UseFreeAction");
 		return UseFreeAction();
 	}
 	InitiativeSlot& slot = GetCurrentTurnBasedSlot();
 	if (slot.haveaction) {
 		slot.haveaction = false;
-		Log(MESSAGE, "TBC", "UseMainAction: main action spent");
 		return true;
 	}
-	Log(MESSAGE, "TBC", "UseMainAction: no action available");
 	return false;
 }
 

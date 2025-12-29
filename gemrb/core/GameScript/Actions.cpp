@@ -6994,10 +6994,6 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 		// Check if item is from quick slot
 		bool isQuickSlot = false;
 		if (act->PCStats) {
-			Log(MESSAGE, "TBC", "UseItem: Slot={}, QuickItemSlots=[{},{},{},{},{}]", 
-				Slot, act->PCStats->QuickItemSlots[0], act->PCStats->QuickItemSlots[1],
-				act->PCStats->QuickItemSlots[2], act->PCStats->QuickItemSlots[3],
-				act->PCStats->QuickItemSlots[4]);
 			for (int i = 0; i < MAX_QUICKITEMSLOT; i++) {
 				if (act->PCStats->QuickItemSlots[i] == Slot) {
 					isQuickSlot = true;
@@ -7005,18 +7001,14 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 				}
 			}
 		}
-		Log(MESSAGE, "TBC", "UseItem: isQuickSlot={}", isQuickSlot);
 		if (isQuickSlot) {
 			// Quick slot: set flag, action will be spent in SpellCore
 			if (!core->tbcManager.HasFreeAction()) {
-				Log(MESSAGE, "TBC", "UseItem: No free action");
 				return;
 			}
 			core->tbcManager.quickSlotItemPending = true;
-			Log(MESSAGE, "TBC", "UseItem: quickSlotItemPending=true");
 		} else {
 			// Inventory = main action
-			Log(MESSAGE, "TBC", "UseItem: Not quick slot, using main action");
 			if (!core->tbcManager.UseMainAction()) {
 				return;
 			}
