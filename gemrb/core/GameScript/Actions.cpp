@@ -6954,8 +6954,30 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 	}
 
 	if (core->IsTurnBased() && act->InInitiativeList()) {
-		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->tbcManager.UseFreeAction()) {
+		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0) {
 			return;
+		}
+		// Check if item is from quick slot
+		bool isQuickSlot = false;
+		if (act->PCStats) {
+			for (int i = 0; i < MAX_QUICKITEMSLOT; i++) {
+				if (act->PCStats->QuickItemSlots[i] == Slot) {
+					isQuickSlot = true;
+					break;
+				}
+			}
+		}
+		if (isQuickSlot) {
+			// Quick slot = free action
+			if (!core->tbcManager.UseFreeAction()) {
+				return;
+			}
+		} else {
+			// Inventory = main action
+			if (!core->GetCurrentTurnBasedSlot().haveaction) {
+				return;
+			}
+			core->GetCurrentTurnBasedSlot().haveaction = false;
 		}
 	}
 
@@ -7010,8 +7032,30 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 	}
 
 	if (core->IsTurnBased() && act->InInitiativeList()) {
-		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->tbcManager.UseFreeAction()) {
+		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0) {
 			return;
+		}
+		// Check if item is from quick slot
+		bool isQuickSlot = false;
+		if (act->PCStats) {
+			for (int i = 0; i < MAX_QUICKITEMSLOT; i++) {
+				if (act->PCStats->QuickItemSlots[i] == Slot) {
+					isQuickSlot = true;
+					break;
+				}
+			}
+		}
+		if (isQuickSlot) {
+			// Quick slot = free action
+			if (!core->tbcManager.UseFreeAction()) {
+				return;
+			}
+		} else {
+			// Inventory = main action
+			if (!core->GetCurrentTurnBasedSlot().haveaction) {
+				return;
+			}
+			core->GetCurrentTurnBasedSlot().haveaction = false;
 		}
 	}
 
