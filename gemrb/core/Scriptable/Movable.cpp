@@ -23,6 +23,7 @@
 
 #include "Actor.h"
 #include "Interface.h"
+#include "TurnBasedCombatManager.h"
 #include "Map.h"
 
 #include "GUI/GameControl.h"
@@ -268,6 +269,12 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 		if (actor && actor->ValidTarget(GA_CAN_BUMP) && actorInTheWay->ValidTarget(GA_ONLY_BUMPABLE)) {
 			actorInTheWay->BumpAway();
 		} else {
+			// TBC: consume movement on backoff
+			if (core->IsTurnBased() && actor && !actor->IsPC() && actor == core->tbcManager.currentTurnBasedActor) {
+				ClearPath(true);
+				NewOrientation = Orientation;
+				core->GetCurrentTurnBasedSlot().movesleft -= 0.1f;
+			}
 			Backoff();
 			return;
 		}
@@ -287,6 +294,22 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 	if (InternalFlags & IF_RUNNING) {
 		StanceID = IE_ANI_RUN;
 	}
+	Point newPos(Pos.x + dx, Pos.y + dy);
+	
+	// TBC: consume movement points
+	if (core->IsTurnBased() && actor && actor == core->tbcManager.currentTurnBasedActor) {
+		float dist = SquaredDistance(Pos, newPos);
+		int speed = actor->GetSpeed() ? gamedata->GetStepTime() / actor->GetSpeed() : 0;
+		if (speed > 0) {
+			core->GetCurrentTurnBasedSlot().movesleft -= dist / (speed * core->Time.defaultTicksPerSec * core->Time.round_sec * 10);
+		}
+		if (core->GetCurrentTurnBasedSlot().movesleft <= 0) {
+			ClearPath(true);
+			NewOrientation = Orientation;
+			return;
+		}
+	}
+	
 	Pos.x += dx;
 	Pos.y += dy;
 	oldPos = Pos;
