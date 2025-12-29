@@ -529,18 +529,20 @@ bool TurnBasedCombatManager::UseMainAction()
 	if (!IsTurnBased() || !currentTurnBasedActor) {
 		return true;
 	}
+	Log(MESSAGE, "TBC", "UseMainAction called, quickSlotItemPending={}", quickSlotItemPending);
 	// If quick slot item is pending, use free action instead of main
 	if (quickSlotItemPending) {
 		quickSlotItemPending = false;
+		Log(MESSAGE, "TBC", "UseMainAction: converting to UseFreeAction");
 		return UseFreeAction();
 	}
 	InitiativeSlot& slot = GetCurrentTurnBasedSlot();
 	if (slot.haveaction) {
 		slot.haveaction = false;
-		Log(DEBUG, "TBC", "UseMainAction: main action spent");
+		Log(MESSAGE, "TBC", "UseMainAction: main action spent");
 		return true;
 	}
-	Log(DEBUG, "TBC", "UseMainAction: no action available");
+	Log(MESSAGE, "TBC", "UseMainAction: no action available");
 	return false;
 }
 
