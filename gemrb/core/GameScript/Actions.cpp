@@ -2365,7 +2365,7 @@ void GameScript::Unlock(Scriptable* Sender, Action* parameters)
 		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
-		core->GetCurrentTurnBasedSlot().haveaction = false;
+		core->tbcManager.UseMainAction();
 		actor->RemoveFromAdditionInitiativeLists();
 	}
 
@@ -2524,7 +2524,7 @@ void GameScript::PickLock(Scriptable* Sender, Action* parameters)
 		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
-		core->GetCurrentTurnBasedSlot().haveaction = false;
+		core->tbcManager.UseMainAction();
 		actor->RemoveFromAdditionInitiativeLists();
 	}
 
@@ -2610,7 +2610,7 @@ void GameScript::OpenDoor(Scriptable* Sender, Action* parameters)
 			if (!core->GetCurrentTurnBasedSlot().haveaction) {
 				return;
 			}
-			core->GetCurrentTurnBasedSlot().haveaction = false;
+			core->tbcManager.UseMainAction();
 			actor->RemoveFromAdditionInitiativeLists();
 		} else {
 			// Door was unlocked - use free action
@@ -2638,7 +2638,7 @@ void GameScript::CloseDoor(Scriptable* Sender, Action* parameters)
 		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
-		core->GetCurrentTurnBasedSlot().haveaction = false;
+		core->tbcManager.UseMainAction();
 		actor->RemoveFromAdditionInitiativeLists();
 	}
 
@@ -4725,7 +4725,7 @@ void GameScript::PickPockets(Scriptable* Sender, Action* parameters)
 		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
-		core->GetCurrentTurnBasedSlot().haveaction = false;
+		core->tbcManager.UseMainAction();
 		actor->RemoveFromAdditionInitiativeLists();
 	}
 
@@ -7001,7 +7001,7 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 			if (!core->GetCurrentTurnBasedSlot().haveaction) {
 				return;
 			}
-			core->GetCurrentTurnBasedSlot().haveaction = false;
+			core->tbcManager.UseMainAction();
 		}
 	}
 
@@ -7079,7 +7079,7 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 			if (!core->GetCurrentTurnBasedSlot().haveaction) {
 				return;
 			}
-			core->GetCurrentTurnBasedSlot().haveaction = false;
+			core->tbcManager.UseMainAction();
 		}
 	}
 

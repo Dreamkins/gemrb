@@ -7912,7 +7912,7 @@ void Actor::CalculateAttackResult()
 		ApplyCriticalEffect(this, target, wi, false);
 		ResetState();
 
-		core->GetCurrentTurnBasedSlot().haveaction = false;
+		core->tbcManager.UseMainAction();
 
 		return;
 	}
@@ -7931,7 +7931,7 @@ void Actor::CalculateAttackResult()
 			target->overHead.SetText(std::move(text), true, true, Color(255, 255, 255, 255));
 		}
 
-		core->GetCurrentTurnBasedSlot().haveaction = false;
+		core->tbcManager.UseMainAction();
 		return;
 	}
 
@@ -7961,7 +7961,7 @@ void Actor::CalculateAttackResult()
 	UseItem(wi.slot, wi.wflags & WEAPON_RANGED ? -2 : -1, target, (critical ? UI_CRITICAL : 0) | UI_NOAURA, damage);
 	ResetState();
 
-	core->GetCurrentTurnBasedSlot().haveaction = false;
+	core->tbcManager.UseMainAction();
 }
 
 void Actor::AttackTurnBased(ieDword gameTime)

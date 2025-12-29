@@ -2416,7 +2416,7 @@ void SpellCore(Scriptable* Sender, Action* parameters, int flags)
 		if (Sender != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
 			return;
 		}
-		core->GetCurrentTurnBasedSlot().haveaction = false;
+		core->tbcManager.UseMainAction();
 		((Actor*)Sender)->RemoveFromAdditionInitiativeLists();
 		parameters->int2Parameter = 1;
 	}
@@ -2562,7 +2562,7 @@ void SpellPointCore(Scriptable* Sender, Action* parameters, int flags)
 		if (Sender != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
 			return;
 		}
-		core->GetCurrentTurnBasedSlot().haveaction = false;
+		core->tbcManager.UseMainAction();
 		((Actor*)Sender)->RemoveFromAdditionInitiativeLists();
 		parameters->int2Parameter = 1;
 	}
