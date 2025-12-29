@@ -2417,10 +2417,13 @@ void SpellCore(Scriptable* Sender, Action* parameters, int flags)
 			return;
 		}
 		// Check appropriate action based on pending quick slot flag
+		Log(DEBUG, "TBC", "SpellCore: quickSlotItemPending={}", core->tbcManager.quickSlotItemPending);
 		bool hasAction = core->tbcManager.quickSlotItemPending ? core->tbcManager.HasFreeAction() : core->tbcManager.HasMainAction();
 		if (!hasAction) {
+			Log(DEBUG, "TBC", "SpellCore: No action available");
 			return;
 		}
+		Log(DEBUG, "TBC", "SpellCore: Calling UseMainAction");
 		core->tbcManager.UseMainAction();
 		((Actor*)Sender)->RemoveFromAdditionInitiativeLists();
 		parameters->int2Parameter = 1;
@@ -2568,10 +2571,13 @@ void SpellPointCore(Scriptable* Sender, Action* parameters, int flags)
 			return;
 		}
 		// Check appropriate action based on pending quick slot flag
+		Log(DEBUG, "TBC", "SpellCore: quickSlotItemPending={}", core->tbcManager.quickSlotItemPending);
 		bool hasAction = core->tbcManager.quickSlotItemPending ? core->tbcManager.HasFreeAction() : core->tbcManager.HasMainAction();
 		if (!hasAction) {
+			Log(DEBUG, "TBC", "SpellCore: No action available");
 			return;
 		}
+		Log(DEBUG, "TBC", "SpellCore: Calling UseMainAction");
 		core->tbcManager.UseMainAction();
 		((Actor*)Sender)->RemoveFromAdditionInitiativeLists();
 		parameters->int2Parameter = 1;
