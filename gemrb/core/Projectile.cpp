@@ -1045,7 +1045,7 @@ void Projectile::LineTarget(Path::const_iterator beg, Path::const_iterator end)
 
 	Actor* original = area->GetActorByGlobalID(Caster);
 	int targetFlags = CalculateTargetFlag();
-	uint32_t time = core->GetGame()->GetGameTime();
+	uint32_t time = core->GetGame()->GetGameTimeReal();
 	auto iter = beg;
 
 	do {
@@ -1663,7 +1663,7 @@ Projectile::ProjectileState Projectile::GetNextExplosionState()
 		// but also anyone else that walks into them gets hit once or twice if unlucky
 		// this enables use in a fanning motion/AOE if the caster can move (bg2, not HoW)
 		// slightly throttle calls for efficiency
-		if (ExtFlags & PEF_LINE && core->GetGame()->GetGameTime() % 5 == 0) {
+		if (ExtFlags & PEF_LINE && core->GetGame()->GetGameTimeReal() % 5 == 0) {
 			LineTarget();
 		}
 		return state;
