@@ -1754,12 +1754,12 @@ void Map::DrawTBCPanel() const
 				                      STATUS_INDICATOR_SIZE, STATUS_INDICATOR_SIZE);
 				VideoDriver->DrawRect(freeActionRect, COLOR_FREE_ACTION, hasFreeAction, BlitFlags::BLENDED);
 
-				// Movement remaining indicator (blue bar)
+				// Movement remaining indicator (blue bar) - below the portrait
 				float movesLeft = std::fmax(0.0f, core->GetCurrentTurnBasedSlot().movesleft);
-				int moveBarWidth = static_cast<int>((SLOT_WIDTH - STATUS_INDICATOR_SIZE * 2 - 10) * movesLeft);
+				int moveBarWidth = static_cast<int>(SLOT_WIDTH * movesLeft);
+				int moveBarY = slotY + SLOT_HEIGHT + STATUS_INDICATOR_OFFSET - STATUS_INDICATOR_SIZE;
 				
-				Region moveRect(slotX + STATUS_INDICATOR_SIZE * 2 + 6, slotY - STATUS_INDICATOR_OFFSET, 
-				                moveBarWidth, STATUS_INDICATOR_SIZE);
+				Region moveRect(slotX, moveBarY, moveBarWidth, STATUS_INDICATOR_SIZE);
 				VideoDriver->DrawRect(moveRect, COLOR_MOVEMENT, true, BlitFlags::BLENDED);
 			}
 
