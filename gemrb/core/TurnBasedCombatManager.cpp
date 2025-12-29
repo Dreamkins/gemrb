@@ -153,7 +153,7 @@ void TurnBasedCombatManager::FirstRoundStart()
 			if (initiatives[0][idx].actor->attackcount >= attacks + 1) {
 				initiatives[attacks].push_back(initiatives[0][idx]);
 				initiatives[attacks].back().haveaction = true;
-				initiatives[attacks].back().havefreeaction = true;
+				initiatives[attacks].back().havefreeaction = false;
 				initiatives[attacks].back().delayaction = false;
 			}
 		}
