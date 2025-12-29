@@ -6600,6 +6600,25 @@ void Actor::DoStep(unsigned int newWalkScale, ieDword time)
 	if (Immobile()) {
 		return;
 	}
+	
+	// TBC: consume movement points
+	if (core->IsTurnBased() && InInitiativeList() && core->tbcManager.currentTurnBasedActor == this) {
+		InitiativeSlot& slot = core->GetCurrentTurnBasedSlot();
+		if (slot.movesleft > 0) {
+			// Decrease movement based on speed (faster = less cost per step)
+			float moveCost = 1.0f / (float)(GetStat(IE_MOVEMENTRATE) * 2);
+			slot.movesleft -= moveCost;
+			if (slot.movesleft < 0) {
+				slot.movesleft = 0;
+			}
+		}
+		// Stop if no movement left
+		if (slot.movesleft <= 0) {
+			ClearPath(true);
+			return;
+		}
+	}
+	
 	Movable::DoStep(newWalkScale, time);
 }
 

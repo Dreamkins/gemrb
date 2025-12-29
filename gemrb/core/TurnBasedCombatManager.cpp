@@ -140,6 +140,11 @@ void TurnBasedCombatManager::FirstRoundStart()
 		initiatives[0][idx].haveaction = true;
 		initiatives[0][idx].havefreeaction = true;
 		initiatives[0][idx].delayaction = false;
+		// Stop all movement at combat start
+		if (roundTurnBased == 1) {
+			initiatives[0][idx].actor->ClearPath(true);
+			initiatives[0][idx].actor->ClearActions();
+		}
 	}
 
 	for (size_t attacks = 1; attacks < 10; attacks++) {
