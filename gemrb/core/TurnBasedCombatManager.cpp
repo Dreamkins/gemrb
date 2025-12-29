@@ -465,6 +465,10 @@ void TurnBasedCombatManager::UpdateTurnBased()
 
 void TurnBasedCombatManager::resetTurnBased()
 {
+	if (core->GetGame() && timeTurnBased) {
+		core->GetGame()->SetGameTime(timeTurnBased);
+	}
+	
 	for (int i = 0; i < MAX_ATTACK_LISTS; i++) {
 		initiatives[i].clear();
 	}
@@ -480,6 +484,7 @@ void TurnBasedCombatManager::resetTurnBased()
 	roundTurnBased = 0;
 	timeTurnBased = 0;
 	timeTurnBasedNeed = 0;
+	pause_before_fight = 10;
 }
 
 bool TurnBasedCombatManager::HasFreeAction() const

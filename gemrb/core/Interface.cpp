@@ -4160,36 +4160,12 @@ void Interface::UpdateTurnBased() {
 tbcManager.UpdateTurnBased();
 }
 
-void Interface::resetTurnBased() 
-{
-	if (core->GetGame() && tbcManager.timeTurnBased) {
-		core->GetGame()->SetGameTime(tbcManager.timeTurnBased);
-	}
-	for (int i = 0; i < 6; i++) {
-		tbcManager.initiatives[i].clear();
-	}
-	tbcManager.currentTurnBasedSlot = 0;
-	tbcManager.currentTurnBasedActor = nullptr;
-	tbcManager.pause_before_fight = 10;
-	tbcManager.roundTurnBased = 0;
-	tbcManager.timeTurnBased = 0;
-	tbcManager.timeTurnBasedNeed = 0;
-	tbcManager.opportunity = 0;
+void Interface::resetTurnBased() {
+	tbcManager.resetTurnBased();
 }
 
-InitiativeSlot& Interface::GetCurrentTurnBasedSlot() 
-{ 
-	if (tbcManager.currentTurnBasedSlot >= tbcManager.initiatives[tbcManager.currentTurnBasedList].size()) {
-		tbcManager.currentTurnBasedSlot = 0;
-		for (size_t idx = 0; idx < tbcManager.initiatives[tbcManager.currentTurnBasedList].size(); idx++) {
-			if (tbcManager.initiatives[tbcManager.currentTurnBasedList][idx].actor == tbcManager.currentTurnBasedActor) {
-				tbcManager.currentTurnBasedSlot = idx;
-				break;
-			}
-		}
-	}
-
-	return tbcManager.initiatives[tbcManager.currentTurnBasedList][tbcManager.currentTurnBasedSlot]; 
+InitiativeSlot& Interface::GetCurrentTurnBasedSlot() {
+	return tbcManager.GetCurrentTurnBasedSlot();
 }
 
 float Interface::GetAnimationFPS(const ResRef& anim) const
