@@ -127,6 +127,19 @@ void TurnBasedCombatManager::resetTurnBased()
 	timeTurnBasedNeed = 0;
 }
 
+bool TurnBasedCombatManager::UseFreeAction()
+{
+	if (!IsTurnBased() || !currentTurnBasedActor) {
+		return true; // Not in TBC, allow action
+	}
+	InitiativeSlot& slot = GetCurrentTurnBasedSlot();
+	if (slot.havefreeaction) {
+		slot.havefreeaction = false;
+		return true;
+	}
+	return false; // No free action available
+}
+
 void TurnBasedCombatManager::ToggleTurnBased()
 {
 	turnBasedEnable = !turnBasedEnable;

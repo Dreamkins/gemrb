@@ -2593,18 +2593,30 @@ void GameScript::OpenDoor(Scriptable* Sender, Action* parameters)
 	// of all doors, or some doors, or whether it should still check for non-actors
 	Actor* actor = Scriptable::As<Actor>(Sender);
 
-	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
-			return;
-		}
-		core->GetCurrentTurnBasedSlot().haveaction = false;
-		actor->RemoveFromAdditionInitiativeLists();
-	}
-
+	bool wasLocked = door->Flags & DOOR_LOCKED;
 	if (actor) {
 		actor->SetModal(Modal::None);
 		if (!door->TryUnlock(actor)) {
 			return;
+		}
+	}
+	// TBC: opening unlocked door = free action, locked door (picking) = main action
+	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
+		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || actor->AuraCooldown) {
+			return;
+		}
+		if (wasLocked) {
+			// Door was locked - use main action
+			if (!core->GetCurrentTurnBasedSlot().haveaction) {
+				return;
+			}
+			core->GetCurrentTurnBasedSlot().haveaction = false;
+			actor->RemoveFromAdditionInitiativeLists();
+		} else {
+			// Door was unlocked - use free action
+			if (!core->tbcManager.UseFreeAction()) {
+				return;
+			}
 		}
 	}
 
@@ -6942,7 +6954,7 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 	}
 
 	if (core->IsTurnBased() && act->InInitiativeList()) {
-		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->tbcManager.UseFreeAction()) {
 			return;
 		}
 	}
@@ -6998,7 +7010,7 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 	}
 
 	if (core->IsTurnBased() && act->InInitiativeList()) {
-		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->tbcManager.UseFreeAction()) {
 			return;
 		}
 	}

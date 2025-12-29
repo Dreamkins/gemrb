@@ -4139,6 +4139,7 @@ void Interface::InitTurnBasedSlot() {
 	if (!GetCurrentTurnBasedSlot().delayaction) {
 		if (tbcManager.currentTurnBasedList == 0) {
 			GetCurrentTurnBasedSlot().movesleft = 1.0f;
+			GetCurrentTurnBasedSlot().havefreeaction = true;
 		} else {
 			for (size_t idx = 0; idx < tbcManager.initiatives[tbcManager.currentTurnBasedList - 1].size(); idx++) {
 				if (tbcManager.initiatives[tbcManager.currentTurnBasedList - 1][idx].actor == tbcManager.currentTurnBasedActor) {
@@ -4185,6 +4186,7 @@ void Interface::FirstRoundStart() {
 	for (size_t idx = 0; idx < tbcManager.initiatives[0].size(); idx++) {
 		tbcManager.initiatives[0][idx].actor->InitRound(tbcManager.timeTurnBased);
 		tbcManager.initiatives[0][idx].haveaction = true;
+		tbcManager.initiatives[0][idx].havefreeaction = true;
 		tbcManager.initiatives[0][idx].delayaction = false;
 	}
 
@@ -4196,6 +4198,7 @@ void Interface::FirstRoundStart() {
 			if (tbcManager.initiatives[0][idx].actor->attackcount >= attacks + 1) {
 				tbcManager.initiatives[attacks].push_back(tbcManager.initiatives[0][idx]);
 				tbcManager.initiatives[attacks].back().haveaction = true;
+				tbcManager.initiatives[attacks].back().havefreeaction = true;
 				tbcManager.initiatives[attacks].back().delayaction = false;
 			}
 		}

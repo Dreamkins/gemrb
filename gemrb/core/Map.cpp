@@ -1516,6 +1516,7 @@ namespace TBCPanel {
 	const Color COLOR_BLACK(0, 0, 0, 255);
 	const Color COLOR_SLOT_BG(64, 64, 64, 255);
 	const Color COLOR_ACTION_AVAILABLE(128, 192, 128, 255);
+	const Color COLOR_FREE_ACTION(255, 220, 64, 255);
 	const Color COLOR_MOVEMENT(128, 128, 255, 255);
 	const Color COLOR_HP_DAMAGE(128, 0, 0, 128);
 	const Color COLOR_OPPORTUNITY_LINE(255, 0, 0, 255);
@@ -1747,11 +1748,17 @@ void Map::DrawTBCPanel() const
 				                  STATUS_INDICATOR_SIZE, STATUS_INDICATOR_SIZE);
 				VideoDriver->DrawRect(actionRect, COLOR_ACTION_AVAILABLE, hasAction, BlitFlags::BLENDED);
 
+				// Free action indicator (yellow square)
+				bool hasFreeAction = core->GetCurrentTurnBasedSlot().havefreeaction;
+				Region freeActionRect(slotX + STATUS_INDICATOR_SIZE + 2, slotY - STATUS_INDICATOR_OFFSET, 
+				                      STATUS_INDICATOR_SIZE, STATUS_INDICATOR_SIZE);
+				VideoDriver->DrawRect(freeActionRect, COLOR_FREE_ACTION, hasFreeAction, BlitFlags::BLENDED);
+
 				// Movement remaining indicator (blue bar)
 				float movesLeft = std::fmax(0.0f, core->GetCurrentTurnBasedSlot().movesleft);
-				int moveBarWidth = static_cast<int>((SLOT_WIDTH - STATUS_INDICATOR_SIZE - 6) * movesLeft);
+				int moveBarWidth = static_cast<int>((SLOT_WIDTH - STATUS_INDICATOR_SIZE * 2 - 10) * movesLeft);
 				
-				Region moveRect(slotX + STATUS_INDICATOR_SIZE + 2, slotY - STATUS_INDICATOR_OFFSET, 
+				Region moveRect(slotX + STATUS_INDICATOR_SIZE * 2 + 6, slotY - STATUS_INDICATOR_OFFSET, 
 				                moveBarWidth, STATUS_INDICATOR_SIZE);
 				VideoDriver->DrawRect(moveRect, COLOR_MOVEMENT, true, BlitFlags::BLENDED);
 			}

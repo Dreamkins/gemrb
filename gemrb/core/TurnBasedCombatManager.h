@@ -36,6 +36,7 @@ struct InitiativeSlot {
 	int initiative = 10;                 // Initiative roll result (lower = faster)
 	float movesleft = 1.0f;              // Remaining movement (0.0 to 1.0)
 	bool haveaction = true;              // Has action available this turn
+	bool havefreeaction = true;          // Has free action available this turn
 	bool delayaction = false;            // Action was delayed
 	int CurrentActionStateDescrease = 0; // Timer for action state decrease
 };
@@ -132,6 +133,9 @@ public:
 	
 	// Get next available slot with action for actor
 	InitiativeSlot* GetTurnBasedSlotWithAttack(Actor* actor);
+	
+	// Use free action for current actor (returns true if had free action)
+	bool UseFreeAction();
 	
 	// -------------------------------------------------------------------------
 	// Turn Management
