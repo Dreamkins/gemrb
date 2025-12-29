@@ -1282,7 +1282,7 @@ int Scriptable::CastSpellPoint(const Point& target, bool deplete, bool instant, 
 		Log(ERROR, "Scriptable", "Spell {} not known or memorized, aborting cast!", SpellResRef);
 		return -1;
 	}
-	if (!instant && !noInterrupt) {
+	if (!instant && !noInterrupt && !core->IsTurnBased()) {
 		AuraCooldown = core->Time.attack_round_size;
 	}
 	if (!noInterrupt && !CanCast(SpellResRef)) {
@@ -1323,7 +1323,7 @@ int Scriptable::CastSpell(Scriptable* target, bool deplete, bool instant, bool n
 
 	assert(target);
 
-	if (!instant && !noInterrupt) {
+	if (!instant && !noInterrupt && !core->IsTurnBased()) {
 		AuraCooldown = core->Time.attack_round_size;
 	}
 	if (!noInterrupt && !CanCast(SpellResRef)) {

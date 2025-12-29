@@ -9943,7 +9943,7 @@ bool Actor::UseItemPoint(ieDword slot, int header, const Point& target, ieDword 
 
 	if (!TryUsingMagicDevice(itm, header)) {
 		ChargeItem(slot, header, item, itm, flags & UI_SILENT, !(flags & UI_NOCHARGE));
-		AuraCooldown = core->Time.attack_round_size;
+		if (!core->IsTurnBased()) AuraCooldown = core->Time.attack_round_size;
 		return false;
 	}
 
@@ -9955,7 +9955,7 @@ bool Actor::UseItemPoint(ieDword slot, int header, const Point& target, ieDword 
 	Projectile* pro = itm->GetProjectile(this, header, target, slot, flags & UI_MISS);
 	ChargeItem(slot, header, item, itm, flags & UI_SILENT, !(flags & UI_NOCHARGE));
 	if (!(flags & UI_NOAURA)) {
-		AuraCooldown = core->Time.attack_round_size;
+		if (!core->IsTurnBased()) AuraCooldown = core->Time.attack_round_size;
 	}
 	ResetCommentTime();
 	if (pro) {
@@ -10283,7 +10283,7 @@ bool Actor::UseItem(ieDword slot, int header, const Scriptable* target, ieDword 
 
 	if (!TryUsingMagicDevice(itm, header)) {
 		ChargeItem(slot, header, item, itm, flags & UI_SILENT, !(flags & UI_NOCHARGE));
-		AuraCooldown = core->Time.attack_round_size;
+		if (!core->IsTurnBased()) AuraCooldown = core->Time.attack_round_size;
 		return false;
 	}
 
@@ -10307,7 +10307,7 @@ bool Actor::UseItem(ieDword slot, int header, const Scriptable* target, ieDword 
 	ChargeItem(slot, header, item, itm, flags & UI_SILENT, !(flags & UI_NOCHARGE));
 
 	if (!(flags & UI_NOAURA)) {
-		AuraCooldown = core->Time.attack_round_size;
+		if (!core->IsTurnBased()) AuraCooldown = core->Time.attack_round_size;
 	}
 	ResetCommentTime();
 	if (!pro) {
