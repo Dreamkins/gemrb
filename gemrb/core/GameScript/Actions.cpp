@@ -2441,6 +2441,15 @@ void GameScript::RemoveTraps(Scriptable* Sender, Action* parameters)
 		Sender->ReleaseCurrentAction();
 		return;
 	}
+
+	if (core->IsTurnBased() && actor->InInitiativeList()) {
+		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->tbcManager.HasMainAction() || actor->AuraCooldown) {
+			return;
+		}
+		core->tbcManager.UseMainAction();
+		actor->RemoveFromAdditionInitiativeLists();
+	}
+
 	Scriptable* tar = GetScriptableFromObject(Sender, parameters);
 	if (!tar) {
 		Sender->ReleaseCurrentAction();
