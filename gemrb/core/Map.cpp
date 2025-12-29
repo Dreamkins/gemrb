@@ -1743,7 +1743,7 @@ void Map::DrawTBCPanel() const
 			// -----------------------------------------------------------------
 			if (isCurrentActor && actor->IsPC()) {
 				// Movement remaining indicator (blue bar) - above the portrait
-				float movesLeft = std::fmax(0.0f, core->GetCurrentTurnBasedSlot().movesleft);
+				float movesLeft = std::clamp(core->GetCurrentTurnBasedSlot().movesleft, 0.0f, 1.0f);
 				int moveBarWidth = static_cast<int>(SLOT_WIDTH * movesLeft);
 				Region moveRect(slotX, slotY - STATUS_INDICATOR_OFFSET, moveBarWidth, STATUS_INDICATOR_SIZE);
 				VideoDriver->DrawRect(moveRect, COLOR_MOVEMENT, true, BlitFlags::BLENDED);
