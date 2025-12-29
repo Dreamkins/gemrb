@@ -201,6 +201,13 @@ void Movable::BumpBack()
 // the goal is close enough.
 void Movable::DoStep(unsigned int walkScale, ieDword time)
 {
+	// TBC: Only current actor can move
+	Actor* tbcActor = Scriptable::As<Actor>(this);
+	if (core->IsTurnBased() && tbcActor && tbcActor != core->tbcManager.currentTurnBasedActor) {
+		ClearPath(true);
+		return;
+	}
+
 	// Only bump back if not moving
 	// Actors can be bumped while moving if they are backing off
 	if (!path) {
