@@ -146,6 +146,9 @@ public:
 	// Use main action for current actor (returns true if had main action)
 	bool UseMainAction();
 	
+	// Use all main actions in all phases for current actor (for spellcasting)
+	bool UseAllMainActions();
+	
 	// -------------------------------------------------------------------------
 	// Turn Management
 	// -------------------------------------------------------------------------

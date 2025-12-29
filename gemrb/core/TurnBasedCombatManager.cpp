@@ -546,6 +546,22 @@ bool TurnBasedCombatManager::UseMainAction()
 	return false;
 }
 
+bool TurnBasedCombatManager::UseAllMainActions()
+{
+	if (!IsTurnBased() || !currentTurnBasedActor) {
+		return true;
+	}
+	// Spend main action in all phases for current actor
+	for (size_t list = 0; list < 10; list++) {
+		for (auto& slot : initiatives[list]) {
+			if (slot.actor == currentTurnBasedActor) {
+				slot.haveaction = false;
+			}
+		}
+	}
+	return true;
+}
+
 void TurnBasedCombatManager::ToggleTurnBased()
 {
 	turnBasedEnable = !turnBasedEnable;

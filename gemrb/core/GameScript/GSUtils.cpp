@@ -2419,7 +2419,7 @@ void SpellCore(Scriptable* Sender, Action* parameters, int flags)
 		if (!core->tbcManager.HasMainAction()) {
 			return;
 		}
-		core->tbcManager.UseMainAction();
+		core->tbcManager.UseAllMainActions();
 		((Actor*)Sender)->RemoveFromAdditionInitiativeLists();
 		parameters->int2Parameter = 1;
 	}
@@ -2568,7 +2568,7 @@ void SpellPointCore(Scriptable* Sender, Action* parameters, int flags)
 		if (!core->tbcManager.HasMainAction()) {
 			return;
 		}
-		core->tbcManager.UseMainAction();
+		core->tbcManager.UseAllMainActions();
 		((Actor*)Sender)->RemoveFromAdditionInitiativeLists();
 		parameters->int2Parameter = 1;
 	}
