@@ -6982,6 +6982,7 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 		}
 	}
 	int itemSpeed = hh->Speed;
+	ieWord itemType = itm->ItemType;
 	gamedata->FreeItem(itm, itemres, false);
 
 	float_t angle = AngleFromPoints(Sender->Pos, tar->Pos);
@@ -7010,7 +7011,8 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 				}
 			}
 		}
-		if (isQuickSlot) {
+		// Scrolls use main action (like casting a spell), other quick items use free action
+		if (isQuickSlot && itemType != 11) { // 11 = IT_SCROLL
 			if (!core->tbcManager.UseFreeAction()) {
 				return;
 			}
@@ -7075,10 +7077,9 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0) {
 			return;
 		}
-		// Get item's casting time (Speed) for action cost check
+		// Get item type for scroll check
 		const Item* itm = gamedata->GetItem(itemres, true);
-		const ITMExtHeader* hh = itm ? itm->GetExtHeader(header) : nullptr;
-		int itemSpeed = hh ? hh->Speed : 0;
+		ieWord itemType = itm ? itm->ItemType : 0;
 		if (itm) gamedata->FreeItem(itm, itemres, false);
 		
 		// Check if item is from quick slot
@@ -7091,7 +7092,8 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 				}
 			}
 		}
-		if (isQuickSlot) {
+		// Scrolls use main action (like casting a spell), other quick items use free action
+		if (isQuickSlot && itemType != 11) { // 11 = IT_SCROLL
 			if (!core->tbcManager.UseFreeAction()) {
 				return;
 			}
