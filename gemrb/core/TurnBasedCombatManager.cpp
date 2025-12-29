@@ -266,6 +266,16 @@ void TurnBasedCombatManager::EndTurn()
 			}
 
 			if (initiatives[currentTurnBasedList].size()) {
+				// Copy havefreeaction from previous phase for each actor
+				for (auto& slot : initiatives[currentTurnBasedList]) {
+					// Find this actor in phase 0 and copy havefreeaction
+					for (const auto& slot0 : initiatives[0]) {
+						if (slot0.actor == slot.actor) {
+							slot.havefreeaction = slot0.havefreeaction;
+							break;
+						}
+					}
+				}
 				break;
 			}
 		}
@@ -518,6 +528,13 @@ bool TurnBasedCombatManager::UseFreeAction()
 	InitiativeSlot& slot = GetCurrentTurnBasedSlot();
 	if (slot.havefreeaction) {
 		slot.havefreeaction = false;
+		// Also update phase 0 so it carries over to next phases
+		for (auto& slot0 : initiatives[0]) {
+			if (slot0.actor == currentTurnBasedActor) {
+				slot0.havefreeaction = false;
+				break;
+			}
+		}
 		return true;
 	}
 	return false;
