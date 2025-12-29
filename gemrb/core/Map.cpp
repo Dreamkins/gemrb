@@ -1742,25 +1742,27 @@ void Map::DrawTBCPanel() const
 			// Draw status indicators for current PC actor
 			// -----------------------------------------------------------------
 			if (isCurrentActor && actor->IsPC()) {
+				// Movement remaining indicator (blue bar) - above the portrait
+				float movesLeft = std::fmax(0.0f, core->GetCurrentTurnBasedSlot().movesleft);
+				int moveBarWidth = static_cast<int>(SLOT_WIDTH * movesLeft);
+				Region moveRect(slotX, slotY - STATUS_INDICATOR_OFFSET, moveBarWidth, STATUS_INDICATOR_SIZE);
+				VideoDriver->DrawRect(moveRect, COLOR_MOVEMENT, true, BlitFlags::BLENDED);
+
+				// Action indicators below the portrait, centered horizontally
+				int totalSquaresWidth = STATUS_INDICATOR_SIZE * 2 + 2;
+				int squaresStartX = slotX + (SLOT_WIDTH - totalSquaresWidth) / 2;
+				int squaresY = slotY + SLOT_HEIGHT + STATUS_INDICATOR_OFFSET - STATUS_INDICATOR_SIZE;
+
 				// Action available indicator (green square)
 				bool hasAction = core->tbcManager.HasMainAction() && !actor->AuraCooldown;
-				Region actionRect(slotX, slotY - STATUS_INDICATOR_OFFSET, 
-				                  STATUS_INDICATOR_SIZE, STATUS_INDICATOR_SIZE);
+				Region actionRect(squaresStartX, squaresY, STATUS_INDICATOR_SIZE, STATUS_INDICATOR_SIZE);
 				VideoDriver->DrawRect(actionRect, COLOR_ACTION_AVAILABLE, hasAction, BlitFlags::BLENDED);
 
 				// Free action indicator (yellow square)
 				bool hasFreeAction = core->GetCurrentTurnBasedSlot().havefreeaction;
-				Region freeActionRect(slotX + STATUS_INDICATOR_SIZE + 2, slotY - STATUS_INDICATOR_OFFSET, 
+				Region freeActionRect(squaresStartX + STATUS_INDICATOR_SIZE + 2, squaresY, 
 				                      STATUS_INDICATOR_SIZE, STATUS_INDICATOR_SIZE);
 				VideoDriver->DrawRect(freeActionRect, COLOR_FREE_ACTION, hasFreeAction, BlitFlags::BLENDED);
-
-				// Movement remaining indicator (blue bar) - below the portrait
-				float movesLeft = std::fmax(0.0f, core->GetCurrentTurnBasedSlot().movesleft);
-				int moveBarWidth = static_cast<int>(SLOT_WIDTH * movesLeft);
-				int moveBarY = slotY + SLOT_HEIGHT + STATUS_INDICATOR_OFFSET - STATUS_INDICATOR_SIZE;
-				
-				Region moveRect(slotX, moveBarY, moveBarWidth, STATUS_INDICATOR_SIZE);
-				VideoDriver->DrawRect(moveRect, COLOR_MOVEMENT, true, BlitFlags::BLENDED);
 			}
 
 			// -----------------------------------------------------------------
