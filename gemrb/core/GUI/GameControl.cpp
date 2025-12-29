@@ -2556,10 +2556,6 @@ void GameControl::ResetTargetMode()
 {
 	target_types = GA_NO_DEAD | GA_NO_HIDDEN | GA_NO_UNSCHEDULED;
 	SetTargetMode(TargetMode::None);
-	// TBC: Reset quick slot item pending flag when cancelling target selection
-	if (core->IsTurnBased()) {
-		core->tbcManager.quickSlotItemPending = false;
-	}
 }
 
 void GameControl::UpdateTargetMode()

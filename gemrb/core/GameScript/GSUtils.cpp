@@ -2416,9 +2416,7 @@ void SpellCore(Scriptable* Sender, Action* parameters, int flags)
 		if (Sender != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0) {
 			return;
 		}
-		// Check appropriate action based on pending quick slot flag
-		bool hasAction = core->tbcManager.quickSlotItemPending ? core->tbcManager.HasFreeAction() : core->tbcManager.HasMainAction();
-		if (!hasAction) {
+		if (!core->tbcManager.HasMainAction()) {
 			return;
 		}
 		core->tbcManager.UseMainAction();
@@ -2567,9 +2565,7 @@ void SpellPointCore(Scriptable* Sender, Action* parameters, int flags)
 		if (Sender != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0) {
 			return;
 		}
-		// Check appropriate action based on pending quick slot flag
-		bool hasAction = core->tbcManager.quickSlotItemPending ? core->tbcManager.HasFreeAction() : core->tbcManager.HasMainAction();
-		if (!hasAction) {
+		if (!core->tbcManager.HasMainAction()) {
 			return;
 		}
 		core->tbcManager.UseMainAction();

@@ -7002,13 +7002,10 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 			}
 		}
 		if (isQuickSlot) {
-			// Quick slot: set flag, action will be spent in SpellCore
-			if (!core->tbcManager.HasFreeAction()) {
+			if (!core->tbcManager.UseFreeAction()) {
 				return;
 			}
-			core->tbcManager.quickSlotItemPending = true;
 		} else {
-			// Inventory = main action
 			if (!core->tbcManager.UseMainAction()) {
 				return;
 			}
@@ -7086,13 +7083,10 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 			}
 		}
 		if (isQuickSlot) {
-			// Quick slot: set flag, action will be spent in SpellCore
-			if (!core->tbcManager.HasFreeAction()) {
+			if (!core->tbcManager.UseFreeAction()) {
 				return;
 			}
-			core->tbcManager.quickSlotItemPending = true;
 		} else {
-			// Inventory = main action
 			if (!core->tbcManager.UseMainAction()) {
 				return;
 			}

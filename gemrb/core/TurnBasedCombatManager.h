@@ -89,9 +89,6 @@ public:
 	std::vector<ieDword> opportunists;      // Actors who can make opportunity attacks
 	Point lasOpportunityPos;                // Last position for opportunity attack check
 	
-	// Quick slot item pending - when true, next UseMainAction will use free action instead
-	bool quickSlotItemPending = false;
-	
 	// -------------------------------------------------------------------------
 	// Timing
 	// -------------------------------------------------------------------------

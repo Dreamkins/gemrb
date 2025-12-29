@@ -89,7 +89,6 @@ void TurnBasedCombatManager::InitTurnBasedSlot()
 {
 	currentTurnBasedActor = GetCurrentTurnBasedSlot().actor;
 	lastTurnBasedTarget = 0;
-	quickSlotItemPending = false;  // Reset pending flag at start of turn
 
 	if (!GetCurrentTurnBasedSlot().delayaction) {
 		if (currentTurnBasedList == 0) {
@@ -528,11 +527,6 @@ bool TurnBasedCombatManager::UseMainAction()
 {
 	if (!IsTurnBased() || !currentTurnBasedActor) {
 		return true;
-	}
-	// If quick slot item is pending, use free action instead of main
-	if (quickSlotItemPending) {
-		quickSlotItemPending = false;
-		return UseFreeAction();
 	}
 	InitiativeSlot& slot = GetCurrentTurnBasedSlot();
 	if (slot.haveaction) {

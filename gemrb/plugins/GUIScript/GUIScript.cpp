@@ -10721,6 +10721,13 @@ static PyObject* GemRB_SetEquippedQuickSlot(PyObject* /*self*/, PyObject* args)
 	GET_GAME();
 	GET_ACTOR_GLOBAL();
 
+	// TBC: Switching weapons costs a free action
+	if (core->IsTurnBased() && actor->InInitiativeList()) {
+		if (!core->tbcManager.UseFreeAction()) {
+			Py_RETURN_NONE;
+		}
+	}
+
 	const CREItem* item = actor->inventory.GetUsedWeapon(false, dummy);
 	if (item && (item->Flags & IE_INV_ITEM_CURSED)) {
 		displaymsg->DisplayConstantString(HCStrings::Cursed, GUIColors::WHITE);
