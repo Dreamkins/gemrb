@@ -2572,7 +2572,7 @@ void Game::MoveFamiliars(const ResRef& targetArea, const Point& targetPoint, int
 
 uint32_t Game::GetGameTime() const
 { 
-	return core->IsTurnBased() ? core->timeTurnBased : (uint32_t)GameTime; 
+	return core->IsTurnBased() ? core->tbcManager.timeTurnBased : (uint32_t)GameTime; 
 }
 
 void Game::SetGameTime(uint32_t value)

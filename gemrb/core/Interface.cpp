@@ -3917,7 +3917,7 @@ int Interface::GetWisdomBonus(int column, int value) const
 PauseState Interface::TogglePause() const
 {
 	if (core->IsTurnBased()) {
-		Actor* actor = core->currentTurnBasedActor;
+		Actor* actor = core->tbcManager.currentTurnBasedActor;
 		if (actor) {
 			bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->Modified[IE_STATE_ID] & (STATE_MINDLESS^STATE_BERSERK));
 			if (actor->lastInit && game->GetGameTimeReal() - actor->lastInit > 4 && !notPlayerControl && !actor->InMove() && !actor->InAttack()) {
@@ -4133,83 +4133,83 @@ void Interface::SetNextScript(const path_t& script)
 }
 
 void Interface::InitTurnBasedSlot() {
-	currentTurnBasedActor = GetCurrentTurnBasedSlot().actor;
-	lastTurnBasedTarget = 0;
+	tbcManager.currentTurnBasedActor = GetCurrentTurnBasedSlot().actor;
+	tbcManager.lastTurnBasedTarget = 0;
 
 	if (!GetCurrentTurnBasedSlot().delayaction) {
-		if (currentTurnBasedList == 0) {
+		if (tbcManager.currentTurnBasedList == 0) {
 			GetCurrentTurnBasedSlot().movesleft = 1.0f;
 		} else {
-			for (size_t idx = 0; idx < initiatives[currentTurnBasedList - 1].size(); idx++) {
-				if (initiatives[currentTurnBasedList - 1][idx].actor == currentTurnBasedActor) {
-					GetCurrentTurnBasedSlot().movesleft = initiatives[currentTurnBasedList - 1][idx].movesleft;
+			for (size_t idx = 0; idx < tbcManager.initiatives[tbcManager.currentTurnBasedList - 1].size(); idx++) {
+				if (tbcManager.initiatives[tbcManager.currentTurnBasedList - 1][idx].actor == tbcManager.currentTurnBasedActor) {
+					GetCurrentTurnBasedSlot().movesleft = tbcManager.initiatives[tbcManager.currentTurnBasedList - 1][idx].movesleft;
 					break;
 				}
 			}
 		}
 	}
 
-	if (currentTurnBasedActor->IsPC() && currentTurnBasedActor->GetStance() != IE_ANI_CAST) {
-		currentTurnBasedActor->ClearPath(true);
-		currentTurnBasedActor->ClearActions();
+	if (tbcManager.currentTurnBasedActor->IsPC() && tbcManager.currentTurnBasedActor->GetStance() != IE_ANI_CAST) {
+		tbcManager.currentTurnBasedActor->ClearPath(true);
+		tbcManager.currentTurnBasedActor->ClearActions();
 	}
-	currentTurnBasedActor->lastInit = core->GetGame()->GetGameTimeReal();
+	tbcManager.currentTurnBasedActor->lastInit = core->GetGame()->GetGameTimeReal();
 
 	GameControl* gc = core->GetGameControl();
-	if (currentTurnBasedActor->GetCurrentArea()->IsVisible(currentTurnBasedActor->Pos)) {
-		gc->MoveViewportTo(currentTurnBasedActor->Pos, true);
+	if (tbcManager.currentTurnBasedActor->GetCurrentArea()->IsVisible(tbcManager.currentTurnBasedActor->Pos)) {
+		gc->MoveViewportTo(tbcManager.currentTurnBasedActor->Pos, true);
 	}
 
-	//currentTurnBasedActor->RefreshEffects();
-	//currentTurnBasedActor->UpdateModalState(timeTurnBased);
+	//tbcManager.currentTurnBasedActor->RefreshEffects();
+	//tbcManager.currentTurnBasedActor->UpdateModalState(tbcManager.timeTurnBased);
 }
 
 void Interface::FirstRoundStart() {
-	currentTurnBasedSlot = 0;
-	currentTurnBasedList = 0;
-	opportunity = 0;
-	roundTurnBased++;
+	tbcManager.currentTurnBasedSlot = 0;
+	tbcManager.currentTurnBasedList = 0;
+	tbcManager.opportunity = 0;
+	tbcManager.roundTurnBased++;
 
-	if (roundTurnBased == 1) {
-		timeTurnBased = core->GetGame()->GetGameTimeReal();
+	if (tbcManager.roundTurnBased == 1) {
+		tbcManager.timeTurnBased = core->GetGame()->GetGameTimeReal();
 	} else {
-		for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
-			initiatives[0][idx].initiative = initiatives[0][idx].actor->CalculateInitiative();
+		for (size_t idx = 0; idx < tbcManager.initiatives[0].size(); idx++) {
+			tbcManager.initiatives[0][idx].initiative = tbcManager.initiatives[0][idx].actor->CalculateInitiative();
 		}
 	}
 
-	std::sort(initiatives[0].begin(), initiatives[0].end(), [](const InitiativeSlot& a, const InitiativeSlot& b) {
+	std::sort(tbcManager.initiatives[0].begin(), tbcManager.initiatives[0].end(), [](const InitiativeSlot& a, const InitiativeSlot& b) {
 		return a.initiative < b.initiative;
 		});
 
-	for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
-		initiatives[0][idx].actor->InitRound(timeTurnBased);
-		initiatives[0][idx].haveaction = true;
-		initiatives[0][idx].delayaction = false;
+	for (size_t idx = 0; idx < tbcManager.initiatives[0].size(); idx++) {
+		tbcManager.initiatives[0][idx].actor->InitRound(tbcManager.timeTurnBased);
+		tbcManager.initiatives[0][idx].haveaction = true;
+		tbcManager.initiatives[0][idx].delayaction = false;
 	}
 
 	for (size_t attacks = 1; attacks < 10; attacks++) {
-		initiatives[attacks].clear();
-		for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
-			auto actor = initiatives[0][idx].actor;
+		tbcManager.initiatives[attacks].clear();
+		for (size_t idx = 0; idx < tbcManager.initiatives[0].size(); idx++) {
+			auto actor = tbcManager.initiatives[0][idx].actor;
 
-			if (initiatives[0][idx].actor->attackcount >= attacks + 1) {
-				initiatives[attacks].push_back(initiatives[0][idx]);
-				initiatives[attacks].back().haveaction = true;
-				initiatives[attacks].back().delayaction = false;
+			if (tbcManager.initiatives[0][idx].actor->attackcount >= attacks + 1) {
+				tbcManager.initiatives[attacks].push_back(tbcManager.initiatives[0][idx]);
+				tbcManager.initiatives[attacks].back().haveaction = true;
+				tbcManager.initiatives[attacks].back().delayaction = false;
 			}
 		}
 	}
 
 	InitTurnBasedSlot();
 
-	String rollLog = fmt::format(u">>> ROUND: {} <<<", roundTurnBased);
+	String rollLog = fmt::format(u">>> ROUND: {} <<<", tbcManager.roundTurnBased);
 	displaymsg->DisplayString(std::move(rollLog), GUIColors::GOLD, 0);
 
 
 	core->GetGame()->SelectActor(nullptr, false, SELECT_REPLACE);
-	if (initiatives[0][0].actor->IsPartyMember()) {
-		core->GetGame()->SelectActor(initiatives[0][0].actor, true, SELECT_REPLACE);
+	if (tbcManager.initiatives[0][0].actor->IsPartyMember()) {
+		core->GetGame()->SelectActor(tbcManager.initiatives[0][0].actor, true, SELECT_REPLACE);
 	}
 }
 
@@ -4218,9 +4218,9 @@ InitiativeSlot& Interface::GetTurnBasedSlot(Actor* actor) {
 		actor->MoveToInitiativeList();
 	}
 
-	for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
-		if (initiatives[0][idx].actor == actor) {
-			return initiatives[0][idx];
+	for (size_t idx = 0; idx < tbcManager.initiatives[0].size(); idx++) {
+		if (tbcManager.initiatives[0][idx].actor == actor) {
+			return tbcManager.initiatives[0][idx];
 		}
 	}
 }
@@ -4230,12 +4230,12 @@ InitiativeSlot* Interface::GetTurnBasedSlotWithAttack(Actor* actor) {
 		return nullptr;
 	}
 	for (size_t list = 0; list < 10; list++) {
-		for (size_t idx = 0; idx < initiatives[list].size(); idx++) {
-			if (initiatives[list][idx].actor != actor) {
+		for (size_t idx = 0; idx < tbcManager.initiatives[list].size(); idx++) {
+			if (tbcManager.initiatives[list][idx].actor != actor) {
 				continue;
 			}
-			if (initiatives[list][idx].haveaction) {
-				return &initiatives[list][idx];
+			if (tbcManager.initiatives[list][idx].haveaction) {
+				return &tbcManager.initiatives[list][idx];
 			}
 		}
 	}
@@ -4243,27 +4243,27 @@ InitiativeSlot* Interface::GetTurnBasedSlotWithAttack(Actor* actor) {
 }
 
 void Interface::EndTurn() {
-	if (!currentTurnBasedActor || 
+	if (!tbcManager.currentTurnBasedActor || 
 		core->GetGame()->GetCurrentAction() || 
-		currentTurnBasedActor->InAttack()) {
+		tbcManager.currentTurnBasedActor->InAttack()) {
 		return;
 	}
 
-	if (currentTurnBasedActorOld) {
-		if (currentTurnBasedActor->IsPC()) {
-			core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
+	if (tbcManager.currentTurnBasedActorOld) {
+		if (tbcManager.currentTurnBasedActor->IsPC()) {
+			core->GetGame()->SelectActor(tbcManager.currentTurnBasedActor, false, SELECT_REPLACE);
 		}
 
-		currentTurnBasedActor = currentTurnBasedActorOld;
-		currentTurnBasedList = currentTurnBasedListOld;
-		currentTurnBasedSlot = currentTurnBasedSlotOld;
-		currentTurnBasedActorOld = nullptr;
-		currentTurnBasedListOld = 0;
-		currentTurnBasedSlotOld = 0;
-		currentTurnBasedActor->lastInit = core->GetGame()->GetGameTimeReal();
+		tbcManager.currentTurnBasedActor = tbcManager.currentTurnBasedActorOld;
+		tbcManager.currentTurnBasedList = tbcManager.currentTurnBasedListOld;
+		tbcManager.currentTurnBasedSlot = tbcManager.currentTurnBasedSlotOld;
+		tbcManager.currentTurnBasedActorOld = nullptr;
+		tbcManager.currentTurnBasedListOld = 0;
+		tbcManager.currentTurnBasedSlotOld = 0;
+		tbcManager.currentTurnBasedActor->lastInit = core->GetGame()->GetGameTimeReal();
 
-		if (currentTurnBasedActor->IsPC()) {
-			core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
+		if (tbcManager.currentTurnBasedActor->IsPC()) {
+			core->GetGame()->SelectActor(tbcManager.currentTurnBasedActor, true, SELECT_REPLACE);
 		}
 
 		String rollLog = fmt::format(u">>> OPPORTUNITY FINISH <<<");
@@ -4271,13 +4271,13 @@ void Interface::EndTurn() {
 		return;
 	}
 
-	Actor* actor = currentTurnBasedActor;
+	Actor* actor = tbcManager.currentTurnBasedActor;
 
 	if (actor->InInitiativeList()) {
-		currentTurnBasedSlot = 0;
-		for (size_t idx = 0; idx < initiatives[currentTurnBasedList].size(); idx++) {
-			if (initiatives[currentTurnBasedList][idx].actor == currentTurnBasedActor) {
-				currentTurnBasedSlot = idx;
+		tbcManager.currentTurnBasedSlot = 0;
+		for (size_t idx = 0; idx < tbcManager.initiatives[tbcManager.currentTurnBasedList].size(); idx++) {
+			if (tbcManager.initiatives[tbcManager.currentTurnBasedList][idx].actor == tbcManager.currentTurnBasedActor) {
+				tbcManager.currentTurnBasedSlot = idx;
 				break;
 			}
 		}
@@ -4285,37 +4285,37 @@ void Interface::EndTurn() {
 		// delayed attack
 		if (actor->GetStance() != IE_ANI_DIE && actor->GetStance() != IE_ANI_TWITCH && actor->GetStance() != IE_ANI_SLEEP &&
 			!(actor->Immobile() || (actor->Modified[IE_STATE_ID] & (STATE_CANTMOVE | STATE_PANIC))) && GetCurrentTurnBasedSlot().haveaction && !actor->AuraCooldown &&
-			!GetCurrentTurnBasedSlot().delayaction && currentTurnBasedSlot < initiatives[currentTurnBasedList].size() - 1) {
+			!GetCurrentTurnBasedSlot().delayaction && tbcManager.currentTurnBasedSlot < tbcManager.initiatives[tbcManager.currentTurnBasedList].size() - 1) {
 			InitiativeSlot delayedSlot = GetCurrentTurnBasedSlot();
 			delayedSlot.delayaction = true;
-			initiatives[currentTurnBasedList].erase(initiatives[currentTurnBasedList].begin() + currentTurnBasedSlot);
-			initiatives[currentTurnBasedList].push_back(delayedSlot);
+			tbcManager.initiatives[tbcManager.currentTurnBasedList].erase(tbcManager.initiatives[tbcManager.currentTurnBasedList].begin() + tbcManager.currentTurnBasedSlot);
+			tbcManager.initiatives[tbcManager.currentTurnBasedList].push_back(delayedSlot);
 		} else {
-			currentTurnBasedSlot++;
+			tbcManager.currentTurnBasedSlot++;
 		}
 	}
 
-	if (currentTurnBasedSlot >= initiatives[currentTurnBasedList].size()) {
-		currentTurnBasedSlot = 0;
+	if (tbcManager.currentTurnBasedSlot >= tbcManager.initiatives[tbcManager.currentTurnBasedList].size()) {
+		tbcManager.currentTurnBasedSlot = 0;
 
-		while (currentTurnBasedList < 10) {
-			currentTurnBasedList++;
+		while (tbcManager.currentTurnBasedList < 10) {
+			tbcManager.currentTurnBasedList++;
 
-			if (!timeTurnBasedNeed) {
-				timeTurnBasedNeed = timeTurnBased;
+			if (!tbcManager.timeTurnBasedNeed) {
+				tbcManager.timeTurnBasedNeed = tbcManager.timeTurnBased;
 			}
 
-			timeTurnBasedNeed += (core->Time.defaultTicksPerSec * core->Time.round_sec) / 10;
-			if (currentTurnBasedList == 10) {
-				timeTurnBasedNeed += (core->Time.defaultTicksPerSec * core->Time.round_sec) % 10;
+			tbcManager.timeTurnBasedNeed += (core->Time.defaultTicksPerSec * core->Time.round_sec) / 10;
+			if (tbcManager.currentTurnBasedList == 10) {
+				tbcManager.timeTurnBasedNeed += (core->Time.defaultTicksPerSec * core->Time.round_sec) % 10;
 			}
 
-			for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
-				Actor* act = initiatives[0][idx].actor;
+			for (size_t idx = 0; idx < tbcManager.initiatives[0].size(); idx++) {
+				Actor* act = tbcManager.initiatives[0][idx].actor;
 				// AuraCooldown
 				if (act->AuraCooldown) {
 					act->AuraCooldown -= (core->Time.defaultTicksPerSec * core->Time.round_sec) / 10;
-					if (currentTurnBasedList == 10) {
+					if (tbcManager.currentTurnBasedList == 10) {
 						act->AuraCooldown -= (core->Time.defaultTicksPerSec * core->Time.round_sec) % 10;
 					}
 					if ((int)act->AuraCooldown < 0) {
@@ -4324,27 +4324,27 @@ void Interface::EndTurn() {
 				}
 				// CurrentActionState
 				if (act->CurrentActionState) {
-					initiatives[0][idx].CurrentActionStateDescrease += (core->Time.defaultTicksPerSec * core->Time.round_sec) / 10;
-					if (currentTurnBasedList == 10) {
-						initiatives[0][idx].CurrentActionStateDescrease += (core->Time.defaultTicksPerSec * core->Time.round_sec) % 10;
+					tbcManager.initiatives[0][idx].CurrentActionStateDescrease += (core->Time.defaultTicksPerSec * core->Time.round_sec) / 10;
+					if (tbcManager.currentTurnBasedList == 10) {
+						tbcManager.initiatives[0][idx].CurrentActionStateDescrease += (core->Time.defaultTicksPerSec * core->Time.round_sec) % 10;
 					}
 				}
 				// IdleTicks
 				act->IdleTicks += (core->Time.defaultTicksPerSec * core->Time.round_sec) / 10;
-				if (currentTurnBasedList == 10) {
+				if (tbcManager.currentTurnBasedList == 10) {
 					act->IdleTicks += (core->Time.defaultTicksPerSec * core->Time.round_sec) % 10;
 				}
 			}
 
-			if (initiatives[currentTurnBasedList].size()) {
+			if (tbcManager.initiatives[tbcManager.currentTurnBasedList].size()) {
 				break;
 			}
 		}
 
-		if (currentTurnBasedList == 10) {
-			currentTurnBasedList = 0;
-			currentTurnBasedSlot = 0;
-			currentTurnBasedActor = nullptr;
+		if (tbcManager.currentTurnBasedList == 10) {
+			tbcManager.currentTurnBasedList = 0;
+			tbcManager.currentTurnBasedSlot = 0;
+			tbcManager.currentTurnBasedActor = nullptr;
 
 			String rollLog = fmt::format(u">>> ENVIRONMENT PHASE <<<");
 			displaymsg->DisplayString(std::move(rollLog), GUIColors::GOLD, 0);
@@ -4352,23 +4352,23 @@ void Interface::EndTurn() {
 		}
 	}
 
-	if (currentTurnBasedActor->IsPC()) {
-		core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
+	if (tbcManager.currentTurnBasedActor->IsPC()) {
+		core->GetGame()->SelectActor(tbcManager.currentTurnBasedActor, false, SELECT_REPLACE);
 	}
 
 	InitTurnBasedSlot();
 
-	if (currentTurnBasedActor->IsPC()) {
-		core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
+	if (tbcManager.currentTurnBasedActor->IsPC()) {
+		core->GetGame()->SelectActor(tbcManager.currentTurnBasedActor, true, SELECT_REPLACE);
 	}
 }
 
 void Interface::ToggleTurnBased()
 {
-	turnBasedEnable = !turnBasedEnable;
+	tbcManager.turnBasedEnable = !tbcManager.turnBasedEnable;
 
 	String text;
-	if (turnBasedEnable) {
+	if (tbcManager.turnBasedEnable) {
 		text = fmt::format(u"Turn based mode enabled.");
 	} else {
 		text = fmt::format(u"Turn based mode disabled.");
@@ -4378,41 +4378,47 @@ void Interface::ToggleTurnBased()
 
 void Interface::UpdateTurnBased() {
 
-	if (initiatives[0].size()) {
-		if (pause_before_fight) {
-			pause_before_fight--;
+	if (tbcManager.initiatives[0].size()) {
+		if (tbcManager.pause_before_fight) {
+			tbcManager.pause_before_fight--;
 		}
 
-		if (timeTurnBased <= timeTurnBasedNeed) {
-			if (timeTurnBased == timeTurnBasedNeed) {
-				timeTurnBasedNeed = 0;
+		if (tbcManager.timeTurnBased <= tbcManager.timeTurnBasedNeed) {
+			if (tbcManager.timeTurnBased == tbcManager.timeTurnBasedNeed) {
+				tbcManager.timeTurnBasedNeed = 0;
 			} else {
-				timeTurnBased++;
+				tbcManager.timeTurnBased++;
 			}
 		}
 
 		// remove dead actors
-		if (currentTurnBasedActor && (currentTurnBasedActor->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP))) {
+		if (tbcManager.currentTurnBasedActor && (tbcManager.currentTurnBasedActor->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP))) {
 			EndTurn();
 		}
 
 		for (size_t list = 0; list < 10; list++) {
-			if (!initiatives[list].size()) {
+			if (!tbcManager.initiatives[list].size()) {
 				break;
 			}
-			for (auto it = initiatives[list].begin(); it != initiatives[list].end();) {
-				if (it->actor->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP)) {
-					it = initiatives[list].erase(it);
+			for (auto it = tbcManager.initiatives[list].begin(); it != tbcManager.initiatives[list].end();) {
+				if (!it->actor || it->actor->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP)) {
+					it = tbcManager.initiatives[list].erase(it);
 				} else {
 					++it;
 				}
 			}
 		}
 
+	// Validate tbcManager.currentTurnBasedSlot after removing dead actors
+	if (tbcManager.currentTurnBasedList < 10 && tbcManager.currentTurnBasedSlot >= tbcManager.initiatives[tbcManager.currentTurnBasedList].size()) {
+		tbcManager.currentTurnBasedSlot = tbcManager.initiatives[tbcManager.currentTurnBasedList].size() > 0 ? tbcManager.initiatives[tbcManager.currentTurnBasedList].size() - 1 : 0;
+	}
+
 		if (!(core->GetGame()->GetGameTimeReal() % 16)) {
-			for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
-				Actor* actor = initiatives[0][idx].actor;
+			for (size_t idx = 0; idx < tbcManager.initiatives[0].size(); idx++) {
+				Actor* actor = tbcManager.initiatives[0][idx].actor;
 				// can attack?
+				if (!actor) continue;
 				if (actor->GetStance() == IE_ANI_DIE ||
 					actor->GetStance() == IE_ANI_TWITCH ||
 					actor->GetStance() == IE_ANI_SLEEP ||
@@ -4431,46 +4437,53 @@ void Interface::UpdateTurnBased() {
 			}
 		}
 
-		currentTurnBasedSlot = 0;
-		for (size_t idx = 0; idx < initiatives[currentTurnBasedList].size(); idx++) {
-			if (initiatives[currentTurnBasedList][idx].actor == currentTurnBasedActor) {
-				currentTurnBasedSlot = idx;
+		tbcManager.currentTurnBasedSlot = 0;
+		for (size_t idx = 0; idx < tbcManager.initiatives[tbcManager.currentTurnBasedList].size(); idx++) {
+			if (tbcManager.initiatives[tbcManager.currentTurnBasedList][idx].actor == tbcManager.currentTurnBasedActor) {
+				tbcManager.currentTurnBasedSlot = idx;
 				break;
 			}
 		}
 
-		// opportunity
-		if (core->opportunity) {
+		// tbcManager.opportunity
+		if (core->tbcManager.opportunity) {
 			// target is dead?
-			if (!core->GetGame()->GetActorByGlobalID(core->opportunity) ||
-				(core->GetGame()->GetActorByGlobalID(core->opportunity)->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP))) {
-				core->opportunists.clear();
-				core->opportunity = 0;
-				opportunists.clear();
-			} else if (!currentTurnBasedActorOld) { // no current opportunist
+			if (!core->GetGame()->GetActorByGlobalID(core->tbcManager.opportunity) ||
+				(core->GetGame()->GetActorByGlobalID(core->tbcManager.opportunity)->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP))) {
+				core->tbcManager.opportunists.clear();
+				core->tbcManager.opportunity = 0;
+				tbcManager.opportunists.clear();
+			} else if (!tbcManager.currentTurnBasedActorOld) { // no current opportunist
 				Actor* opportunist = nullptr;
-				while (opportunists.size()) {
-					opportunist = core->GetGame()->GetActorByGlobalID(opportunists.back());
-					opportunists.pop_back();
+				while (tbcManager.opportunists.size()) {
+					opportunist = core->GetGame()->GetActorByGlobalID(tbcManager.opportunists.back());
+					tbcManager.opportunists.pop_back();
 					if (!opportunist || opportunist->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP)) {
 						continue;
 					}
 
-					if (currentTurnBasedActor->IsPC()) {
-						core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
+					if (tbcManager.currentTurnBasedActor->IsPC()) {
+						core->GetGame()->SelectActor(tbcManager.currentTurnBasedActor, false, SELECT_REPLACE);
 					}
 
 					int opportunistList = -1;
 					int opportunistSlot = -1;
 					for (size_t list = 0; list < 10; list++) {
-						for (size_t idx = 0; idx < initiatives[list].size(); idx++) {
-							if (initiatives[list][idx].actor != opportunist) {
+						for (size_t idx = 0; idx < tbcManager.initiatives[list].size(); idx++) {
+							if (tbcManager.initiatives[list][idx].actor != opportunist) {
 								continue;
 							}
-							if (initiatives[list][idx].haveaction && !initiatives[list][idx].actor->AuraCooldown) {
-								opportunistList = list;
-								opportunistSlot = idx;
-								break;
+							if (tbcManager.initiatives[list][idx].haveaction && !tbcManager.initiatives[list][idx].actor->AuraCooldown) {
+								// Check melee weapon range for tbcManager.opportunity attack
+								Actor* target = core->GetGame()->GetActorByGlobalID(core->tbcManager.opportunity);
+								if (target) {
+									unsigned int weaponRange = opportunist->GetWeaponRange(false);
+									if (PersonalDistance(opportunist, target) <= weaponRange) {
+										opportunistList = list;
+										opportunistSlot = idx;
+										break;
+									}
+								}
 							}
 						}
 						if (opportunistSlot != -1) {
@@ -4479,31 +4492,31 @@ void Interface::UpdateTurnBased() {
 					}
 
 					if (opportunistSlot != -1) {
-						currentTurnBasedActorOld = currentTurnBasedActor;
-						currentTurnBasedListOld = currentTurnBasedList;
-						currentTurnBasedSlotOld = currentTurnBasedSlot;
+						tbcManager.currentTurnBasedActorOld = tbcManager.currentTurnBasedActor;
+						tbcManager.currentTurnBasedListOld = tbcManager.currentTurnBasedList;
+						tbcManager.currentTurnBasedSlotOld = tbcManager.currentTurnBasedSlot;
 
-						currentTurnBasedActor = opportunist;
-						currentTurnBasedList = opportunistList;
-						currentTurnBasedSlot = opportunistSlot;
-						currentTurnBasedActor->lastInit = game->GetGameTimeReal();
+						tbcManager.currentTurnBasedActor = opportunist;
+						tbcManager.currentTurnBasedList = opportunistList;
+						tbcManager.currentTurnBasedSlot = opportunistSlot;
+						tbcManager.currentTurnBasedActor->lastInit = game->GetGameTimeReal();
 
-						if (currentTurnBasedActor->IsPC()) {
-							core->GetGame()->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
-							currentTurnBasedActor->ClearPath(true);
-							currentTurnBasedActor->ReleaseCurrentAction();
+						if (tbcManager.currentTurnBasedActor->IsPC()) {
+							core->GetGame()->SelectActor(tbcManager.currentTurnBasedActor, true, SELECT_REPLACE);
+							tbcManager.currentTurnBasedActor->ClearPath(true);
+							tbcManager.currentTurnBasedActor->ReleaseCurrentAction();
 						}
 						break;
 					}
 				}
 
-				if (currentTurnBasedActorOld) {
+				if (tbcManager.currentTurnBasedActorOld) {
 					String rollLog = fmt::format(u">>> OPPORTUNITY ATTACK <<<");
 					displaymsg->DisplayString(std::move(rollLog), GUIColors::GOLD, 0);
 					return;
 				} else {
-					core->opportunity = 0;
-					opportunists.clear();
+					core->tbcManager.opportunity = 0;
+					tbcManager.opportunists.clear();
 				}
 			}
 		}
@@ -4519,25 +4532,25 @@ void Interface::UpdateTurnBased() {
 		// have enemy present?
 		bool enemyPresent = false;
 		bool pcPresent = false;
-		for (size_t idx = 0; idx < initiatives[0].size(); idx++) {
-			Actor* actor = initiatives[0][idx].actor;
+		for (size_t idx = 0; idx < tbcManager.initiatives[0].size(); idx++) {
+			Actor* actor = tbcManager.initiatives[0][idx].actor;
 			if (actor->Modified[IE_EA] > EA_EVILCUTOFF && actor->GetCurrentArea()->IsVisible(actor->Pos)) {
 				enemyPresent = true;
 			}
-			if (initiatives[0][idx].actor->IsPC() == true) {
+			if (tbcManager.initiatives[0][idx].actor->IsPC() == true) {
 				pcPresent = true;
 			}
 		}
 
-		if (timeTurnBased >= timeTurnBasedNeed) {
+		if (tbcManager.timeTurnBased >= tbcManager.timeTurnBasedNeed) {
 			// first round start
-			if (enemyPresent && pcPresent && currentTurnBasedActor == nullptr && pause_before_fight == 0) {
+			if (enemyPresent && pcPresent && tbcManager.currentTurnBasedActor == nullptr && tbcManager.pause_before_fight == 0) {
 				core->GetGame()->PartyAttack = true;
 				FirstRoundStart();
 			}
 
 			// end battle if no enemy present
-			if (!turnBasedEnable || !enemyPresent || !pcPresent) {
+			if (!tbcManager.turnBasedEnable || !enemyPresent || !pcPresent) {
 				resetTurnBased();
 			}
 		}
@@ -4546,34 +4559,34 @@ void Interface::UpdateTurnBased() {
 
 void Interface::resetTurnBased() 
 {
-	if (core->GetGame() && timeTurnBased) {
-		core->GetGame()->SetGameTime(timeTurnBased);
+	if (core->GetGame() && tbcManager.timeTurnBased) {
+		core->GetGame()->SetGameTime(tbcManager.timeTurnBased);
 	}
 	for (int i = 0; i < 6; i++) {
-		initiatives[i].clear();
+		tbcManager.initiatives[i].clear();
 	}
-	currentTurnBasedSlot = 0;
-	currentTurnBasedActor = nullptr;
-	pause_before_fight = 10;
-	roundTurnBased = 0;
-	timeTurnBased = 0;
-	timeTurnBasedNeed = 0;
-	opportunity = 0;
+	tbcManager.currentTurnBasedSlot = 0;
+	tbcManager.currentTurnBasedActor = nullptr;
+	tbcManager.pause_before_fight = 10;
+	tbcManager.roundTurnBased = 0;
+	tbcManager.timeTurnBased = 0;
+	tbcManager.timeTurnBasedNeed = 0;
+	tbcManager.opportunity = 0;
 }
 
 InitiativeSlot& Interface::GetCurrentTurnBasedSlot() 
 { 
-	if (currentTurnBasedSlot >= initiatives[currentTurnBasedList].size()) {
-		currentTurnBasedSlot = 0;
-		for (size_t idx = 0; idx < initiatives[currentTurnBasedList].size(); idx++) {
-			if (initiatives[currentTurnBasedList][idx].actor == currentTurnBasedActor) {
-				currentTurnBasedSlot = idx;
+	if (tbcManager.currentTurnBasedSlot >= tbcManager.initiatives[tbcManager.currentTurnBasedList].size()) {
+		tbcManager.currentTurnBasedSlot = 0;
+		for (size_t idx = 0; idx < tbcManager.initiatives[tbcManager.currentTurnBasedList].size(); idx++) {
+			if (tbcManager.initiatives[tbcManager.currentTurnBasedList][idx].actor == tbcManager.currentTurnBasedActor) {
+				tbcManager.currentTurnBasedSlot = idx;
 				break;
 			}
 		}
 	}
 
-	return initiatives[currentTurnBasedList][currentTurnBasedSlot]; 
+	return tbcManager.initiatives[tbcManager.currentTurnBasedList][tbcManager.currentTurnBasedSlot]; 
 }
 
 float Interface::GetAnimationFPS(const ResRef& anim) const

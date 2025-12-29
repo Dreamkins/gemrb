@@ -1113,8 +1113,8 @@ bool GameControl::OnKeyRelease(const KeyboardEvent& Key, unsigned short Mod)
 	switch (Key.keycode) {
 		//FIXME: move these to guiscript
 		case GEM_ESCAPE:
-			if (core->IsTurnBased() && core->currentTurnBasedActor->IsPC()) {
-				core->currentTurnBasedActor->ReleaseCurrentAction();
+			if (core->IsTurnBased() && core->tbcManager.currentTurnBasedActor->IsPC()) {
+				core->tbcManager.currentTurnBasedActor->ReleaseCurrentAction();
 			}
 			break;
 		case GEM_RETURN:

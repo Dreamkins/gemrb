@@ -34,6 +34,7 @@
 #include "GameData.h"
 #include "GlobalTimer.h"
 #include "Holder.h"
+#include "TurnBasedCombatManager.h"
 #include "ImageMgr.h"
 #include "InterfaceConfig.h"
 #include "Orientation.h"
@@ -277,15 +278,7 @@ private:
 	static Control dragDummy;
 };
 
-struct InitiativeSlot {
-	Actor* actor = nullptr;
-	Holder<Sprite2D> image;
-	int initiative = 10;
-	float movesleft = 1.0f;
-	bool haveaction = true;
-	bool delayaction = false;
-	int CurrentActionStateDescrease = 0;
-};
+// InitiativeSlot is now defined in TurnBasedCombatManager.h
 
 /**
  * @class Interface
@@ -706,23 +699,10 @@ public:
 	bool DitherSprites = true;
 	int FeedbackLevel = 0;
 
-	bool turnBasedEnable = true;
-	std::vector<InitiativeSlot> initiatives[10];
-	std::vector<int> opportunists;
-	int currentTurnBasedSlot = 0;
-	int currentTurnBasedSlotOld = 0;
-	int currentTurnBasedList = 0;
-	int currentTurnBasedListOld = 0;
-	int roundTurnBased = 0;
-	Actor* currentTurnBasedActor = nullptr;
-	Actor* currentTurnBasedActorOld = nullptr;
-	ieDword opportunity = 0;
-	Point lasOpportunityPos;
-	int pause_before_fight = 10;
-	uint32_t timeTurnBased = 0;
-	uint32_t timeTurnBasedNeed = 0;
-	int lastTurnBasedTarget = 0;
-	int offsetPanelTurnBased = 0;
+	// TurnBasedCombatManager - contains all TBC state and logic
+	TurnBasedCombatManager tbcManager;
+	
+	// UI-related variables (not part of TBC logic)
 	int currentMouseWheel = 0;
 	bool resetFrame = false;
 	/** The Main program loop */
@@ -762,9 +742,9 @@ public:
 
 	Timer& SetTimer(const EventHandler&, tick_t interval, int repeats = -1);
 
-	bool IsTurnBased() { return (currentTurnBasedActor != nullptr || timeTurnBased < timeTurnBasedNeed); }
-	int GetCurrentTurnBasedSlotNum() { return currentTurnBasedSlot; }
-	int GetCurrentTurnBasedListNum() { return currentTurnBasedList; }
+	bool IsTurnBased() { return (tbcManager.currentTurnBasedActor != nullptr || tbcManager.timeTurnBased < tbcManager.timeTurnBasedNeed); }
+	int GetCurrentTurnBasedSlotNum() { return tbcManager.currentTurnBasedSlot; }
+	int GetCurrentTurnBasedListNum() { return tbcManager.currentTurnBasedList; }
 	InitiativeSlot& GetCurrentTurnBasedSlot();
 	InitiativeSlot& GetTurnBasedSlot(Actor* actor);
 	InitiativeSlot* GetTurnBasedSlotWithAttack(Actor* actor);

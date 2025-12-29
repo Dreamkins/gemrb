@@ -6726,9 +6726,9 @@ int Actor::BAB2APR(int pBAB, int pBABDecrement, int CheckRapidShot) const
 void Actor::RemoveFromAdditionInitiativeLists() 
 {
 	for (size_t list = 1; list < 6; list++) {
-		for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
-			if (core->initiatives[list][idx].actor == this) {
-				core->initiatives[list].erase(core->initiatives[list].begin() + idx);
+		for (size_t idx = 0; idx < core->tbcManager.initiatives[list].size(); idx++) {
+			if (core->tbcManager.initiatives[list][idx].actor == this) {
+				core->tbcManager.initiatives[list].erase(core->tbcManager.initiatives[list].begin() + idx);
 				break;
 			}
 		}
@@ -6737,8 +6737,8 @@ void Actor::RemoveFromAdditionInitiativeLists()
 
 Actor* Actor::FindActorInInitiativeList() 
 {
-	for (size_t idx = 0; idx < core->initiatives[0].size(); idx++) {
-		if (core->initiatives[0][idx].actor == this) {
+	for (size_t idx = 0; idx < core->tbcManager.initiatives[0].size(); idx++) {
+		if (core->tbcManager.initiatives[0][idx].actor == this) {
 			return this;
 		}
 	}
@@ -6753,38 +6753,71 @@ bool Actor::InInitiativeList()
 	return FindActorInInitiativeList() == this;
 }
 
+// AD&D creature size categories for initiative modifier
+namespace CreatureSize {
+	constexpr int TINY = 1;      // circleSize 1
+	constexpr int SMALL = 2;     // circleSize 2
+	constexpr int MEDIUM = 3;    // circleSize 3
+	constexpr int LARGE = 4;     // circleSize 4+
+	
+	// Initiative modifiers by size (smaller = faster = lower initiative)
+	constexpr int MODIFIER_TINY = -2;
+	constexpr int MODIFIER_SMALL = -1;
+	constexpr int MODIFIER_MEDIUM = 0;
+	constexpr int MODIFIER_LARGE = 1;
+	constexpr int MODIFIER_HUGE = 2;
+}
+
 int Actor::CalculateInitiative(int from) 
 {
 	WeaponInfo& wi = weaponInfo[0];
 	const ITMExtHeader* hittingheader = wi.extHeader;
 
+	// Base initiative: weapon speed + d10 roll
 	int spdfactor = hittingheader ? hittingheader->Speed : 5;
 	spdfactor += LuckyRoll(from, 10, 0, LR_NEGATIVE);
 
+	// Haste/Slow modifiers
 	if (fxqueue.HasEffectWithParam(fx_set_haste_state_ref, 0) || fxqueue.HasEffectWithParam(fx_set_haste_state_ref, 1)) {
 		spdfactor -= 2;
 	}
 	else if (fxqueue.HasEffect(fx_set_slow_state_ref)) {
 		spdfactor += 2;
 	}
+	
+	// Dexterity reaction bonus
 	spdfactor -= GetAbilityBonus(IE_DEX);
+
+	// Creature size modifier (AD&D: smaller creatures act faster)
+	if (circleSize <= CreatureSize::TINY) {
+		spdfactor += CreatureSize::MODIFIER_TINY;
+	} else if (circleSize == CreatureSize::SMALL) {
+		spdfactor += CreatureSize::MODIFIER_SMALL;
+	} else if (circleSize == CreatureSize::MEDIUM) {
+		spdfactor += CreatureSize::MODIFIER_MEDIUM;
+	} else if (circleSize == CreatureSize::LARGE) {
+		spdfactor += CreatureSize::MODIFIER_LARGE;
+	} else {
+		// Huge creatures (circleSize 5+)
+		spdfactor += CreatureSize::MODIFIER_HUGE;
+	}
 
 	return spdfactor;
 }
 
 void Actor::MoveToInitiativeList() 
 {
-	if (!core->turnBasedEnable || core->InCutSceneMode() || InInitiativeList() || !GetCurrentStanceAnim().size() || !GetCurrentStanceAnim()[0].first->GetFrame(0)) {
+	if (!core->tbcManager.turnBasedEnable || core->InCutSceneMode() || InInitiativeList() || !GetCurrentStanceAnim().size() || !GetCurrentStanceAnim()[0].first->GetFrame(0)) {
 		return;
 	}
 
 	InitiativeSlot slot;
 	slot.actor = this;
 
-	slot.initiative = CalculateInitiative(core->roundTurnBased > 0 ? core->GetCurrentTurnBasedSlot().initiative + 1 : 1);
+	slot.initiative = CalculateInitiative(core->tbcManager.roundTurnBased > 0 ? core->GetCurrentTurnBasedSlot().initiative + 1 : 1);
 	slot.image = CopyPortrait(1);
 
-	core->initiatives[0].push_back(slot);
+	core->tbcManager.initiatives[0].push_back(slot);
 
 	ClearPath();
 }
@@ -7655,13 +7688,13 @@ int Actor::getHitChanceTurnBased(const Actor* target)
 
 void Actor::CalculateAttackResult()
 {
-	core->currentTurnBasedActor->lastInit = core->GetGame()->GetGameTimeReal();
+	core->tbcManager.currentTurnBasedActor->lastInit = core->GetGame()->GetGameTimeReal();
 
 	static int attackRollDiceSides = gamedata->GetMiscRule("ATTACK_ROLL_DICE_SIDES");
 	static EffectRef fx_puppetmarker_ref = { "PuppetMarker", -1 };
 	
 	//get target
-	Actor* target = area->GetActorByGlobalID(core->lastTurnBasedTarget);
+	Actor* target = area->GetActorByGlobalID(core->tbcManager.lastTurnBasedTarget);
 	if (!target) {
 		Log(WARNING, "Actor", "Attack without valid target!");
 		return;
@@ -7947,7 +7980,7 @@ void Actor::AttackTurnBased(ieDword gameTime)
 		return;
 	}
 
-	if (!core->currentTurnBasedActor || core->currentTurnBasedActor != this) {
+	if (!core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedActor != this) {
 		return;
 	}
 
@@ -8011,7 +8044,7 @@ void Actor::AttackTurnBased(ieDword gameTime)
 
 
 	lastInit = core->GetGame()->GetGameTimeReal();
-	core->lastTurnBasedTarget = objects.LastTarget;
+	core->tbcManager.lastTurnBasedTarget = objects.LastTarget;
 
 	//UpdateModalState(gameTime);
 	PlaySwingSound(wi);
@@ -8805,7 +8838,7 @@ bool Actor::AdvanceAnimations()
 	Animation* first = currentStance.anim[0].first;
 	Animation* firstShadow = currentStance.shadow.empty() ? nullptr : currentStance.shadow[0].first;
 	
-	if (core->IsTurnBased() && core->currentTurnBasedActor == this && core->resetFrame) {
+	if (core->IsTurnBased() && core->tbcManager.currentTurnBasedActor == this && core->resetFrame) {
 		core->resetFrame = false;
 		first->SetFrame(0);
 		if (firstShadow) {
@@ -9761,7 +9794,7 @@ HCStrings Actor::SetEquippedQuickSlot(int slot, int header)
 	}
 
 	if (InInitiativeList()) {
-		if (core->currentTurnBasedList != 0 || attackcount != attacksperround) {
+		if (core->tbcManager.currentTurnBasedList != 0 || attackcount != attacksperround) {
 			return HCStrings::count;
 		}
 		RemoveFromAdditionInitiativeLists();

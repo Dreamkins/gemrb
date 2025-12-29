@@ -747,9 +747,9 @@ void Map::UpdateScripts()
 		//actor->fxqueue.RemoveAllNonPermanentEffects();
 
 		if (core->IsTurnBased() && actor->InInitiativeList()) {
-			if (core->currentTurnBasedActor == actor) {
+			if (core->tbcManager.currentTurnBasedActor == actor) {
 				bool notPlayerControl = actor->Immobile() || (actor->GetStat(IE_EA) != EA_PC && actor->GetStat(IE_EA) != EA_FAMILIAR) || (actor->Modified[IE_STATE_ID] & (STATE_MINDLESS^STATE_BERSERK)) || (actor->GetBase(IE_STATE_ID) & (STATE_MINDLESS ^ STATE_BERSERK));
-				bool cantMove = core->opportunity || actor->GetRandomBackoff() || !actor->InMove() || actor->Immobile() || !actor->GetPath() || (actor->Modified[IE_STATE_ID] & STATE_CANTMOVE);
+				bool cantMove = core->tbcManager.opportunity || actor->GetRandomBackoff() || !actor->InMove() || actor->Immobile() || !actor->GetPath() || (actor->Modified[IE_STATE_ID] & STATE_CANTMOVE);
 				bool notAttackNow = !actor->InAttack();
 				if (notPlayerControl && cantMove && notAttackNow) {
 					const Actor* target = area->GetActorByGlobalID(objects.LastTarget);
@@ -1418,6 +1418,9 @@ void Map::DrawMap(const Region& viewport, FogRenderer& fogRenderer, uint32_t dFl
 	if (debugFlags & (DEBUG_SHOW_WALLS_ALL | DEBUG_SHOW_DOORS_DISABLED)) {
 		DrawWallPolygons(viewport);
 	}
+
+	// Draw TBC panel (always when in turn-based mode)
+	DrawTBCPanel();
 }
 
 void Map::DrawOverheadText() const
@@ -1473,214 +1476,319 @@ void Map::DrawWallPolygons(const Region& viewport) const
 			VideoDriver->DrawLine(poly->base0 - viewport.origin, poly->base1 - viewport.origin, ColorMagenta);
 		}
 	}
+}
 
-#define SLOTSIZEX 42
-#define HPSIZEX 0
+// =============================================================================
+// TBC Panel Constants
+// =============================================================================
 
-	if (core->IsTurnBased() && !core->pause_before_fight) {
+namespace TBCPanel {
+	// Slot dimensions
+	constexpr int SLOT_WIDTH = 42;           // Width of each actor slot
+	constexpr int SLOT_HEIGHT = 60;          // Height of each actor slot
+	constexpr int PORTRAIT_WIDTH = 38;       // Width of actor portrait area
+	
+	// Panel layout
+	constexpr int PANEL_TOP = 40;            // Y position of panel top
+	constexpr int PANEL_PADDING = 5;         // Padding around panel
+	constexpr int LIST_SEPARATOR = 15;       // Gap between initiative lists
+	
+	// Active actor offset
+	constexpr int ACTIVE_ACTOR_OFFSET = 15;  // Y offset for current actor highlight
+	
+	// Status indicators
+	constexpr int STATUS_INDICATOR_SIZE = 10;     // Size of action/move indicators
+	constexpr int STATUS_INDICATOR_OFFSET = 15;   // Y offset above slot
+	
+	// Screen margins (fraction of screen width)
+	constexpr int SCREEN_MARGIN_DIVISOR = 8;      // 1/8 of screen width
+	
+	// Animation orientation thresholds for sprite offset
+	constexpr int ORIENTATION_LEFT_MIN = 2;
+	constexpr int ORIENTATION_LEFT_MAX = 6;
+	constexpr int ORIENTATION_RIGHT_MIN = 10;
+	constexpr int ORIENTATION_RIGHT_MAX = 14;
+	constexpr int SPRITE_ORIENTATION_OFFSET = 10;
+	
+	// Colors
+	const Color COLOR_PANEL_BORDER(128, 128, 128, 255);
+	const Color COLOR_WHITE(255, 255, 255, 255);
+	const Color COLOR_BLACK(0, 0, 0, 255);
+	const Color COLOR_SLOT_BG(64, 64, 64, 255);
+	const Color COLOR_ACTION_AVAILABLE(128, 192, 128, 255);
+	const Color COLOR_MOVEMENT(128, 128, 255, 255);
+	const Color COLOR_HP_DAMAGE(128, 0, 0, 128);
+	const Color COLOR_OPPORTUNITY_LINE(255, 0, 0, 255);
+}
 
-		GameControl* gc = core->GetGameControl();
+// =============================================================================
+// TBC Panel Drawing
+// =============================================================================
 
-		Region panelTBC(Point(0, 40 - 5), Size(0, 60 + 10));
+void Map::DrawTBCPanel() const
+{
+	using namespace TBCPanel;
+	
+	// Early exit if not in turn-based mode or paused before fight
+	if (!core->IsTurnBased() || core->tbcManager.pause_before_fight) {
+		return;
+	}
 
-		int xoffset = 0;
-		for (size_t list = 0; list < 10; list++) {
-			if (!core->initiatives[list].size()) {
+	GameControl* gc = core->GetGameControl();
+	if (!gc) return;
+
+	// -------------------------------------------------------------------------
+	// Step 1: Calculate total panel width
+	// -------------------------------------------------------------------------
+	int totalWidth = 0;
+	for (size_t list = 0; list < 10; list++) {
+		if (core->tbcManager.initiatives[list].empty()) break;
+		totalWidth += static_cast<int>(core->tbcManager.initiatives[list].size()) * SLOT_WIDTH + LIST_SEPARATOR;
+	}
+
+	// -------------------------------------------------------------------------
+	// Step 2: Calculate horizontal offset to center panel on screen
+	// -------------------------------------------------------------------------
+	int screenWidth = core->config.Width;
+	int screenMargin = screenWidth / SCREEN_MARGIN_DIVISOR;
+	int xOffset = screenWidth / 2 - totalWidth / 2;
+
+	// Adjust offset to keep current actor visible within screen margins
+	int testOffset = xOffset;
+	for (size_t list = 0; list < 10; list++) {
+		if (core->tbcManager.initiatives[list].empty()) break;
+		
+		for (size_t idx = 0; idx < core->tbcManager.initiatives[list].size(); idx++) {
+			Actor* actor = core->tbcManager.initiatives[list][idx].actor;
+			if (!actor) continue;
+			
+			bool isCurrentActor = (actor == core->tbcManager.currentTurnBasedActor && 
+			                       core->tbcManager.currentTurnBasedList == static_cast<int>(list));
+			if (isCurrentActor) {
+				int actorPosX = testOffset + static_cast<int>(idx) * SLOT_WIDTH;
+				
+				// Shift panel if current actor would be outside margins
+				if (actorPosX < screenMargin) {
+					xOffset += screenMargin - actorPosX;
+				} else if (actorPosX + SLOT_WIDTH + 10 > screenWidth - screenMargin) {
+					xOffset -= (actorPosX + SLOT_WIDTH + 10) - (screenWidth - screenMargin);
+				}
 				break;
 			}
-			xoffset += core->initiatives[list].size() * SLOTSIZEX + 15;
+		}
+		testOffset += static_cast<int>(core->tbcManager.initiatives[list].size()) * SLOT_WIDTH + LIST_SEPARATOR;
+	}
+
+	// -------------------------------------------------------------------------
+	// Step 3: Handle mouse wheel scrolling when panel exceeds screen
+	// -------------------------------------------------------------------------
+	Region panelBounds(Point(xOffset - PANEL_PADDING, PANEL_TOP - PANEL_PADDING), 
+	                   Size(totalWidth, SLOT_HEIGHT + PANEL_PADDING * 2));
+
+	bool panelExceedsScreen = !(panelBounds.x > screenMargin && 
+	                            panelBounds.x + panelBounds.w < screenWidth - screenMargin);
+	
+	if (panelExceedsScreen) {
+		// Apply mouse wheel scrolling
+		if (panelBounds.PointInside(gc->ScreenMousePos())) {
+			int scrollDelta = 0;
+			if (core->currentMouseWheel > 0) {
+				scrollDelta = core->GetMouseScrollSpeed() * 4;
+			} else if (core->currentMouseWheel < 0) {
+				scrollDelta = -core->GetMouseScrollSpeed() * 4;
+			}
+			core->tbcManager.offsetPanelTurnBased += scrollDelta;
+		} else {
+			core->tbcManager.offsetPanelTurnBased = 0;
+		}
+		core->currentMouseWheel = 0;
+
+		// Clamp scroll offset to keep panel within bounds
+		if (xOffset + core->tbcManager.offsetPanelTurnBased > screenMargin) {
+			core->tbcManager.offsetPanelTurnBased = screenMargin - xOffset;
+		} else if (xOffset + core->tbcManager.offsetPanelTurnBased + totalWidth < screenWidth - screenMargin) {
+			core->tbcManager.offsetPanelTurnBased = (screenWidth - screenMargin) - totalWidth - xOffset;
 		}
 
-		panelTBC.w += xoffset;
+		xOffset += core->tbcManager.offsetPanelTurnBased;
+	}
 
-		// to center of screen
-		xoffset = core->config.Width / 2 - xoffset / 2;
+	// -------------------------------------------------------------------------
+	// Step 4: Track opportunity attack line endpoints
+	// -------------------------------------------------------------------------
+	Point opportunityTarget;
+	Point opportunitySource;
 
-		bool endfixoffset = false;
-		int testoffset = xoffset;
-		for (size_t list = 0; list < 10; list++) {
-			if (endfixoffset || !core->initiatives[list].size()) {
-				break;
-			}
+	// -------------------------------------------------------------------------
+	// Step 5: Draw each initiative list
+	// -------------------------------------------------------------------------
+	for (size_t list = 0; list < 10; list++) {
+		if (core->tbcManager.initiatives[list].empty()) break;
 
-			for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
-				Actor* actor = core->initiatives[list][idx].actor;
-				if (actor == core->currentTurnBasedActor && core->currentTurnBasedList == list) {
-					Point pos(testoffset + idx * SLOTSIZEX, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 10 : 0));
-					if (pos.x < core->config.Width / 8) {
-						xoffset += core->config.Width / 8 - pos.x;
-					}
-					else if ((pos.x + SLOTSIZEX + 10) > (core->config.Width - core->config.Width / 8)) {
-						xoffset -= (pos.x + SLOTSIZEX + 10) - (core->config.Width - core->config.Width / 8);
-					}
-					endfixoffset = true;
-					break;
-				}
-			}
-			testoffset += core->initiatives[list].size() * SLOTSIZEX + 15;
+		int listSize = static_cast<int>(core->tbcManager.initiatives[list].size());
+		
+		// Draw list separator line (except for first list)
+		if (list > 0) {
+			Region separator(Point(xOffset - PANEL_PADDING - 6, PANEL_TOP - PANEL_PADDING + 15), 
+			                 Size(2, 40));
+			VideoDriver->DrawRect(separator, COLOR_PANEL_BORDER, true, BlitFlags::BLENDED);
 		}
 
-		panelTBC.x = xoffset - 5;
+		// Draw list border
+		Region listBorder(Point(xOffset - PANEL_PADDING, PANEL_TOP - PANEL_PADDING), 
+		                  Size(listSize * SLOT_WIDTH + PANEL_PADDING, SLOT_HEIGHT + PANEL_PADDING * 2));
+		VideoDriver->DrawRect(listBorder, COLOR_PANEL_BORDER, false, BlitFlags::BLENDED);
 
-		if (!(panelTBC.x > core->config.Width / 8 && panelTBC.x + panelTBC.w < (core->config.Width - core->config.Width / 8))) {
-			if (panelTBC.PointInside(gc->ScreenMousePos())) {
-				core->offsetPanelTurnBased += (core->currentMouseWheel > 0 ? core->GetMouseScrollSpeed() : core->currentMouseWheel < 0 ? -core->GetMouseScrollSpeed() : 0) * 4;
-			} else {
-				core->offsetPanelTurnBased = 0;
-			}
-			core->currentMouseWheel = 0;
+		// ---------------------------------------------------------------------
+		// Draw each actor slot
+		// ---------------------------------------------------------------------
+		for (size_t idx = 0; idx < core->tbcManager.initiatives[list].size(); idx++) {
+			Actor* actor = core->tbcManager.initiatives[list][idx].actor;
+			if (!actor) continue;
 
-			if (xoffset + core->offsetPanelTurnBased > core->config.Width / 8) {
-				core->offsetPanelTurnBased = core->config.Width / 8 - xoffset;
-			} else if (xoffset + core->offsetPanelTurnBased + panelTBC.w < (core->config.Width - core->config.Width / 8)) {
-				core->offsetPanelTurnBased = (core->config.Width - core->config.Width / 8) - panelTBC.w - xoffset;
-			}
+			bool isCurrentActor = (actor == core->tbcManager.currentTurnBasedActor && 
+			                       core->tbcManager.currentTurnBasedList == static_cast<int>(list));
+			bool isAlive = !(actor->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP));
 
-			xoffset += core->offsetPanelTurnBased;
-		}
+			// Calculate slot position (current actor is offset downward)
+			int slotX = xOffset + static_cast<int>(idx) * SLOT_WIDTH;
+			int slotY = PANEL_TOP + (isCurrentActor ? ACTIVE_ACTOR_OFFSET : 0);
+			Point slotPos(slotX, slotY);
+			Region slotRegion(slotPos, Size(PORTRAIT_WIDTH, SLOT_HEIGHT));
 
-		Point opportunityTarget;
-		Point opportunitySource;
-
-		for (size_t list = 0; list < 10; list++) {
-			if (!core->initiatives[list].size()) {
-				break;
-			}
-
-			// border
-			Point pos(xoffset - 5, 40 - 5);
-			Region region(pos, Size(core->initiatives[list].size() * SLOTSIZEX + 5, 60 + 10));
-			Color color = Color(128, 128, 128, 255);
-			if (list) {
-				//VideoDriver->DrawLine(pos + Point(-5, 10), pos + Point(-5, 60), color, BlitFlags::BLENDED);
-				VideoDriver->DrawRect(Region(Point(pos.x - 6, pos.y + 15), Size(2, 40)), color, true, BlitFlags::BLENDED);
-			}
-			VideoDriver->DrawRect(region, color, false, BlitFlags::BLENDED);
-
-			for (size_t idx = 0; idx < core->initiatives[list].size(); idx++) {
-				Actor* actor = core->initiatives[list][idx].actor;
-
-				// opportunity target
-				if (core->opportunity && !opportunityTarget.y && core->GetGame()->GetActorByGlobalID(core->opportunity) == core->initiatives[0][idx].actor && list == 0) {
-					opportunityTarget = Point(xoffset + idx * SLOTSIZEX + HPSIZEX + 20, 125);
+			// Track opportunity attack endpoints
+			if (core->tbcManager.opportunity && list == 0) {
+				Actor* oppTarget = core->GetGame()->GetActorByGlobalID(core->tbcManager.opportunity);
+				if (!opportunityTarget.y && oppTarget == actor) {
+					opportunityTarget = Point(slotX + PORTRAIT_WIDTH / 2, PANEL_TOP + SLOT_HEIGHT + 65);
 				}
-				// opportunity source
-				if (core->opportunity && !opportunitySource.y && core->currentTurnBasedActorOld && core->currentTurnBasedActor == actor && core->currentTurnBasedList == list) {
-					opportunitySource = Point(xoffset + idx * SLOTSIZEX + HPSIZEX + 20, 125);
-				}
-				Point pos(xoffset + idx * SLOTSIZEX + HPSIZEX, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 15 : 0));
-				Region region(pos, Size(38, 60));
+			}
+			if (core->tbcManager.opportunity && !opportunitySource.y && 
+			    core->tbcManager.currentTurnBasedActorOld && isCurrentActor) {
+				opportunitySource = Point(slotX + PORTRAIT_WIDTH / 2, PANEL_TOP + SLOT_HEIGHT + 65);
+			}
 
-				if (region.PointInside(gc->ScreenMousePos())) {
-					gc->SetLastActor(actor);
-					gc->UpdateCursor();
-				}
+			// Handle mouse hover on slot
+			if (slotRegion.PointInside(gc->ScreenMousePos())) {
+				gc->SetLastActor(actor);
+				gc->UpdateCursor();
+			}
 
-				// actor image
-				Color color = Color(255, 255, 255, 255);
-				Region oldClip = VideoDriver->GetScreenClip();
-				VideoDriver->SetScreenClip(&region);
+			// -----------------------------------------------------------------
+			// Draw actor portrait/sprite
+			// -----------------------------------------------------------------
+			Region oldClip = VideoDriver->GetScreenClip();
+			VideoDriver->SetScreenClip(&slotRegion);
 
-				if (core->initiatives[list][idx].image) {
-					int width = core->initiatives[list][idx].image->Frame.w;
-					int height = core->initiatives[list][idx].image->Frame.h;
-					pos.x -= width > 38 ? (width - 38) / 2 : 0;
-					pos.x += width < 38 ? (38 - width) / 2 : 0;
-					pos.y += height < 60 ? (60 - height) / 2 : 0;
+			const auto& initSlot = core->tbcManager.initiatives[list][idx];
+			
+			if (initSlot.image) {
+				// Use cached portrait image
+				int imgWidth = initSlot.image->Frame.w;
+				int imgHeight = initSlot.image->Frame.h;
+				
+				// Center image in slot
+				Point imgPos = slotPos;
+				imgPos.x += (PORTRAIT_WIDTH - imgWidth) / 2;
+				imgPos.y += (SLOT_HEIGHT - imgHeight) / 2;
 
-					// actor image background
-					Color bcolor = Color(0, 0, 0, 255);
-					VideoDriver->DrawRect(region, bcolor, true, BlitFlags::BLENDED);
-					// actor sprite
-					VideoDriver->BlitSprite(core->initiatives[list][idx].image, pos);
-				} else {
-					if (!(core->initiatives[list][idx].actor->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP))) {
-						int sh = 0;
-						int oy = 0;
-						using AnimationPart = std::pair<Animation*, Holder<Palette>>;
-						std::vector<AnimationPart> anim = actor->GetCurrentStanceAnim();
-						if (anim.size() && anim[0].first->GetFrameCount()) {
-							Animation* first = anim[0].first;
-							sh = first->animArea.h;
-							oy = first->animArea.origin.y;
+				VideoDriver->DrawRect(slotRegion, COLOR_BLACK, true, BlitFlags::BLENDED);
+				VideoDriver->BlitSprite(initSlot.image, imgPos);
+			} else if (isAlive) {
+				// Draw live actor sprite
+				using AnimationPart = std::pair<Animation*, Holder<Palette>>;
+				std::vector<AnimationPart> anim = actor->GetCurrentStanceAnim();
+				
+				if (!anim.empty() && anim[0].first && anim[0].first->GetFrameCount()) {
+					Animation* firstAnim = anim[0].first;
+					int animHeight = firstAnim->animArea.h;
+					int animOriginY = firstAnim->animArea.origin.y;
+					int animWidth = firstAnim->animArea.w;
 
-							int hoffset = 0;
-							if (sh < 60) {
-								hoffset = (60 - sh) / 2;
-							}
-								
-							int woffset = 0;
-							if ((first->animArea.w - 38) > 10) {
-								if (actor->GetOrientation() >= 2 && actor->GetOrientation() <= 6) {
-									woffset += 10;
-								} else if (actor->GetOrientation() >= 10 && actor->GetOrientation() <= 14) {
-									woffset -= 10;
-								}
-							}
+					// Vertical centering
+					int vertOffset = (SLOT_HEIGHT > animHeight) ? (SLOT_HEIGHT - animHeight) / 2 : 0;
+					int spriteY = animHeight - (animHeight + animOriginY) + vertOffset;
 
-							sh = sh - (sh + oy) + hoffset;
-
-							// actor image background
-							Color bcolor = Color(64, 64, 64, 255);
-							VideoDriver->DrawRect(region, bcolor, true, BlitFlags::BLENDED);
-							// actor sprite
-							Region r(pos.x + 19 + woffset, pos.y + sh + 4, 38, 60);
-							actor->Draw(r, color, color, BlitFlags::BLENDED, true);
+					// Horizontal offset based on actor orientation
+					int horizOffset = 0;
+					if (animWidth - PORTRAIT_WIDTH > 10) {
+						int orientation = actor->GetOrientation();
+						if (orientation >= ORIENTATION_LEFT_MIN && orientation <= ORIENTATION_LEFT_MAX) {
+							horizOffset = SPRITE_ORIENTATION_OFFSET;
+						} else if (orientation >= ORIENTATION_RIGHT_MIN && orientation <= ORIENTATION_RIGHT_MAX) {
+							horizOffset = -SPRITE_ORIENTATION_OFFSET;
 						}
 					}
+
+					VideoDriver->DrawRect(slotRegion, COLOR_SLOT_BG, true, BlitFlags::BLENDED);
+					
+					Region drawRegion(slotPos.x + PORTRAIT_WIDTH / 2 + horizOffset, 
+					                  slotPos.y + spriteY + 4, 
+					                  PORTRAIT_WIDTH, SLOT_HEIGHT);
+					actor->Draw(drawRegion, COLOR_WHITE, COLOR_WHITE, BlitFlags::BLENDED, true);
 				}
-
-				VideoDriver->SetScreenClip(&oldClip);
-
-				// actor border
-				Color rcolor = actor->GetCircleColor();
-				Region actborder(region.x - HPSIZEX, region.y, region.w + HPSIZEX, region.h);
-				VideoDriver->DrawRect(actborder, rcolor, false, BlitFlags::BLENDED);
-
-				if (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list && actor->IsPC()) {
-					int offs = xoffset + idx * SLOTSIZEX;
-
-					// action rect
-					Color rcolor = Color(128, 192, 128, 255);
-					Region r(offs, region.y -15, 10, 10);
-					VideoDriver->DrawRect(r, rcolor, core->GetCurrentTurnBasedSlot().haveaction && !actor->AuraCooldown, BlitFlags::BLENDED);
-
-					// moves rect
-					Color r2color = Color(128, 128, 255, 255);
-					float movescur = core->GetCurrentTurnBasedSlot().movesleft;
-					movescur = std::fmax(0, movescur);
-
-					float part = (SLOTSIZEX - HPSIZEX - 10 - 2 - 4) * movescur;
-
-					Region r2(offs + 12, region.y - 15, part, 10);
-					VideoDriver->DrawRect(r2, r2color, true, BlitFlags::BLENDED);
-				}
-				
-				// HP rect
-				int maxhp = actor->Modified[IE_MAXHITPOINTS];;
-				int hp = actor->Modified[IE_HITPOINTS];
-				hp = hp < 0 ? 0 : hp;
-				float percent = (float)((float)hp / (float)maxhp);
-				int hpheight = 60 * percent;
-
-				//Point hppos(xoffset + idx * SLOTSIZEX + 1, 40 + (core->currentTurnBasedActor == actor && core->currentTurnBasedList == list ? 15 : 0) + 60 - hpheight + 1);
-				//Region hpregion(hppos, Size(HPSIZEX, hpheight - 2));
-				//Color hpcolor = Color(255 - (255 * percent), 255 * percent, 0, 255);
-				//VideoDriver->DrawRect(hpregion, hpcolor, true, BlitFlags::BLENDED);
-
-				Region hpregion(actborder.x + 1, actborder.y + 1 + actborder.h * percent, actborder.w - 2, (actborder.h - 2) * (1.0f - percent) );
-				Color hpcolor = Color(128, 0, 0, 128);
-				VideoDriver->DrawRect(hpregion, hpcolor, true, BlitFlags::BLENDED);
 			}
-			xoffset += core->initiatives[list].size() * SLOTSIZEX + 15;
+
+			VideoDriver->SetScreenClip(&oldClip);
+
+			// -----------------------------------------------------------------
+			// Draw actor border (using faction color)
+			// -----------------------------------------------------------------
+			Color borderColor = actor->GetCircleColor();
+			VideoDriver->DrawRect(slotRegion, borderColor, false, BlitFlags::BLENDED);
+
+			// -----------------------------------------------------------------
+			// Draw status indicators for current PC actor
+			// -----------------------------------------------------------------
+			if (isCurrentActor && actor->IsPC()) {
+				// Action available indicator (green square)
+				bool hasAction = core->GetCurrentTurnBasedSlot().haveaction && !actor->AuraCooldown;
+				Region actionRect(slotX, slotY - STATUS_INDICATOR_OFFSET, 
+				                  STATUS_INDICATOR_SIZE, STATUS_INDICATOR_SIZE);
+				VideoDriver->DrawRect(actionRect, COLOR_ACTION_AVAILABLE, hasAction, BlitFlags::BLENDED);
+
+				// Movement remaining indicator (blue bar)
+				float movesLeft = std::fmax(0.0f, core->GetCurrentTurnBasedSlot().movesleft);
+				int moveBarWidth = static_cast<int>((SLOT_WIDTH - STATUS_INDICATOR_SIZE - 6) * movesLeft);
+				
+				Region moveRect(slotX + STATUS_INDICATOR_SIZE + 2, slotY - STATUS_INDICATOR_OFFSET, 
+				                moveBarWidth, STATUS_INDICATOR_SIZE);
+				VideoDriver->DrawRect(moveRect, COLOR_MOVEMENT, true, BlitFlags::BLENDED);
+			}
+
+			// -----------------------------------------------------------------
+			// Draw HP damage overlay
+			// -----------------------------------------------------------------
+			int maxHP = actor->Modified[IE_MAXHITPOINTS];
+			int currentHP = std::max(0, static_cast<int>(actor->Modified[IE_HITPOINTS]));
+			
+			if (maxHP > 0) {
+				float hpPercent = static_cast<float>(currentHP) / static_cast<float>(maxHP);
+				float damagePercent = 1.0f - hpPercent;
+				
+				// Red overlay from bottom proportional to damage taken
+				int damageHeight = static_cast<int>((SLOT_HEIGHT - 2) * damagePercent);
+				Region damageOverlay(slotRegion.x + 1, 
+				                     slotRegion.y + 1 + static_cast<int>((SLOT_HEIGHT - 2) * hpPercent),
+				                     slotRegion.w - 2, 
+				                     damageHeight);
+				VideoDriver->DrawRect(damageOverlay, COLOR_HP_DAMAGE, true, BlitFlags::BLENDED);
+			}
 		}
 
-		if (core->opportunity && opportunityTarget.y && opportunitySource.y) {
-			Color color = Color(255, 0, 0, 255);
-			VideoDriver->DrawLine(opportunitySource, opportunitySource + Point(0, -10), color, BlitFlags::BLENDED);
-			VideoDriver->DrawLine(opportunitySource, opportunityTarget, color, BlitFlags::BLENDED);
-			VideoDriver->DrawLine(opportunityTarget, opportunityTarget + Point(0, -25), color, BlitFlags::BLENDED);
-		}
+		xOffset += listSize * SLOT_WIDTH + LIST_SEPARATOR;
+	}
+
+	// -------------------------------------------------------------------------
+	// Step 6: Draw opportunity attack indicator line
+	// -------------------------------------------------------------------------
+	if (core->tbcManager.opportunity && opportunityTarget.y && opportunitySource.y) {
+		VideoDriver->DrawLine(opportunitySource, opportunitySource + Point(0, -10), 
+		                      COLOR_OPPORTUNITY_LINE, BlitFlags::BLENDED);
+		VideoDriver->DrawLine(opportunitySource, opportunityTarget, 
+		                      COLOR_OPPORTUNITY_LINE, BlitFlags::BLENDED);
+		VideoDriver->DrawLine(opportunityTarget, opportunityTarget + Point(0, -25), 
+		                      COLOR_OPPORTUNITY_LINE, BlitFlags::BLENDED);
 	}
 }
 

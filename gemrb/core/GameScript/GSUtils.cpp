@@ -1447,7 +1447,7 @@ void MoveToObjectCore(Scriptable* Sender, Action* parameters, ieDword flags, boo
 		return;
 	}
 
-	if (core->IsTurnBased() && actor->InInitiativeList() && core->currentTurnBasedActor != actor) {
+	if (core->IsTurnBased() && actor->InInitiativeList() && core->tbcManager.currentTurnBasedActor != actor) {
 		return;
 	}
 
@@ -1525,7 +1525,7 @@ void AttackCore(Scriptable* Sender, Scriptable* target, int flags)
 	assert(attacker);
 	assert(target);
 
-	if (core->IsTurnBased() && attacker->InInitiativeList() && core->currentTurnBasedActor != Sender) {
+	if (core->IsTurnBased() && attacker->InInitiativeList() && core->tbcManager.currentTurnBasedActor != Sender) {
 		return;
 	}
 
@@ -1543,8 +1543,8 @@ void AttackCore(Scriptable* Sender, Scriptable* target, int flags)
 		return;
 	}
 
-	if (core->IsTurnBased() && core->opportunity) {
-		Actor* optar = attacker->GetCurrentArea()->GetActorByGlobalID(core->opportunity);
+	if (core->IsTurnBased() && core->tbcManager.opportunity) {
+		Actor* optar = attacker->GetCurrentArea()->GetActorByGlobalID(core->tbcManager.opportunity);
 		if (optar) {
 			target = optar;
 		}
@@ -2233,6 +2233,10 @@ static bool InterruptSpellcasting(Scriptable* Sender)
 			displaymsg->DisplayConstantStringName(HCStrings::SpellFailed, GUIColors::WHITE, Sender);
 		}
 		DisplayStringCoreVC(Sender, Verbal::SpellDisrupted, DS_CONSOLE);
+		// Reset casting animation in turn-based mode
+		if (core->IsTurnBased()) {
+			caster->SetStance(IE_ANI_READY);
+		}
 		return true;
 	}
 
@@ -2271,7 +2275,7 @@ void SpellCore(Scriptable* Sender, Action* parameters, int flags)
 	int level = 0;
 	static bool third = core->HasFeature(GFFlags::RULES_3ED);
 
-	if (core->IsTurnBased() && core->opportunity) {
+	if (core->IsTurnBased() && core->tbcManager.opportunity) {
 		return;
 	}
 
@@ -2365,7 +2369,7 @@ void SpellCore(Scriptable* Sender, Action* parameters, int flags)
 		//move near to target
 		if ((flags & SC_RANGE_CHECK) && dist != 0x7fffffff) {
 			if (PersonalDistance(tar, Sender) > dist) {
-				if (core->IsTurnBased() && (core->currentTurnBasedActor != act || core->GetTurnBasedSlot(act).movesleft <= 0)) {
+				if (core->IsTurnBased() && (core->tbcManager.currentTurnBasedActor != act || core->GetTurnBasedSlot(act).movesleft <= 0)) {
 					Sender->ReleaseCurrentAction();
 					act->SetStance(IE_ANI_READY);
 				} else {
@@ -2377,7 +2381,7 @@ void SpellCore(Scriptable* Sender, Action* parameters, int flags)
 			if (!Sender->GetCurrentArea()->IsVisibleLOS(Sender->SMPos, tar->SMPos, act)) {
 				if (!(spl->Flags & SF_NO_LOS)) {
 					gamedata->FreeSpell(spl, Sender->SpellResRef, false);
-					if (core->IsTurnBased() && (core->currentTurnBasedActor != act || core->GetTurnBasedSlot(act).movesleft <= 0)) {
+					if (core->IsTurnBased() && (core->tbcManager.currentTurnBasedActor != act || core->GetTurnBasedSlot(act).movesleft <= 0)) {
 						Sender->ReleaseCurrentAction();
 						act->SetStance(IE_ANI_READY);
 					} else {
@@ -2409,7 +2413,7 @@ void SpellCore(Scriptable* Sender, Action* parameters, int flags)
 	}
 
 	if (!Sender->CurrentActionState && core->IsTurnBased() && Sender->Type == ST_ACTOR && ((Actor*)Sender)->InInitiativeList()) {
-		if (Sender != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+		if (Sender != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
 			return;
 		}
 		core->GetCurrentTurnBasedSlot().haveaction = false;
@@ -2473,7 +2477,7 @@ void SpellPointCore(Scriptable* Sender, Action* parameters, int flags)
 	ResRef spellResRef;
 	int level = 0;
 
-	if (core->IsTurnBased() && core->opportunity) {
+	if (core->IsTurnBased() && core->tbcManager.opportunity) {
 		return;
 	}
 
@@ -2515,14 +2519,26 @@ void SpellPointCore(Scriptable* Sender, Action* parameters, int flags)
 		if (flags & SC_RANGE_CHECK) {
 			unsigned int dist = GetSpellDistance(spellResRef, Sender, parameters->pointParameter);
 			if (PersonalDistance(parameters->pointParameter, Sender) > dist) {
-				MoveNearerTo(Sender, parameters->pointParameter, dist, 2);
+				// TBC: check if actor can move (is current actor and has movement left)
+				if (core->IsTurnBased() && (core->tbcManager.currentTurnBasedActor != act || core->GetTurnBasedSlot(act).movesleft <= 0)) {
+					Sender->ReleaseCurrentAction();
+					act->SetStance(IE_ANI_READY);
+				} else {
+					MoveNearerTo(Sender, parameters->pointParameter, dist, 2);
+				}
 				return;
 			}
 			if (!Sender->GetCurrentArea()->IsVisibleLOS(Sender->SMPos, SearchmapPoint(parameters->pointParameter), act)) {
 				const Spell* spl = gamedata->GetSpell(Sender->SpellResRef, true);
 				if (!(spl->Flags & SF_NO_LOS)) {
 					gamedata->FreeSpell(spl, Sender->SpellResRef, false);
-					MoveNearerTo(Sender, parameters->pointParameter, dist, 2);
+					// TBC: check if actor can move
+					if (core->IsTurnBased() && (core->tbcManager.currentTurnBasedActor != act || core->GetTurnBasedSlot(act).movesleft <= 0)) {
+						Sender->ReleaseCurrentAction();
+						act->SetStance(IE_ANI_READY);
+					} else {
+						MoveNearerTo(Sender, parameters->pointParameter, dist, 2);
+					}
 					return;
 				}
 				gamedata->FreeSpell(spl, Sender->SpellResRef, false);
@@ -2543,7 +2559,7 @@ void SpellPointCore(Scriptable* Sender, Action* parameters, int flags)
 	}
 
 	if (!Sender->CurrentActionState && core->IsTurnBased() && Sender->Type == ST_ACTOR && ((Actor*)Sender)->InInitiativeList()) {
-		if (Sender != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+		if (Sender != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
 			return;
 		}
 		core->GetCurrentTurnBasedSlot().haveaction = false;
@@ -2696,6 +2712,9 @@ void RunAwayFromCore(Scriptable* Sender, const Action* parameters, int flags)
 	Actor* actor = Scriptable::As<Actor>(Sender);
 	if (!actor) {
 		Sender->ReleaseCurrentAction();
+		return;
+	}
+	if (core->IsTurnBased() && actor->InInitiativeList() && core->tbcManager.currentTurnBasedActor != actor) {
 		return;
 	}
 	// Avenger: I believe being dead still interrupts RunAwayFromNoInterrupt

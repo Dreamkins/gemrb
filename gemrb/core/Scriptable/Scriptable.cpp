@@ -196,7 +196,7 @@ bool Scriptable::IsPC() const
 
 void Scriptable::Update()
 {
-	if (Type == ST_PROXIMITY && core->IsTurnBased() && core->timeTurnBasedNeed < core->timeTurnBased) {
+	if (Type == ST_PROXIMITY && core->IsTurnBased() && core->tbcManager.timeTurnBasedNeed < core->tbcManager.timeTurnBased) {
 		return;
 	}
 

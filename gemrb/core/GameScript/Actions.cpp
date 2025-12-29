@@ -1319,7 +1319,7 @@ void GameScript::MoveToPoint(Scriptable* Sender, Action* parameters)
 		return;
 	}
 
-	if (core->IsTurnBased() && actor->InInitiativeList() && core->currentTurnBasedActor != actor) {
+	if (core->IsTurnBased() && actor->InInitiativeList() && core->tbcManager.currentTurnBasedActor != actor) {
 		return;
 	}
 
@@ -2362,7 +2362,7 @@ void GameScript::Unlock(Scriptable* Sender, Action* parameters)
 
 	Actor* actor = Scriptable::As<Actor>(Sender);
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
+		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
 		core->GetCurrentTurnBasedSlot().haveaction = false;
@@ -2521,7 +2521,7 @@ void GameScript::PickLock(Scriptable* Sender, Action* parameters)
 	Actor* actor = Scriptable::As<Actor>(Sender);
 
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
+		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
 		core->GetCurrentTurnBasedSlot().haveaction = false;
@@ -2594,7 +2594,7 @@ void GameScript::OpenDoor(Scriptable* Sender, Action* parameters)
 	Actor* actor = Scriptable::As<Actor>(Sender);
 
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
+		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
 		core->GetCurrentTurnBasedSlot().haveaction = false;
@@ -2623,7 +2623,7 @@ void GameScript::CloseDoor(Scriptable* Sender, Action* parameters)
 	Actor* actor = Scriptable::As<Actor>(Sender);
 
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
+		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
 		core->GetCurrentTurnBasedSlot().haveaction = false;
@@ -4710,7 +4710,7 @@ void GameScript::PickPockets(Scriptable* Sender, Action* parameters)
 
 	Actor* actor = Scriptable::As<Actor>(Sender);
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
+		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
 			return;
 		}
 		core->GetCurrentTurnBasedSlot().haveaction = false;
@@ -5763,6 +5763,9 @@ void GameScript::RandomWalk(Scriptable* Sender, Action* /*parameters*/)
 		Sender->ReleaseCurrentAction();
 		return;
 	}
+	if (core->IsTurnBased() && actor->InInitiativeList() && core->tbcManager.currentTurnBasedActor != actor) {
+		return;
+	}
 	actor->RandomWalk(true, false);
 }
 
@@ -5771,6 +5774,9 @@ void GameScript::RandomRun(Scriptable* Sender, Action* /*parameters*/)
 	Actor* actor = Scriptable::As<Actor>(Sender);
 	if (!actor) {
 		Sender->ReleaseCurrentAction();
+		return;
+	}
+	if (core->IsTurnBased() && actor->InInitiativeList() && core->tbcManager.currentTurnBasedActor != actor) {
 		return;
 	}
 	actor->RandomWalk(true, true);
@@ -6936,7 +6942,7 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 	}
 
 	if (core->IsTurnBased() && act->InInitiativeList()) {
-		if (act != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
 			return;
 		}
 	}
@@ -6992,7 +6998,7 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 	}
 
 	if (core->IsTurnBased() && act->InInitiativeList()) {
-		if (act != core->currentTurnBasedActor || core->currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
+		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction) {
 			return;
 		}
 	}

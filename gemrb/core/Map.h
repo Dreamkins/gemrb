@@ -708,6 +708,7 @@ private:
 	void DrawHighlightables(const Region& viewport) const;
 	void DrawOverheadText() const;
 	void DrawWallPolygons(const Region& viewport) const;
+	void DrawTBCPanel() const;
 
 	Size PropsSize() const noexcept;
 	Size FogMapSize() const;

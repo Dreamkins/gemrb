@@ -595,14 +595,14 @@ Projectile::ProjectileState Projectile::GetNextTravelState()
 	if (ExtFlags & PEF_FREEZE && extensionDelay) {
 		if (extensionDelay > 0) {
 			if (core->IsTurnBased()) {
-				if (timeTurnBasedExtencionDelay <= core->timeTurnBased) {
+				if (timeTurnBasedExtencionDelay <= core->tbcManager.timeTurnBased) {
 					if (timeTurnBasedExtencionDelay) {
 						extensionDelay -= core->Time.round_sec * core->Time.defaultTicksPerSec;
 						if (extensionDelay < 0) {
 							extensionDelay = 0;
 						}
 					}
-					timeTurnBasedExtencionDelay = core->timeTurnBased + core->Time.round_sec * core->Time.defaultTicksPerSec;
+					timeTurnBasedExtencionDelay = core->tbcManager.timeTurnBased + core->Time.round_sec * core->Time.defaultTicksPerSec;
 				}
 			} else {
 				extensionDelay--;
@@ -1645,14 +1645,14 @@ Projectile::ProjectileState Projectile::GetNextExplosionState()
 	//Delay explosion, it could even be revoked with PAF_SYNC (see skull trap)
 	if (extensionDelay) {
 		if (core->IsTurnBased()) {
-			if (timeTurnBasedExtencionDelay <= core->timeTurnBased) {
+			if (timeTurnBasedExtencionDelay <= core->tbcManager.timeTurnBased) {
 				if (timeTurnBasedExtencionDelay) {
 					extensionDelay -= 5 * core->Time.defaultTicksPerSec;
 					if (extensionDelay < 0) {
 						extensionDelay = 0;
 					}
 				}
-				timeTurnBasedExtencionDelay = core->timeTurnBased + 6 * core->Time.defaultTicksPerSec;
+				timeTurnBasedExtencionDelay = core->tbcManager.timeTurnBased + 6 * core->Time.defaultTicksPerSec;
 			}
 		}
 		else {
