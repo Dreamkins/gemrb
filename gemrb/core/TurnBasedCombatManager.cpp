@@ -526,6 +526,7 @@ bool TurnBasedCombatManager::UseFreeAction()
 
 bool TurnBasedCombatManager::UseMainAction()
 {
+	Log(MESSAGE, "TBC", "UseMainAction ENTRY, IsTurnBased={}, currentActor={}", IsTurnBased(), (void*)currentTurnBasedActor);
 	if (!IsTurnBased() || !currentTurnBasedActor) {
 		return true;
 	}
