@@ -137,6 +137,9 @@ public:
 	// Use free action for current actor (returns true if had free action)
 	bool UseFreeAction();
 	
+	// Use main action for current actor (returns true if had main action)
+	bool UseMainAction();
+	
 	// -------------------------------------------------------------------------
 	// Turn Management
 	// -------------------------------------------------------------------------

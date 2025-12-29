@@ -6054,6 +6054,10 @@ void GameScript::PlayBardSong(Scriptable* Sender, Action* parameters)
 		return;
 	}
 
+	// TBC: activating modal aura costs main action
+	if (core->IsTurnBased() && !core->tbcManager.UseMainAction()) {
+		return;
+	}
 	actor->SetModalSpell(Modal::BattleSong, songs[songIdx]);
 	actor->SetModal(Modal::BattleSong);
 }
@@ -6064,6 +6068,10 @@ void GameScript::BattleSong(Scriptable* Sender, Action* /*parameters*/)
 	if (!actor) {
 		return;
 	}
+	// TBC: activating modal aura costs main action
+	if (core->IsTurnBased() && !core->tbcManager.UseMainAction()) {
+		return;
+	}
 	actor->SetModal(Modal::BattleSong);
 }
 
@@ -6071,6 +6079,10 @@ void GameScript::FindTraps(Scriptable* Sender, Action* /*parameters*/)
 {
 	Actor* actor = Scriptable::As<Actor>(Sender);
 	if (!actor) {
+		return;
+	}
+	// TBC: activating modal aura costs main action
+	if (core->IsTurnBased() && !core->tbcManager.UseMainAction()) {
 		return;
 	}
 	actor->SetModal(Modal::DetectTraps);
@@ -6084,6 +6096,10 @@ void GameScript::Hide(Scriptable* Sender, Action* /*parameters*/)
 	}
 
 	if (actor->TryToHide()) {
+		// TBC: activating modal aura costs main action
+		if (core->IsTurnBased() && !core->tbcManager.UseMainAction()) {
+			return;
+		}
 		actor->SetModal(Modal::Stealth);
 	}
 	//TODO: expiry isn't instant (skill based transition?)
@@ -6098,6 +6114,10 @@ void GameScript::Unhide(Scriptable* Sender, Action* /*parameters*/)
 	}
 
 	if (actor->Modal.State == Modal::Stealth) {
+		// TBC: deactivating modal aura costs free action
+		if (core->IsTurnBased() && !core->tbcManager.UseFreeAction()) {
+			return;
+		}
 		actor->SetModal(Modal::None);
 	}
 	actor->fxqueue.RemoveAllEffects(fx_set_invisible_state_ref);
@@ -6117,6 +6137,10 @@ void GameScript::Turn(Scriptable* Sender, Action* /*parameters*/)
 	int skill = actor->GetStat(IE_TURNUNDEADLEVEL);
 	if (skill < 1) return;
 
+	// TBC: activating modal aura costs main action
+	if (core->IsTurnBased() && !core->tbcManager.UseMainAction()) {
+		return;
+	}
 	actor->SetModal(Modal::TurnUndead);
 }
 
