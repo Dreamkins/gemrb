@@ -525,12 +525,14 @@ bool TurnBasedCombatManager::UseFreeAction()
 
 bool TurnBasedCombatManager::UseMainAction()
 {
+	Log(DEBUG, "TBC", "UseMainAction() called!");
 	if (!IsTurnBased() || !currentTurnBasedActor) {
 		return true;
 	}
 	InitiativeSlot& slot = GetCurrentTurnBasedSlot();
 	if (slot.haveaction) {
 		slot.haveaction = false;
+		Log(DEBUG, "TBC", "UseMainAction() - action consumed!");
 		return true;
 	}
 	return false;

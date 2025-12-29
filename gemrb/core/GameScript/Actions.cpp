@@ -6985,19 +6985,23 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 		bool isQuickSlot = false;
 		if (act->PCStats) {
 			for (int i = 0; i < MAX_QUICKITEMSLOT; i++) {
+				Log(DEBUG, "UseItem", "TBC: QuickItemSlots[{}]={}, Slot={}", i, act->PCStats->QuickItemSlots[i], Slot);
 				if (act->PCStats->QuickItemSlots[i] == Slot) {
 					isQuickSlot = true;
 					break;
 				}
 			}
 		}
+		Log(DEBUG, "UseItem", "TBC: isQuickSlot={}, Slot={}", isQuickSlot, Slot);
 		if (isQuickSlot) {
 			// Quick slot = free action
+			Log(DEBUG, "UseItem", "TBC: Using FREE action for quick slot");
 			if (!core->tbcManager.UseFreeAction()) {
 				return;
 			}
 		} else {
 			// Inventory = main action
+			Log(DEBUG, "UseItem", "TBC: Using MAIN action for inventory");
 			if (!core->tbcManager.HasMainAction()) {
 				return;
 			}
