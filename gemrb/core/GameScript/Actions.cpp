@@ -6096,9 +6096,17 @@ void GameScript::Hide(Scriptable* Sender, Action* /*parameters*/)
 	}
 
 	if (actor->TryToHide()) {
-		// TBC: activating modal aura costs main action
-		if (core->IsTurnBased() && !core->tbcManager.UseMainAction()) {
-			return;
+		// TBC: rogues use free action, others use main action
+		if (core->IsTurnBased()) {
+			if (actor->GetThiefLevel() > 0) {
+				if (!core->tbcManager.UseFreeAction()) {
+					return;
+				}
+			} else {
+				if (!core->tbcManager.UseMainAction()) {
+					return;
+				}
+			}
 		}
 		actor->SetModal(Modal::Stealth);
 	}
@@ -6985,23 +6993,20 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 		bool isQuickSlot = false;
 		if (act->PCStats) {
 			for (int i = 0; i < MAX_QUICKITEMSLOT; i++) {
-				Log(DEBUG, "UseItem", "TBC: QuickItemSlots[{}]={}, Slot={}", i, act->PCStats->QuickItemSlots[i], Slot);
 				if (act->PCStats->QuickItemSlots[i] == Slot) {
 					isQuickSlot = true;
 					break;
 				}
 			}
 		}
-		Log(DEBUG, "UseItem", "TBC: isQuickSlot={}, Slot={}", isQuickSlot, Slot);
-		if (isQuickSlot) {
-			// Quick slot = free action
-			Log(DEBUG, "UseItem", "TBC: Using FREE action for quick slot");
-			if (!core->tbcManager.UseFreeAction()) {
+		if (isQuickSlot && hh->Speed == 0) {
+			// Quick slot with no casting time = set pending flag, free action will be used when the triggered action runs
+			if (!core->tbcManager.HasFreeAction()) {
 				return;
 			}
+			core->tbcManager.quickSlotItemPending = true;
 		} else {
-			// Inventory = main action
-			Log(DEBUG, "UseItem", "TBC: Using MAIN action for inventory");
+			// Inventory or item with casting time = main action
 			if (!core->tbcManager.HasMainAction()) {
 				return;
 			}
@@ -7063,6 +7068,12 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 		if (act != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0) {
 			return;
 		}
+		// Get item's casting time (Speed) for action cost check
+		const Item* itm = gamedata->GetItem(itemres, true);
+		const ITMExtHeader* hh = itm ? itm->GetExtHeader(header) : nullptr;
+		int itemSpeed = hh ? hh->Speed : 0;
+		if (itm) gamedata->FreeItem(itm, itemres, false);
+		
 		// Check if item is from quick slot
 		bool isQuickSlot = false;
 		if (act->PCStats) {
@@ -7073,13 +7084,14 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 				}
 			}
 		}
-		if (isQuickSlot) {
-			// Quick slot = free action
-			if (!core->tbcManager.UseFreeAction()) {
+		if (isQuickSlot && itemSpeed == 0) {
+			// Quick slot with no casting time = set pending flag, free action will be used when the triggered action runs
+			if (!core->tbcManager.HasFreeAction()) {
 				return;
 			}
+			core->tbcManager.quickSlotItemPending = true;
 		} else {
-			// Inventory = main action
+			// Inventory or item with casting time = main action
 			if (!core->tbcManager.HasMainAction()) {
 				return;
 			}

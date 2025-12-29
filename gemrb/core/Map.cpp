@@ -1755,7 +1755,7 @@ void Map::DrawTBCPanel() const
 
 				// Action available indicator (green square)
 				bool hasAction = core->tbcManager.HasMainAction() && !actor->AuraCooldown;
-				Region actionRect(squaresStartX, squaresY, STATUS_INDICATOR_SIZE, STATUS_INDICATOR_SIZE);
+				Region actionRect(squaresStartX - 1, squaresY, STATUS_INDICATOR_SIZE, STATUS_INDICATOR_SIZE);
 				VideoDriver->DrawRect(actionRect, COLOR_ACTION_AVAILABLE, hasAction, BlitFlags::BLENDED);
 
 				// Free action indicator (yellow square)
