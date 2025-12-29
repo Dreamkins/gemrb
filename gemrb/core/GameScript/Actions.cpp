@@ -6096,7 +6096,7 @@ void GameScript::Hide(Scriptable* Sender, Action* /*parameters*/)
 	}
 
 	// TBC: spend action before attempting hide
-	if (core->IsTurnBased()) {
+	if (core->IsTurnBased() && actor->InInitiativeList()) {
 		if (actor->GetThiefLevel() > 0) {
 			if (!core->tbcManager.UseFreeAction()) {
 				return;
@@ -7002,11 +7002,10 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 			}
 		}
 		if (isQuickSlot) {
-			// Quick slot = free action
-			if (!core->tbcManager.UseFreeAction()) {
+			// Quick slot: set flag, action will be spent in SpellCore
+			if (!core->tbcManager.HasFreeAction()) {
 				return;
 			}
-			// Skip next UseMainAction call from the triggered spell
 			core->tbcManager.quickSlotItemPending = true;
 		} else {
 			// Inventory = main action
@@ -7087,11 +7086,10 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 			}
 		}
 		if (isQuickSlot) {
-			// Quick slot = free action
-			if (!core->tbcManager.UseFreeAction()) {
+			// Quick slot: set flag, action will be spent in SpellCore
+			if (!core->tbcManager.HasFreeAction()) {
 				return;
 			}
-			// Skip next UseMainAction call from the triggered spell
 			core->tbcManager.quickSlotItemPending = true;
 		} else {
 			// Inventory = main action
