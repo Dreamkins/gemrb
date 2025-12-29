@@ -7985,7 +7985,7 @@ void Actor::AttackTurnBased(ieDword gameTime)
 	}
 
 	//only return if we don't have any attacks left this round
-	if (!core->tbcManager.HasMainAction() || AuraCooldown) {
+	if (!core->tbcManager.HasMainAction()) {
 		//if (!InAttack()) {
 		//	ReleaseCurrentAction();
 		//}
