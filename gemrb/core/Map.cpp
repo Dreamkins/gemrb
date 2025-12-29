@@ -1743,7 +1743,7 @@ void Map::DrawTBCPanel() const
 			// -----------------------------------------------------------------
 			if (isCurrentActor && actor->IsPC()) {
 				// Action available indicator (green square)
-				bool hasAction = core->GetCurrentTurnBasedSlot().haveaction && !actor->AuraCooldown;
+				bool hasAction = core->tbcManager.HasMainAction() && !actor->AuraCooldown;
 				Region actionRect(slotX, slotY - STATUS_INDICATOR_OFFSET, 
 				                  STATUS_INDICATOR_SIZE, STATUS_INDICATOR_SIZE);
 				VideoDriver->DrawRect(actionRect, COLOR_ACTION_AVAILABLE, hasAction, BlitFlags::BLENDED);

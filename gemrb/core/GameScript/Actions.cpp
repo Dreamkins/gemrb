@@ -2362,7 +2362,7 @@ void GameScript::Unlock(Scriptable* Sender, Action* parameters)
 
 	Actor* actor = Scriptable::As<Actor>(Sender);
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
+		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->tbcManager.HasMainAction() || actor->AuraCooldown) {
 			return;
 		}
 		core->tbcManager.UseMainAction();
@@ -2521,7 +2521,7 @@ void GameScript::PickLock(Scriptable* Sender, Action* parameters)
 	Actor* actor = Scriptable::As<Actor>(Sender);
 
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
+		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->tbcManager.HasMainAction() || actor->AuraCooldown) {
 			return;
 		}
 		core->tbcManager.UseMainAction();
@@ -2607,7 +2607,7 @@ void GameScript::OpenDoor(Scriptable* Sender, Action* parameters)
 		}
 		if (wasLocked) {
 			// Door was locked - use main action
-			if (!core->GetCurrentTurnBasedSlot().haveaction) {
+			if (!core->tbcManager.HasMainAction()) {
 				return;
 			}
 			core->tbcManager.UseMainAction();
@@ -2635,7 +2635,7 @@ void GameScript::CloseDoor(Scriptable* Sender, Action* parameters)
 	Actor* actor = Scriptable::As<Actor>(Sender);
 
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
+		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->tbcManager.HasMainAction() || actor->AuraCooldown) {
 			return;
 		}
 		core->tbcManager.UseMainAction();
@@ -4722,7 +4722,7 @@ void GameScript::PickPockets(Scriptable* Sender, Action* parameters)
 
 	Actor* actor = Scriptable::As<Actor>(Sender);
 	if (core->IsTurnBased() && actor && actor->InInitiativeList()) {
-		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->GetCurrentTurnBasedSlot().haveaction || actor->AuraCooldown) {
+		if (actor != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->tbcManager.HasMainAction() || actor->AuraCooldown) {
 			return;
 		}
 		core->tbcManager.UseMainAction();
@@ -6998,7 +6998,7 @@ void GameScript::UseItem(Scriptable* Sender, Action* parameters)
 			}
 		} else {
 			// Inventory = main action
-			if (!core->GetCurrentTurnBasedSlot().haveaction) {
+			if (!core->tbcManager.HasMainAction()) {
 				return;
 			}
 			core->tbcManager.UseMainAction();
@@ -7076,7 +7076,7 @@ void GameScript::UseItemPoint(Scriptable* Sender, Action* parameters)
 			}
 		} else {
 			// Inventory = main action
-			if (!core->GetCurrentTurnBasedSlot().haveaction) {
+			if (!core->tbcManager.HasMainAction()) {
 				return;
 			}
 			core->tbcManager.UseMainAction();

@@ -134,6 +134,12 @@ public:
 	// Get next available slot with action for actor
 	InitiativeSlot* GetTurnBasedSlotWithAttack(Actor* actor);
 	
+	// Check if current actor has free action
+	bool HasFreeAction() const;
+	
+	// Check if current actor has main action
+	bool HasMainAction() const;
+	
 	// Use free action for current actor (returns true if had free action)
 	bool UseFreeAction();
 	

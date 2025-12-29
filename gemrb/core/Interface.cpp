@@ -4287,7 +4287,7 @@ void Interface::EndTurn() {
 
 		// delayed attack
 		if (actor->GetStance() != IE_ANI_DIE && actor->GetStance() != IE_ANI_TWITCH && actor->GetStance() != IE_ANI_SLEEP &&
-			!(actor->Immobile() || (actor->Modified[IE_STATE_ID] & (STATE_CANTMOVE | STATE_PANIC))) && GetCurrentTurnBasedSlot().haveaction && !actor->AuraCooldown &&
+			!(actor->Immobile() || (actor->Modified[IE_STATE_ID] & (STATE_CANTMOVE | STATE_PANIC))) && tbcManager.HasMainAction() && !actor->AuraCooldown &&
 			!GetCurrentTurnBasedSlot().delayaction && tbcManager.currentTurnBasedSlot < tbcManager.initiatives[tbcManager.currentTurnBasedList].size() - 1) {
 			InitiativeSlot delayedSlot = GetCurrentTurnBasedSlot();
 			delayedSlot.delayaction = true;

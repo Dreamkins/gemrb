@@ -127,6 +127,25 @@ void TurnBasedCombatManager::resetTurnBased()
 	timeTurnBasedNeed = 0;
 }
 
+bool TurnBasedCombatManager::HasFreeAction() const
+{
+	if (!IsTurnBased() || !currentTurnBasedActor) {
+		return true; // Not in TBC, allow action
+	}
+	// Need to cast away const for GetCurrentTurnBasedSlot
+	auto* self = const_cast<TurnBasedCombatManager*>(this);
+	return self->GetCurrentTurnBasedSlot().havefreeaction;
+}
+
+bool TurnBasedCombatManager::HasMainAction() const
+{
+	if (!IsTurnBased() || !currentTurnBasedActor) {
+		return true; // Not in TBC, allow action
+	}
+	auto* self = const_cast<TurnBasedCombatManager*>(this);
+	return self->GetCurrentTurnBasedSlot().haveaction;
+}
+
 bool TurnBasedCombatManager::UseFreeAction()
 {
 	if (!IsTurnBased() || !currentTurnBasedActor) {
