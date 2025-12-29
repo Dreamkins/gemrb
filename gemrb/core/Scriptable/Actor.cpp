@@ -4239,7 +4239,7 @@ static void ChunkActor(Actor* actor)
 		copy->SetInternalFlag(IF_REALLYDIED, BitOp::OR);
 		Effect* fx = EffectQueue::CreateEffect(fx_remove_creature_ref, 0, 0, FX_DURATION_DELAY_PERMANENT);
 		fx->Target = FX_TARGET_SELF;
-		fx->Duration = core->GetGame()->GameTime + core->Time.round_size / 2 + RAND(-30, 30);
+		fx->Duration = core->GetGame()->GetGameTime() + core->Time.round_size / 2 + RAND(-30, 30);
 		copy->fxqueue.AddEffect(fx, true);
 	}
 	for (uint8_t i = 0; i < MAX_SCRIPTS; ++i) {
@@ -5754,7 +5754,7 @@ bool Actor::CheckOnDeath()
 	//don't mess with the already deceased
 	if (BaseStats[IE_STATE_ID] & STATE_DEAD) {
 		// delayed cleanup of chunked actors, see below
-		if (LastDamageType & DAMAGE_CHUNKING && Timers.removalTime < core->GetGame()->GameTime) return true;
+		if (LastDamageType & DAMAGE_CHUNKING && Timers.removalTime < core->GetGame()->GetGameTime()) return true;
 		return false;
 	}
 	// don't destroy actors currently in a dialog

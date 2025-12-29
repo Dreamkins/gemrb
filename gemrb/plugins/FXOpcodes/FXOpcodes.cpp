@@ -3262,7 +3262,7 @@ int fx_set_diseased_state(Scriptable* Owner, Actor* target, Effect* fx)
 		case RPD_MOLD: //mold touch (how)
 			EXTSTATE_SET(EXTSTATE_MOLD);
 			target->SetSpellState(SS_MOLDTOUCH);
-			if (core->GetGame()->GameTime % target->GetAdjustedTime(aRound)) {
+			if (core->GetGame()->GetGameTime() % target->GetAdjustedTime(aRound)) {
 				return FX_APPLIED;
 			}
 			if (fx->Parameter1 < 1) {
@@ -3279,7 +3279,7 @@ int fx_set_diseased_state(Scriptable* Owner, Actor* target, Effect* fx)
 		default:
 			damage = 1;
 			// per second
-			if (core->GetGame()->GameTime % target->GetAdjustedTime(aRound)) {
+			if (core->GetGame()->GetGameTime() % target->GetAdjustedTime(aRound)) {
 				return FX_APPLIED;
 			}
 			break;
@@ -4664,7 +4664,7 @@ int fx_casting_glow(Scriptable* Owner, Actor* target, Effect* fx)
 
 	// Resource contains the termination sound from when used from GameScript::SpellCastEffect
 	// the channel is a guess
-	if (fx->Duration - core->GetGame()->GameTime == 1 && !fx->Resource.IsEmpty()) {
+	if (fx->Duration - core->GetGame()->GetGameTime() == 1 && !fx->Resource.IsEmpty()) {
 		core->GetAudioDrv()->Play(fx->Resource, SFXChannel::Hits, target->Pos, GEM_SND_SPATIAL);
 	}
 

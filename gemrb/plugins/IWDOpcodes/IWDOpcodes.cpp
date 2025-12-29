@@ -3015,11 +3015,11 @@ static int fx_cleave(Scriptable* /*Owner*/, Actor* target, Effect* fx)
 		if (enemy && WithinPersonalRange(enemy, target, weaponRange)) {
 			target->attackcount = fx->Parameter1;
 			target->Timers.lastAttack = 0;
-			target->Timers.nextAttack = core->GetGame()->GameTime;
+			target->Timers.nextAttack = core->GetGame()->GetGameTime();
 			target->FaceTarget(enemy);
 			target->objects.LastTarget = target->objects.LastSeen;
 			target->objects.LastTargetPersistent = target->objects.LastSeen;
-			target->PerformAttack(core->GetGame()->GameTime);
+			target->PerformAttack(core->GetGame()->GetGameTime());
 
 			// ~Cleave feat adds another level %d attack.~
 			// uses the max tohit bonus (tested), but game always displayed "level 1"
