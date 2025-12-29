@@ -508,7 +508,9 @@ bool TurnBasedCombatManager::HasMainAction() const
 		return true;
 	}
 	auto* self = const_cast<TurnBasedCombatManager*>(this);
-	return self->GetCurrentTurnBasedSlot().haveaction;
+	bool result = self->GetCurrentTurnBasedSlot().haveaction;
+	Log(MESSAGE, "TBC", "HasMainAction: list={}, slot={}, result={}", currentTurnBasedList, currentTurnBasedSlot, result);
+	return result;
 }
 
 bool TurnBasedCombatManager::UseFreeAction()
