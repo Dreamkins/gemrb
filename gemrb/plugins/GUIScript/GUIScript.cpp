@@ -10869,16 +10869,18 @@ static PyObject* GemRB_SetModalState(PyObject* /*self*/, PyObject* args)
 	GET_GAME();
 	GET_ACTOR_GLOBAL();
 
-	// TBC: Stealth costs action
-	if ((Modal) state == Modal::Stealth && core->IsTurnBased() && actor->InInitiativeList()) {
+	// TBC: Stealth costs action (only when entering stealth, not when already in stealth)
+	if ((Modal) state == Modal::Stealth && actor->Modal.State != Modal::Stealth && core->IsTurnBased() && actor->InInitiativeList()) {
 		if (actor->GetThiefLevel() > 0) {
-			if (!core->tbcManager.UseFreeAction()) {
+			if (!core->tbcManager.HasFreeAction()) {
 				Py_RETURN_NONE;
 			}
+			core->tbcManager.UseFreeAction();
 		} else {
-			if (!core->tbcManager.UseMainAction()) {
+			if (!core->tbcManager.HasMainAction()) {
 				Py_RETURN_NONE;
 			}
+			core->tbcManager.UseMainAction();
 		}
 	}
 

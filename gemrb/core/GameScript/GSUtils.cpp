@@ -2413,7 +2413,12 @@ void SpellCore(Scriptable* Sender, Action* parameters, int flags)
 	}
 
 	if (!Sender->CurrentActionState && core->IsTurnBased() && Sender->Type == ST_ACTOR && ((Actor*)Sender)->InInitiativeList()) {
-		if (Sender != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->tbcManager.HasMainAction()) {
+		if (Sender != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0) {
+			return;
+		}
+		// Check appropriate action based on pending quick slot flag
+		bool hasAction = core->tbcManager.quickSlotItemPending ? core->tbcManager.HasFreeAction() : core->tbcManager.HasMainAction();
+		if (!hasAction) {
 			return;
 		}
 		core->tbcManager.UseMainAction();
@@ -2559,7 +2564,12 @@ void SpellPointCore(Scriptable* Sender, Action* parameters, int flags)
 	}
 
 	if (!Sender->CurrentActionState && core->IsTurnBased() && Sender->Type == ST_ACTOR && ((Actor*)Sender)->InInitiativeList()) {
-		if (Sender != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0 || !core->tbcManager.HasMainAction()) {
+		if (Sender != core->tbcManager.currentTurnBasedActor || core->tbcManager.currentTurnBasedList != 0) {
+			return;
+		}
+		// Check appropriate action based on pending quick slot flag
+		bool hasAction = core->tbcManager.quickSlotItemPending ? core->tbcManager.HasFreeAction() : core->tbcManager.HasMainAction();
+		if (!hasAction) {
 			return;
 		}
 		core->tbcManager.UseMainAction();
