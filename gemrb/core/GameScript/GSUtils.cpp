@@ -1535,7 +1535,9 @@ void AttackCore(Scriptable* Sender, Scriptable* target, int flags)
 		Map* area = attacker->GetCurrentArea();
 		Actor* actorAtPos = area->GetActor(attacker->Pos, GA_NO_DEAD | GA_NO_UNSCHEDULED | GA_NO_SELF, attacker);
 		if (actorAtPos && actorAtPos->BlocksSearchMap() && EARelation(attacker, actorAtPos) != EAR_HOSTILE) {
-			attacker->overHead.SetText(u"Can't act here!", true, false, Color(255, 100, 100, 255));
+			if (attacker->IsPC()) {
+				attacker->overHead.SetText(u"Can't act here!", true, false, Color(255, 100, 100, 255));
+			}
 			Sender->ReleaseCurrentAction();
 			return;
 		}
@@ -1702,7 +1704,9 @@ int MoveNearerTo(Scriptable* Sender, const Point& p, int distance, int flags)
 	if (core->IsTurnBased() && actor->InInitiativeList()) {
 		const InitiativeSlot& slot = core->GetTurnBasedSlot(actor);
 		if (slot.movesleft <= 0) {
-			actor->overHead.SetText(u"Can't reach!", true, false, Color(255, 100, 100, 255));
+			if (actor->IsPC()) {
+				actor->overHead.SetText(u"Can't reach!", true, false, Color(255, 100, 100, 255));
+			}
 			Sender->ReleaseCurrentAction();
 			return flags & 1 ? flags : 0;
 		}
@@ -1712,7 +1716,9 @@ int MoveNearerTo(Scriptable* Sender, const Point& p, int distance, int flags)
 			int pathFlags = PF_SIGHT | PF_ENEMIES_BLOCK_ALLIES_PASS | PF_PRECISE;
 			Path testPath = area->FindPath(actor->Pos, p, actor->circleSize, distance, pathFlags, actor);
 			if (testPath.Empty()) {
-				actor->overHead.SetText(u"Can't reach!", true, false, Color(255, 100, 100, 255));
+				if (actor->IsPC()) {
+					actor->overHead.SetText(u"Can't reach!", true, false, Color(255, 100, 100, 255));
+				}
 				Sender->ReleaseCurrentAction();
 				return flags & 1 ? flags : 0;
 			}
