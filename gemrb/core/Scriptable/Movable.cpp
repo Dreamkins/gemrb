@@ -358,54 +358,56 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 		// TBC: check for opportunity attacks
 		if (core->tbcManager.lasOpportunityPos != Pos) {
 			core->tbcManager.opportunists.clear();
-			// check enemies for opportunity attack
-			for (size_t idx = 0; idx < core->tbcManager.initiatives[0].size(); idx++) {
-				if (core->tbcManager.initiatives[0][idx].actor == this) {
-					continue;
-				}
-				if (actor->IsPC() && core->tbcManager.initiatives[0][idx].actor->IsPC()) {
-					continue;
-				}
-				// enemy?
-				if (EARelation(actor, core->tbcManager.initiatives[0][idx].actor) != EAR_HOSTILE) {
-					continue;
-				}
-				Actor* enemy = core->tbcManager.initiatives[0][idx].actor;
-				// can attack?
-				if (enemy->GetStance() == IE_ANI_DIE || 
-					enemy->GetStance() == IE_ANI_TWITCH || 
-					enemy->GetStance() == IE_ANI_SLEEP || 
-					enemy->GetStance() == IE_ANI_CAST) {
-					continue;
-				}
-				// can move?
-				if (enemy->Immobile() || 
-					(enemy->Modified[IE_STATE_ID] & (STATE_CANTMOVE | STATE_PANIC)) || 
-					(enemy->GetBase(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) {
-					continue;
-				}
-				// current area?
-				if (enemy->GetCurrentArea() != GetCurrentArea()) {
-					continue;
-				}
-				// can see?
-				if (actor->IsInvisibleTo(enemy) || !CanSee(enemy, this, true, 0)) {
-					continue;
-				}
-				const ITMExtHeader* header = enemy->GetWeapon(false);
-				// melee weapon only
-				if (header && (header->AttackType != ITEM_AT_MELEE)) {
-					continue;
-				}
-				InitiativeSlot* slot = core->tbcManager.GetTurnBasedSlotWithAttack(enemy);
-				// have attacks?
-				if (!slot) {
-					continue;
-				}
-				unsigned int weaponRange = enemy->GetWeaponRange(false);
-				if (slot->actor == enemy && WithinPersonalRange(enemy, Pos, weaponRange) && !WithinPersonalRange(enemy, newPos, weaponRange)) {
-					core->tbcManager.opportunists.push_back(enemy->GetGlobalID());
-					core->tbcManager.opportunity = actor->GetGlobalID();
+			// check enemies for opportunity attack (check all initiative lists)
+			for (int list = 0; list < 2; list++) {
+				for (size_t idx = 0; idx < core->tbcManager.initiatives[list].size(); idx++) {
+					if (core->tbcManager.initiatives[list][idx].actor == this) {
+						continue;
+					}
+					if (actor->IsPC() && core->tbcManager.initiatives[list][idx].actor->IsPC()) {
+						continue;
+					}
+					// enemy?
+					if (EARelation(actor, core->tbcManager.initiatives[list][idx].actor) != EAR_HOSTILE) {
+						continue;
+					}
+					Actor* enemy = core->tbcManager.initiatives[list][idx].actor;
+					// can attack?
+					if (enemy->GetStance() == IE_ANI_DIE || 
+						enemy->GetStance() == IE_ANI_TWITCH || 
+						enemy->GetStance() == IE_ANI_SLEEP || 
+						enemy->GetStance() == IE_ANI_CAST) {
+						continue;
+					}
+					// can move?
+					if (enemy->Immobile() || 
+						(enemy->Modified[IE_STATE_ID] & (STATE_CANTMOVE | STATE_PANIC)) || 
+						(enemy->GetBase(IE_STATE_ID) & (STATE_CANTMOVE | STATE_PANIC))) {
+						continue;
+					}
+					// current area?
+					if (enemy->GetCurrentArea() != GetCurrentArea()) {
+						continue;
+					}
+					// can see?
+					if (actor->IsInvisibleTo(enemy) || !CanSee(enemy, this, true, 0)) {
+						continue;
+					}
+					const ITMExtHeader* header = enemy->GetWeapon(false);
+					// melee weapon only
+					if (header && (header->AttackType != ITEM_AT_MELEE)) {
+						continue;
+					}
+					InitiativeSlot* slot = core->tbcManager.GetTurnBasedSlotWithAttack(enemy);
+					// have attacks?
+					if (!slot) {
+						continue;
+					}
+					unsigned int weaponRange = enemy->GetWeaponRange(false);
+					if (slot->actor == enemy && WithinPersonalRange(enemy, Pos, weaponRange) && !WithinPersonalRange(enemy, newPos, weaponRange)) {
+						core->tbcManager.opportunists.push_back(enemy->GetGlobalID());
+						core->tbcManager.opportunity = actor->GetGlobalID();
+					}
 				}
 			}
 			if (core->tbcManager.opportunists.size()) {
