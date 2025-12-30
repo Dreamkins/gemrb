@@ -179,6 +179,18 @@ void TurnBasedCombatManager::EndTurn()
 		return;
 	}
 
+	// TBC: Cannot end turn on an ally's tile - revert to last safe position
+	Map* area = currentTurnBasedActor->GetCurrentArea();
+	if (area) {
+		Actor* actorAtPos = area->GetActor(currentTurnBasedActor->Pos, GA_NO_DEAD | GA_NO_UNSCHEDULED | GA_NO_SELF, currentTurnBasedActor);
+		if (actorAtPos && actorAtPos->BlocksSearchMap() && 
+		    EARelation(currentTurnBasedActor, actorAtPos) != EAR_HOSTILE) {
+			if (currentTurnBasedActor->tbcLastSafePos != currentTurnBasedActor->Pos) {
+				currentTurnBasedActor->Pos = currentTurnBasedActor->tbcLastSafePos;
+			}
+		}
+	}
+
 	if (currentTurnBasedActorOld) {
 		if (currentTurnBasedActor->IsPC()) {
 			core->GetGame()->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
