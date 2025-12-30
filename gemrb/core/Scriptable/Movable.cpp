@@ -263,27 +263,43 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 
 	bool blocksSearch = BlocksSearchMap();
 	if (actorInTheWay && blocksSearch && actorInTheWay->BlocksSearchMap()) {
-		// Give up instead of bumping if you are close to the goal
-		if (path.Size() == 1 && PersonalDistance(nmptStep, this) < MAX_OPERATING_DISTANCE) {
-			ClearPath(true);
-			NewOrientation = Orientation;
-			// Do not call ReleaseCurrentAction() since other actions
-			// than MoveToPoint can cause movement
-			Log(DEBUG, "PathFinderWIP", "Abandoning because I'm close to the goal");
-			pathAbandoned = true;
-			return;
-		}
-		if (actor && actor->ValidTarget(GA_CAN_BUMP) && actorInTheWay->ValidTarget(GA_ONLY_BUMPABLE)) {
-			actorInTheWay->BumpAway();
+		if (core->IsTurnBased() && actor && actor == core->tbcManager.currentTurnBasedActor) {
+			// TBC mode: no bumping, different collision handling
+			bool isEnemy = EARelation(actor, actorInTheWay) == EAR_HOSTILE;
+			if (isEnemy) {
+				// Enemy blocking - shouldn't happen with proper pathfinding, but stop if it does
+				// Backtrack along path to find free spot
+				if (path.currentStep > 0) {
+					// Go back to previous step
+					path.currentStep--;
+					ClearPath(true);
+				} else {
+					ClearPath(true);
+				}
+				NewOrientation = Orientation;
+				Log(DEBUG, "TBC", "Enemy blocking path, stopping");
+				return;
+			} else {
+				// Ally in the way - pass through with extra movement cost
+				core->GetCurrentTurnBasedSlot().movesleft -= 0.05f;  // penalty for passing through ally
+				// Continue movement - don't return
+			}
 		} else {
-			// TBC: consume movement on backoff
-			if (core->IsTurnBased() && actor && !actor->IsPC() && actor == core->tbcManager.currentTurnBasedActor) {
+			// Real-time mode: original behavior
+			// Give up instead of bumping if you are close to the goal
+			if (path.Size() == 1 && PersonalDistance(nmptStep, this) < MAX_OPERATING_DISTANCE) {
 				ClearPath(true);
 				NewOrientation = Orientation;
-				core->GetCurrentTurnBasedSlot().movesleft -= 0.1f;
+				Log(DEBUG, "PathFinderWIP", "Abandoning because I'm close to the goal");
+				pathAbandoned = true;
+				return;
 			}
-			Backoff();
-			return;
+			if (actor && actor->ValidTarget(GA_CAN_BUMP) && actorInTheWay->ValidTarget(GA_ONLY_BUMPABLE)) {
+				actorInTheWay->BumpAway();
+			} else {
+				Backoff();
+				return;
+			}
 		}
 	}
 	// Stop if there's a door in the way
@@ -392,6 +408,14 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 		path.nodes[path.currentStep].waypoint = false;
 		++path.currentStep;
 		if (path.currentStep >= path.Size()) {
+			// TBC: check if destination is occupied, backtrack if needed
+			if (core->IsTurnBased() && actor && actor == core->tbcManager.currentTurnBasedActor) {
+				Actor* actorAtDest = area->GetActor(Pos, GA_NO_DEAD | GA_NO_UNSCHEDULED | GA_NO_SELF, this);
+				if (actorAtDest && actorAtDest->BlocksSearchMap()) {
+					// Destination occupied - already at previous position, just stop here
+					Log(DEBUG, "TBC", "Destination occupied, stopping at current position");
+				}
+			}
 			ClearPath(true);
 			NewOrientation = Orientation;
 			pathfindingDistance = circleSize;
@@ -448,8 +472,18 @@ void Movable::WalkTo(const Point& Des, int distance)
 	}
 
 	if (BlocksSearchMap()) area->ClearSearchMapFor(this);
-	Path newPath = area->FindPath(Pos, Des, circleSize, distance, PF_SIGHT | PF_ACTORS_ARE_BLOCKING, actor);
-	if (!newPath && actor && actor->ValidTarget(GA_CAN_BUMP)) {
+	
+	int pathFlags = PF_SIGHT;
+	if (core->IsTurnBased()) {
+		// TBC: enemies are walls, allies are passable (no bumping)
+		pathFlags |= PF_ENEMIES_BLOCK_ALLIES_PASS;
+	} else {
+		pathFlags |= PF_ACTORS_ARE_BLOCKING;
+	}
+	Path newPath = area->FindPath(Pos, Des, circleSize, distance, pathFlags, actor);
+	
+	// Fallback only in real-time mode
+	if (!newPath && !core->IsTurnBased() && actor && actor->ValidTarget(GA_CAN_BUMP)) {
 		Log(DEBUG, "WalkTo", "{} re-pathing ignoring actors", fmt::WideToChar { actor->GetShortName() });
 		newPath = area->FindPath(Pos, Des, circleSize, distance, PF_SIGHT, actor);
 	}

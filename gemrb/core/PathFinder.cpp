@@ -39,6 +39,7 @@
 #include "Debug.h"
 #include "FibonacciHeap.h"
 #include "GameData.h"
+#include "Interface.h"
 #include "Map.h"
 #include "RNG.h"
 
@@ -230,6 +231,7 @@ Path Map::FindPath(const Point& s, const Point& d, unsigned int size, unsigned i
 		    fmt::WideToChar { caller ? caller->GetShortName() : u"nullptr" },
 		    minDistance, size);
 	bool actorsAreBlocking = flags & PF_ACTORS_ARE_BLOCKING;
+	bool enemiesBlockAlliesPass = flags & PF_ENEMIES_BLOCK_ALLIES_PASS;
 
 	// TODO: we could optimize this function further by doing everything in SearchmapPoint and converting at the end
 	SearchmapPoint smptDest0 { d };
@@ -327,10 +329,20 @@ Path Map::FindPath(const Point& s, const Point& d, unsigned int size, unsigned i
 			bool childBlocked = !(childBlockStatus & (PathMapFlags::PASSABLE | PathMapFlags::ACTOR));
 			if (childBlocked) continue;
 
-			// If there's an actor, check it can be bumped away
+			// If there's an actor, check if it blocks passage
 			const Actor* childActor = GetActor(nmptChild, GA_NO_DEAD | GA_NO_UNSCHEDULED);
-			bool childIsUnbumpable = childActor && childActor != caller && (actorsAreBlocking || !childActor->ValidTarget(GA_ONLY_BUMPABLE));
-			if (childIsUnbumpable) continue;
+			if (childActor && childActor != caller) {
+				if (enemiesBlockAlliesPass) {
+					// TBC mode: enemies block, allies are passable
+					bool isEnemy = EARelation(caller, childActor) == EAR_HOSTILE;
+					if (isEnemy) continue;  // enemies are walls
+					// allies are passable - continue pathfinding
+				} else {
+					// Standard mode: check if can be bumped
+					bool childIsUnbumpable = actorsAreBlocking || !childActor->ValidTarget(GA_ONLY_BUMPABLE);
+					if (childIsUnbumpable) continue;
+				}
+			}
 
 			SearchmapPoint smptCurrent2 { nmptCurrent };
 			NavmapPoint nmptParent = parents[smptCurrent2.y * mapSize.w + smptCurrent2.x];
