@@ -113,6 +113,26 @@ One per entire turn (all attack phases). If unused — carries over to the next 
 - Movement bar below portrait shows remaining allowance
 - Movement does not cost actions — you can move and attack in any order
 
+**Movement Rules (D&D 5e inspired):**
+
+| Rule | Description |
+|------|-------------|
+| Enemies block | Enemy characters are impassable obstacles |
+| Allies passable | You can move through allied characters |
+| Ally penalty | Moving through an ally costs extra movement |
+| No stacking | Cannot end turn on an ally's tile — auto-repositions back |
+| No bumping | Characters don't push each other in TBC mode |
+| Precise paths | Optimal pathfinding algorithm (no shortcuts) |
+
+**Feedback Messages:**
+
+| Message | Meaning |
+|---------|---------|
+| "Can't reach!" | No valid path or insufficient movement points |
+| "Can't act here!" | Cannot perform action while on ally's tile |
+
+**Pre-validation:** Before moving to attack/cast, the game checks if the path exists and movement is sufficient. If not — action is cancelled immediately without wasting movement.
+
 ### Attack Phases
 
 Characters with multiple attacks per round receive additional phases:
