@@ -272,7 +272,8 @@ Path Map::FindPath(const Point& s, const Point& d, unsigned int size, unsigned i
 	unsigned int squaredMinDist = minDistance * minDistance;
 
 	// Weighted heuristic. Finds sub-optimal paths but should be quite a bit faster
-	constexpr float_t HEURISTIC_WEIGHT = 1.5;
+	// In TBC mode with PF_PRECISE, use weight 1.0 for optimal paths
+	const float_t HEURISTIC_WEIGHT = (flags & PF_PRECISE) ? 1.0f : 1.5f;
 	auto getHeuristic = [&](const SearchmapPoint& smptChild, const int& smptChildIdx) {
 		// Calculate heuristic
 		int xDist = smptChild.x - smptDest.x;

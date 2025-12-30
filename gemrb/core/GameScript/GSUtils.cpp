@@ -1711,7 +1711,7 @@ int MoveNearerTo(Scriptable* Sender, const Point& p, int distance, int flags)
 		// Check if path exists
 		Map* area = actor->GetCurrentArea();
 		if (area) {
-			int pathFlags = PF_SIGHT | PF_ENEMIES_BLOCK_ALLIES_PASS;
+			int pathFlags = PF_SIGHT | PF_ENEMIES_BLOCK_ALLIES_PASS | PF_PRECISE;
 			Path testPath = area->FindPath(actor->Pos, p, actor->circleSize, distance, pathFlags, actor);
 			if (testPath.Empty()) {
 				Log(DEBUG, "MoveNearerTo", "TBC: No valid path to target, aborting");

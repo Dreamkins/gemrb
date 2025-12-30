@@ -500,8 +500,8 @@ void Movable::WalkTo(const Point& Des, int distance)
 	
 	int pathFlags = PF_SIGHT;
 	if (core->IsTurnBased()) {
-		// TBC: enemies are walls, allies are passable (no bumping)
-		pathFlags |= PF_ENEMIES_BLOCK_ALLIES_PASS;
+		// TBC: enemies are walls, allies are passable (no bumping), precise pathfinding
+		pathFlags |= PF_ENEMIES_BLOCK_ALLIES_PASS | PF_PRECISE;
 	} else {
 		pathFlags |= PF_ACTORS_ARE_BLOCKING;
 	}
