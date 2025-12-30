@@ -1529,7 +1529,17 @@ void AttackCore(Scriptable* Sender, Scriptable* target, int flags)
 		return;
 	}
 
-	// if held or disabled, etc, then cannot start or continue attacking
+	// TBC: cannot attack while standing on an ally's cell
+	if (core->IsTurnBased() && attacker->InInitiativeList()) {
+		Map* area = attacker->GetCurrentArea();
+		Actor* actorAtPos = area->GetActor(attacker->Pos, GA_NO_DEAD | GA_NO_UNSCHEDULED | GA_NO_SELF, attacker);
+		if (actorAtPos && actorAtPos->BlocksSearchMap() && EARelation(attacker, actorAtPos) != EAR_HOSTILE) {
+			Log(DEBUG, "AttackCore", "TBC: Cannot attack while on ally's cell");
+			return;
+		}
+	}
+
+	// if held or disabled, etc, then cannot start or continuing attacking
 	if (attacker->Immobile()) {
 		attacker->Timers.roundStart = 0;
 		Sender->ReleaseCurrentAction();
