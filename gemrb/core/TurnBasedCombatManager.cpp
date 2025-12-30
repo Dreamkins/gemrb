@@ -90,9 +90,6 @@ void TurnBasedCombatManager::InitTurnBasedSlot()
 	currentTurnBasedActor = GetCurrentTurnBasedSlot().actor;
 	lastTurnBasedTarget = 0;
 
-	// TBC: Initialize safe position at turn start
-	currentTurnBasedActor->tbcLastSafePos = currentTurnBasedActor->Pos;
-
 	if (!GetCurrentTurnBasedSlot().delayaction) {
 		if (currentTurnBasedList == 0) {
 			GetCurrentTurnBasedSlot().movesleft = 1.0f;
@@ -180,18 +177,6 @@ void TurnBasedCombatManager::EndTurn()
 		core->GetGame()->GetCurrentAction() || 
 		currentTurnBasedActor->InAttack()) {
 		return;
-	}
-
-	// TBC: Cannot end turn on an ally's tile - revert to last safe position
-	Map* area = currentTurnBasedActor->GetCurrentArea();
-	if (area) {
-		Actor* actorAtPos = area->GetActor(currentTurnBasedActor->Pos, GA_NO_DEAD | GA_NO_UNSCHEDULED | GA_NO_SELF, currentTurnBasedActor);
-		if (actorAtPos && actorAtPos->BlocksSearchMap() && 
-		    EARelation(currentTurnBasedActor, actorAtPos) != EAR_HOSTILE) {
-			if (currentTurnBasedActor->tbcLastSafePos != currentTurnBasedActor->Pos) {
-				currentTurnBasedActor->Pos = currentTurnBasedActor->tbcLastSafePos;
-			}
-		}
 	}
 
 	if (currentTurnBasedActorOld) {

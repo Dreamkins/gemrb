@@ -335,21 +335,7 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 			core->GetCurrentTurnBasedSlot().movesleft -= dist / (speed * core->Time.defaultTicksPerSec * core->Time.round_sec * 10);
 		}
 		
-		// Check if currently on an ally
-		Actor* actorAtPos = area->GetActor(Pos, GA_NO_DEAD | GA_NO_UNSCHEDULED | GA_NO_SELF, this);
-		bool onAlly = actorAtPos && actorAtPos->BlocksSearchMap() && EARelation(actor, actorAtPos) != EAR_HOSTILE;
-		
-		// Update safe position if not on an ally
-		if (!onAlly) {
-			tbcLastSafePos = Pos;
-		}
-		
 		if (core->GetCurrentTurnBasedSlot().movesleft <= 0) {
-			// If on ally and out of movement, return to last safe position
-			if (onAlly && tbcLastSafePos != Pos) {
-				Pos = tbcLastSafePos;
-				SMPos = SearchmapPoint(Pos);
-			}
 			ClearPath(true);
 			NewOrientation = Orientation;
 			return;
@@ -497,8 +483,8 @@ void Movable::WalkTo(const Point& Des, int distance)
 	
 	int pathFlags = PF_SIGHT;
 	if (core->IsTurnBased()) {
-		// TBC: enemies are walls, allies are passable (no bumping), precise pathfinding
-		pathFlags |= PF_ENEMIES_BLOCK_ALLIES_PASS | PF_PRECISE;
+		// TBC: all actors are walls, precise pathfinding
+		pathFlags |= PF_ACTORS_ARE_BLOCKING | PF_PRECISE;
 	} else {
 		pathFlags |= PF_ACTORS_ARE_BLOCKING;
 	}

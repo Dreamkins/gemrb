@@ -48,7 +48,6 @@ protected:
 	int randomWalkCounter = 0;
 
 public:
-	Point tbcLastSafePos = Pos;  // TBC: last position not on an ally
 	inline int GetRandomBackoff() const
 	{
 		return randomBackoff;
