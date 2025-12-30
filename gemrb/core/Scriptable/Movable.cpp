@@ -280,15 +280,16 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 				return;
 			} else {
 				// Ally in the way - check if enough movement to pass through
-				float passThruCost = 0.1f;  // minimum cost to enter and exit ally space
-				if (core->GetCurrentTurnBasedSlot().movesleft < passThruCost) {
+				// Need enough to enter AND exit (2x penalty)
+				float passThruPenalty = 0.05f;
+				if (core->GetCurrentTurnBasedSlot().movesleft < passThruPenalty * 2) {
 					// Not enough movement to pass through - stop before ally
 					ClearPath(true);
 					NewOrientation = Orientation;
 					return;
 				}
 				// Pass through with extra movement cost
-				core->GetCurrentTurnBasedSlot().movesleft -= 0.05f;  // penalty for passing through ally
+				core->GetCurrentTurnBasedSlot().movesleft -= passThruPenalty;
 				// Continue movement - don't return
 			}
 		} else {
