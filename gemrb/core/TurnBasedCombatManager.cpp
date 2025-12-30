@@ -449,7 +449,7 @@ void TurnBasedCombatManager::UpdateTurnBased()
 							// NPC: automatically attack the opportunity target
 							Actor* target = game->GetActorByGlobalID(opportunity);
 							if (target) {
-								currentTurnBasedActor->CommandActor(GenerateActionDirect("Attack([0])", target), true, true);
+								currentTurnBasedActor->CommandActor(GenerateActionDirect("Attack([0])", target), true);
 							}
 						}
 						break;
