@@ -18,6 +18,7 @@
 #include "Interface.h"
 #include "DisplayMessage.h"
 #include "GUI/GameControl.h"
+#include "GameScript/GameScript.h"
 
 #include <algorithm>
 
