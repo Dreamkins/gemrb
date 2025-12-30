@@ -46,6 +46,7 @@ protected:
 	bool bumped = false;
 	int pathfindingDistance = circleSize;
 	int randomWalkCounter = 0;
+	Point tbcLastSafePos = Pos;  // TBC: last position not on an ally
 
 public:
 	inline int GetRandomBackoff() const

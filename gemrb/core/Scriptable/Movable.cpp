@@ -335,7 +335,23 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 		if (speed > 0) {
 			core->GetCurrentTurnBasedSlot().movesleft -= dist / (speed * core->Time.defaultTicksPerSec * core->Time.round_sec * 10);
 		}
+		
+		// Check if currently on an ally
+		Actor* actorAtPos = area->GetActor(Pos, GA_NO_DEAD | GA_NO_UNSCHEDULED | GA_NO_SELF, this);
+		bool onAlly = actorAtPos && actorAtPos->BlocksSearchMap() && EARelation(actor, actorAtPos) != EAR_HOSTILE;
+		
+		// Update safe position if not on an ally
+		if (!onAlly) {
+			tbcLastSafePos = Pos;
+		}
+		
 		if (core->GetCurrentTurnBasedSlot().movesleft <= 0) {
+			// If on ally and out of movement, return to last safe position
+			if (onAlly && tbcLastSafePos != Pos) {
+				Log(DEBUG, "TBC", "Out of movement on ally, returning to safe position");
+				Pos = tbcLastSafePos;
+				SMPos = SearchmapPoint(Pos);
+			}
 			ClearPath(true);
 			NewOrientation = Orientation;
 			return;
