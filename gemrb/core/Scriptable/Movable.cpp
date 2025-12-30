@@ -277,7 +277,6 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 					ClearPath(true);
 				}
 				NewOrientation = Orientation;
-				Log(DEBUG, "TBC", "Enemy blocking path, stopping");
 				return;
 			} else {
 				// Ally in the way - check if enough movement to pass through
@@ -286,7 +285,6 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 					// Not enough movement to pass through - stop before ally
 					ClearPath(true);
 					NewOrientation = Orientation;
-					Log(DEBUG, "TBC", "Not enough movement to pass through ally, stopping");
 					return;
 				}
 				// Pass through with extra movement cost
@@ -348,7 +346,6 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 		if (core->GetCurrentTurnBasedSlot().movesleft <= 0) {
 			// If on ally and out of movement, return to last safe position
 			if (onAlly && tbcLastSafePos != Pos) {
-				Log(DEBUG, "TBC", "Out of movement on ally, returning to safe position");
 				Pos = tbcLastSafePos;
 				SMPos = SearchmapPoint(Pos);
 			}
@@ -437,8 +434,7 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 			if (core->IsTurnBased() && actor && actor == core->tbcManager.currentTurnBasedActor) {
 				Actor* actorAtDest = area->GetActor(Pos, GA_NO_DEAD | GA_NO_UNSCHEDULED | GA_NO_SELF, this);
 				if (actorAtDest && actorAtDest->BlocksSearchMap()) {
-					// Destination occupied - already at previous position, just stop here
-					Log(DEBUG, "TBC", "Destination occupied, stopping at current position");
+					// Destination occupied - stop here
 				}
 			}
 			ClearPath(true);
