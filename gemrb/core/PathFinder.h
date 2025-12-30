@@ -135,8 +135,7 @@ enum {
 	PF_SIGHT = 1,
 	PF_BACKAWAY = 2,
 	PF_ACTORS_ARE_BLOCKING = 4,
-	PF_ENEMIES_BLOCK_ALLIES_PASS = 8,  // TBC: enemies are walls, allies are passable
-	PF_PRECISE = 16  // TBC: use optimal pathfinding (no heuristic weight)
+	PF_PRECISE = 8  // TBC: use optimal pathfinding (no heuristic weight)
 };
 
 

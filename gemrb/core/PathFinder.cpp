@@ -231,7 +231,6 @@ Path Map::FindPath(const Point& s, const Point& d, unsigned int size, unsigned i
 		    fmt::WideToChar { caller ? caller->GetShortName() : u"nullptr" },
 		    minDistance, size);
 	bool actorsAreBlocking = flags & PF_ACTORS_ARE_BLOCKING;
-	bool enemiesBlockAlliesPass = flags & PF_ENEMIES_BLOCK_ALLIES_PASS;
 
 	// TODO: we could optimize this function further by doing everything in SearchmapPoint and converting at the end
 	SearchmapPoint smptDest0 { d };
@@ -333,14 +332,16 @@ Path Map::FindPath(const Point& s, const Point& d, unsigned int size, unsigned i
 			// If there's an actor, check if it blocks passage
 			const Actor* childActor = GetActor(nmptChild, GA_NO_DEAD | GA_NO_UNSCHEDULED);
 			if (childActor && childActor != caller) {
-				if (enemiesBlockAlliesPass) {
-					// TBC mode: enemies block, allies are passable
-					bool isEnemy = EARelation(caller, childActor) == EAR_HOSTILE;
-					if (isEnemy) continue;  // enemies are walls
-					// allies are passable - continue pathfinding
+				if (actorsAreBlocking) {
+					// TBC/blocking mode: use reduced collision size (2/3 of actual)
+					int reducedSize = std::max(1, childActor->circleSize * 2 / 3);
+					if (nmptChild.IsWithinEllipse(reducedSize, childActor->Pos)) {
+						continue;  // blocked by actor
+					}
+					// outside reduced collision area - passable
 				} else {
 					// Standard mode: check if can be bumped
-					bool childIsUnbumpable = actorsAreBlocking || !childActor->ValidTarget(GA_ONLY_BUMPABLE);
+					bool childIsUnbumpable = !childActor->ValidTarget(GA_ONLY_BUMPABLE);
 					if (childIsUnbumpable) continue;
 				}
 			}
