@@ -18,7 +18,6 @@
 #include "Interface.h"
 #include "DisplayMessage.h"
 #include "GUI/GameControl.h"
-#include "GameScript/GameScript.h"
 
 #include <algorithm>
 
@@ -402,7 +401,9 @@ void TurnBasedCombatManager::UpdateTurnBased()
 					if (!opportunist || opportunist->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP)) {
 						continue;
 					}
-
+					if (currentTurnBasedActor->IsPC()) {
+						game->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
+					}
 					int opportunistList = -1;
 					int opportunistSlot = -1;
 					for (size_t list = 0; list < 10; list++) {
@@ -411,57 +412,38 @@ void TurnBasedCombatManager::UpdateTurnBased()
 								continue;
 							}
 							if (initiatives[list][idx].haveaction) {
-								Actor* target = game->GetActorByGlobalID(opportunity);
-								if (target) {
-									unsigned int weaponRange = opportunist->GetWeaponRange(false);
-									if (PersonalDistance(opportunist, target) <= weaponRange) {
-										opportunistList = list;
-										opportunistSlot = idx;
-										break;
-									}
-								}
+								opportunistList = list;
+								opportunistSlot = idx;
+								break;
 							}
 						}
 						if (opportunistSlot != -1) {
 							break;
 						}
 					}
-
 					if (opportunistSlot != -1) {
-						// Deselect current actor only after confirming valid opportunist
-						if (currentTurnBasedActor->IsPC()) {
-							game->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
-						}
-						
 						currentTurnBasedActorOld = currentTurnBasedActor;
 						currentTurnBasedListOld = currentTurnBasedList;
 						currentTurnBasedSlotOld = currentTurnBasedSlot;
-
 						currentTurnBasedActor = opportunist;
 						currentTurnBasedList = opportunistList;
 						currentTurnBasedSlot = opportunistSlot;
 						currentTurnBasedActor->lastInit = game->GetGameTimeReal();
-
 						if (currentTurnBasedActor->IsPC()) {
 							game->SelectActor(currentTurnBasedActor, true, SELECT_REPLACE);
 							currentTurnBasedActor->ClearPath(true);
 							currentTurnBasedActor->ReleaseCurrentAction();
-						} else {
-							// NPC: automatically attack the opportunity target
-							Actor* target = game->GetActorByGlobalID(opportunity);
-							if (target) {
-								currentTurnBasedActor->CommandActor(GenerateActionDirect("Attack([0])", target), true);
-							}
 						}
 						break;
 					}
 				}
-
 				if (currentTurnBasedActorOld) {
 					String rollLog = fmt::format(u">>> OPPORTUNITY ATTACK <<<");
 					displaymsg->DisplayString(std::move(rollLog), GUIColors::GOLD, 0);
+					return;
 				} else {
 					opportunity = 0;
+					opportunists.clear();
 				}
 			}
 		}
