@@ -36,6 +36,7 @@
 #include "Interface.h"
 #include "Item.h"
 #include "Map.h"
+#include "PathFinder.h"
 #include "RNG.h"
 #include "ScriptedAnimation.h"
 #include "Spell.h"
@@ -1694,6 +1695,27 @@ int MoveNearerTo(Scriptable* Sender, const Point& p, int distance, int flags)
 		Log(ERROR, "GameScript", "MoveNearerTo only works with actors");
 		Sender->ReleaseCurrentAction();
 		return 0;
+	}
+
+	// TBC: pre-validate path and movement points before attempting to move
+	if (core->IsTurnBased() && actor->InInitiativeList()) {
+		const InitiativeSlot& slot = core->GetTurnBasedSlot(actor);
+		if (slot.movesleft <= 0) {
+			Log(DEBUG, "MoveNearerTo", "TBC: No movement points left, aborting");
+			Sender->ReleaseCurrentAction();
+			return flags & 1 ? flags : 0;
+		}
+		// Check if path exists
+		Map* area = actor->GetCurrentArea();
+		if (area) {
+			int pathFlags = PF_SIGHT | PF_ENEMIES_BLOCK_ALLIES_PASS;
+			Path testPath = area->FindPath(actor->Pos, p, actor->circleSize, distance, pathFlags, actor);
+			if (testPath.Empty()) {
+				Log(DEBUG, "MoveNearerTo", "TBC: No valid path to target, aborting");
+				Sender->ReleaseCurrentAction();
+				return flags & 1 ? flags : 0;
+			}
+		}
 	}
 
 	// chasing is not unbreakable
