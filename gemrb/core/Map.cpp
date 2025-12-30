@@ -1658,15 +1658,15 @@ void Map::DrawTBCPanel() const
 			Region slotRegion(slotPos, Size(PORTRAIT_WIDTH, SLOT_HEIGHT));
 
 			// Track opportunity attack endpoints
-			if (core->tbcManager.opportunity && list == 0) {
+			if (core->tbcManager.opportunity) {
 				Actor* oppTarget = core->GetGame()->GetActorByGlobalID(core->tbcManager.opportunity);
 				if (!opportunityTarget.y && oppTarget == actor) {
 					opportunityTarget = Point(slotX + PORTRAIT_WIDTH / 2, PANEL_TOP + SLOT_HEIGHT + 65);
 				}
-			}
-			if (core->tbcManager.opportunity && !opportunitySource.y && 
-			    core->tbcManager.currentTurnBasedActorOld && isCurrentActor) {
-				opportunitySource = Point(slotX + PORTRAIT_WIDTH / 2, PANEL_TOP + SLOT_HEIGHT + 65);
+				if (!opportunitySource.y && core->tbcManager.currentTurnBasedActorOld && 
+				    actor == core->tbcManager.currentTurnBasedActor) {
+					opportunitySource = Point(slotX + PORTRAIT_WIDTH / 2, PANEL_TOP + SLOT_HEIGHT + 65);
+				}
 			}
 
 			// Handle mouse hover on slot
