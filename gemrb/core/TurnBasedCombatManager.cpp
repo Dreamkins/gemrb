@@ -401,9 +401,6 @@ void TurnBasedCombatManager::UpdateTurnBased()
 					if (!opportunist || opportunist->GetInternalFlag() & (IF_JUSTDIED | IF_REALLYDIED | IF_CLEANUP)) {
 						continue;
 					}
-					if (currentTurnBasedActor->IsPC()) {
-						game->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
-					}
 					int opportunistList = -1;
 					int opportunistSlot = -1;
 					for (size_t list = 0; list < 10; list++) {
@@ -422,6 +419,9 @@ void TurnBasedCombatManager::UpdateTurnBased()
 						}
 					}
 					if (opportunistSlot != -1) {
+						if (currentTurnBasedActor->IsPC()) {
+							game->SelectActor(currentTurnBasedActor, false, SELECT_REPLACE);
+						}
 						currentTurnBasedActorOld = currentTurnBasedActor;
 						currentTurnBasedListOld = currentTurnBasedList;
 						currentTurnBasedSlotOld = currentTurnBasedSlot;
