@@ -280,7 +280,16 @@ void Movable::DoStep(unsigned int walkScale, ieDword time)
 				Log(DEBUG, "TBC", "Enemy blocking path, stopping");
 				return;
 			} else {
-				// Ally in the way - pass through with extra movement cost
+				// Ally in the way - check if enough movement to pass through
+				float passThruCost = 0.1f;  // minimum cost to enter and exit ally space
+				if (core->GetCurrentTurnBasedSlot().movesleft < passThruCost) {
+					// Not enough movement to pass through - stop before ally
+					ClearPath(true);
+					NewOrientation = Orientation;
+					Log(DEBUG, "TBC", "Not enough movement to pass through ally, stopping");
+					return;
+				}
+				// Pass through with extra movement cost
 				core->GetCurrentTurnBasedSlot().movesleft -= 0.05f;  // penalty for passing through ally
 				// Continue movement - don't return
 			}
