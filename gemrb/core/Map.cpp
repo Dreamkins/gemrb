@@ -1661,11 +1661,11 @@ void Map::DrawTBCPanel() const
 			if (core->tbcManager.opportunity) {
 				Actor* oppTarget = core->GetGame()->GetActorByGlobalID(core->tbcManager.opportunity);
 				if (!opportunityTarget.y && oppTarget == actor) {
-					opportunityTarget = Point(slotX + PORTRAIT_WIDTH / 2, PANEL_TOP + SLOT_HEIGHT + 65);
+					opportunityTarget = Point(slotX + PORTRAIT_WIDTH / 2, slotY + SLOT_HEIGHT);
 				}
 				if (!opportunitySource.y && core->tbcManager.currentTurnBasedActorOld && 
 				    actor == core->tbcManager.currentTurnBasedActor) {
-					opportunitySource = Point(slotX + PORTRAIT_WIDTH / 2, PANEL_TOP + SLOT_HEIGHT + 65);
+					opportunitySource = Point(slotX + PORTRAIT_WIDTH / 2, slotY + SLOT_HEIGHT);
 				}
 			}
 
